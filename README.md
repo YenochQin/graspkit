@@ -8,5 +8,9 @@ Although GRASP has some original tools to handle the data, the programs written 
 
 ---
 
-An example *example.ipynb* is given. The only thing need to do is change the data file location, file name and calculation_parameters.
+An example *example.ipynb* is given. The only thing need to do is change the data file location, file name and `calculation_parameters'.
+
+---
+
+
 
