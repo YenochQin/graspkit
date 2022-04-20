@@ -36,38 +36,74 @@
     
     Version 1.0.7(1/10/2022)
     Add "Configuration"   subshells LS-coupling state, for better identifying the atomic state.
+    
+    Version 1.1.1(04/08/2022)
+    TODO Object-oriented programming of the functions involved
+    A function is needed to read configuration state raw and change it in LaTeX form. 
+    
 """
 
 import numpy as np
 import pandas as pd
 import re
 
+def configuration_format(this_conf):
+    '''
+    Format the configuration state of energy levels data file to a LaTeX form string and a row list.
+    
+    this_conf: a string of configuration state
+    '''
+    conf_temp = this_conf.split('.')
+    format_conf = ''
+    for subshell in conf_temp:
+        print(subshell)
+        if '(' and ')' in subshell:
+            ele_num = re.findall(r"[(](.*?)[)]", subshell)
+            temp_subshell_LS_transform = ''
+            if re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", subshell):
+                temp_subshell_LS = re.findall(
+                    r"[)]([0-9][A-Z][0-9]?)[_]", subshell)
+                temp_subshell_LS_transform = f"\\,(^{temp_subshell_LS[0][0]}_{temp_subshell_LS[0][-1]}{temp_subshell_LS[0][1]})"
+            format_conf = format_conf + f'{subshell[0:2]}^{{{ele_num[0]}}}{temp_subshell_LS_transform}\\,' 
+            
+        else:
+            if subshell != conf_temp[-1]:
+                temp_subshell_LS_transform = ''
+                if '_' in subshell:
+                    temp_subshell_LS = re.findall(r"[_]([0-9][A-Z]?)", subshell)
+                    temp_subshell_LS_transform = f"\\,^{temp_subshell_LS[0][0]}{temp_subshell_LS[0][1]}"
+                    format_conf = format_conf + f'{subshell[0:2]}{temp_subshell_LS_transform}\\,'
+            elif subshell == conf_temp[-1]:
+                format_conf = format_conf + f'{subshell[0:2]}\\,'
+                
+    return format_conf, conf_temp
+
 # load level data from {atom}{as}
 
-def level_read(levelas, skipconf=0):
-    print(levelas)
-    
+def level_read(atom, dir, parameters, a_s, skipconf=0):
+    level_as = f'{dir}/{atom}{parameters}{a_s}'
+    print(level_as)
     # This for strorange configuration' col_index
-    if 'CI' not in levelas:
-        findas = levelas.index('as')
-        thisas = levelas[findas: findas+3]
-    else:
-        findas = levelas.index('as')
-        thisas = 'CI' + levelas[findas: findas+3]
-    
-    level_file = open(levelas, 'r')
+    # if 'CI' not in level_as:
+    #     findas = level_as.index('as')
+    #     this_as = level_as[findas: findas+3]
+    # else:
+    #     findas = level_as.index('as')
+    #     this_as = 'CI' + level_as[findas: findas+3]
+    this_as = parameters + str(a_s)
+    level_file = open(level_as, 'r')
     level_data = level_file.readlines()
     level_file.close()
     
     # This for skip line to read levels 
-    # ' 1 ' is the target in the first level line
+    # ' No Pos  J ' is the target in the begining of the level data
     for i in range(len(level_data)):
-        if '  1  ' in level_data[i]:
-            skip_line = i
+        if ' No Pos  J ' in level_data[i]:
+            skip_line = i + 3
             break
     
     # define 'level' to store the level data
-    level_as = pd.DataFrame(columns=['No', 'Pos', 'J', 'Parity', 'Levels',f'Configuration_{thisas}raw'])
+    level_read_df = pd.DataFrame(columns=['No', 'Pos', 'J', 'Parity', f'{this_as}',f'Configuration_{this_as}raw'])
     
     # store level data to 'level' array
     for line in range(0,len(level_data)-skip_line-1):
@@ -76,84 +112,66 @@ def level_read(levelas, skipconf=0):
         # print(level_source)
         if len(level_source) != 8:
             if line == 0 :
-                level_as.loc[line, ['No', 'Pos', 'J', 'Parity', 'Levels']] = [level_source[0], level_source[1], level_source[2], level_source[3], float(0)]
+                level_read_df.loc[line, ['No', 'Pos', 'J', 'Parity', f'{this_as}']] = [level_source[0], level_source[1], level_source[2], level_source[3], float(0)]
             else:
-                level_as.loc[line, ['No', 'Pos', 'J', 'Parity', 'Levels']] =[level_source[0], level_source[1], level_source[2], level_source[3], level_source[5]]
+                level_read_df.loc[line, ['No', 'Pos', 'J', 'Parity', f'{this_as}']] =[level_source[0], level_source[1], level_source[2], level_source[3], level_source[5]]
         else:
-            level_as.loc[line, ['No', 'Pos', 'J', 'Parity', 'Levels', f'Configuration_{thisas}raw']] =[level_source[0], level_source[1], level_source[2], level_source[3], level_source[5], level_source[7]]
+            level_read_df.loc[line, ['No', 'Pos', 'J', 'Parity', f'{this_as}', f'Configuration_{this_as}raw']] =[level_source[0], level_source[1], level_source[2], level_source[3], level_source[5], level_source[7]]
 
     # change Levels columns type to float
-    level_as['Levels'] = level_as.Levels.astype(np.float64)
+    level_read_df[f'{this_as}'] = level_read_df[f'{this_as}'].astype(np.float64)
 
     # change Configuration into a LaTeX equation form
-    if not level_as[f'Configuration_{thisas}raw'].isnull().any():
-        # print(level_as['Configuration_raw'])
-        for n in range(len(level_as[f'Configuration_{thisas}raw'])):
-            conf_temp = level_as.loc[n, f'Configuration_{thisas}raw'][skipconf:].split('.')
-            temp_conf = ''
-            for subshell in conf_temp:
-                print(subshell)
-                if '(' and ')' in subshell:
-                    ele_num = re.findall(r"[(](.*?)[)]", subshell)
-                    temp_subshell_LS_transform = ''
-                    if re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", subshell):
-                        temp_subshell_LS = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", subshell)
-                        temp_subshell_LS_transform = f"\\,(^{temp_subshell_LS[0][0]}_{temp_subshell_LS[0][-1]}{temp_subshell_LS[0][1]})"
-                    temp_conf= temp_conf + f'{subshell[0:2]}^{{{ele_num[0]}}}{temp_subshell_LS_transform}\\,' 
-                    print(temp_conf)
-                else:
-                    if subshell != conf_temp[-1]:
-                        temp_subshell_LS_transform = ''
-                        if '_' in subshell:
-                            temp_subshell_LS = re.findall(r"[_]([0-9][A-Z]?)", subshell)
-                            temp_subshell_LS_transform = f"\\,^{temp_subshell_LS[0][0]}{temp_subshell_LS[0][1]}"
-                        temp_conf = temp_conf + f'{subshell[0:2]}{temp_subshell_LS_transform}\\,'
-                    elif subshell == conf_temp[-1]:
-                        temp_conf = temp_conf + f'{subshell[0:2]}\\,'
-                        
+    if not level_read_df[f'Configuration_{this_as}raw'].isnull().any():
+        # print(level_read_df['Configuration_raw'])
+        for n in range(len(level_read_df[f'Configuration_{this_as}raw'])):
+            format_conf, conf_temp = configuration_format(level_read_df.loc[n, f'Configuration_{this_as}raw'][skipconf:])
             ls = conf_temp[-1][-2:]
 
-            level_as.loc[n, f'Configuration_{thisas}']= f'${temp_conf }$'
-            j = level_as.loc[n, 'J']
-            if level_as.loc[n, 'Parity'] == '-':
-                level_as.loc[n, f'LSj_{thisas}'] = f'$\\,^{ls[0]}{ls[1]}_{{{j}}}^{{o}}$'
-            elif level_as.loc[n, 'Parity'] == '+':
-                level_as.loc[n, f'LSj_{thisas}'] = f'$\\,^{ls[0]}{ls[1]}_{{{j}}}$'
-    return level_as
+            level_read_df.loc[n, f'Configuration_{this_as}']= f'${format_conf }$'
+            total_angular_j = level_read_df.loc[n, 'J']
+            if level_read_df.loc[n, 'Parity'] == '-':
+                level_read_df.loc[n, f'LSj_{this_as}'] = f'$\\,^{ls[0]}{ls[1]}_{{{total_angular_j}}}^{{o}}$'
+            elif level_read_df.loc[n, 'Parity'] == '+':
+                level_read_df.loc[n, f'LSj_{this_as}'] = f'$\\,^{ls[0]}{ls[1]}_{{{total_angular_j}}}$'
+    return level_read_df
 
-def level_mcdhf_storage(atom, dir, parameters, max_as=np.nan, min_as=0, skipconf=0):
-    for a in range(min_as, max_as+1):
-        level_temp = level_read(f'{dir}/{atom}{parameters}{a}', skipconf)
-        if a == 0:
-            level = level_temp.copy()
-            level.rename(columns={'Levels': f'{parameters}{a}'}, inplace = True)
-        else:
-            level[f'{parameters}{a}'] = np.nan
-            for i in range(0, len(level)):
-                for j in range(0, len(level)):
-                    if level.loc[i,'Pos'] == level_temp.loc[j,'Pos'] and level.loc[i,'J'] == level_temp.loc[j,'J'] and level.loc[i,'Parity'] == level_temp.loc[j,'Parity']:
-                        level.loc[i,f'{parameters}{a}'] = level_temp.loc[j, 'Levels']
-    level['No'] = level.No.astype(np.int32)
-    level['Comp_of_asf'] = ''
-    return level
-
-# add extra energy levels (like RCI results) to level DataFrame
+# add extra energy levels data to level DataFrame
 def level_add(level, atom, dir, parameters, a_s=np.nan, skipconf=0):
-    if 'CI' in parameters:
-        thisas = 'CIas' + str(a_s)
-    level_temp = level_read(f'{dir}/{atom}{parameters}{a_s}', skipconf)
+    this_as = parameters + str(a_s)
+    level_temp = level_read(atom, dir, parameters, a_s, skipconf)
     level[f'{parameters}{a_s}'] = np.nan
     for i in range(0, len(level)):
         for j in range(0, len(level_temp)):
             if level.loc[i,'Pos'] == level_temp.loc[j,'Pos'] and level.loc[i,'J'] == level_temp.loc[j,'J'] and level.loc[i,'Parity'] == level_temp.loc[j,'Parity']:
-                level.loc[i,f'{parameters}{a_s}'] = level_temp.loc[j, 'Levels']
-                level.loc[i, f'Configuration_{thisas}'] = level_temp.loc[j, f'Configuration_{thisas}']
-                level.loc[i, f'LSj_{thisas}'] = level_temp.loc[j, f'LSj_{thisas}']
-                level.loc[i, f'Configuration_{thisas}raw'] = level_temp.loc[j, f'Configuration_{thisas}raw']
-    return level   
+                level.loc[i, f'{this_as}'] = level_temp.loc[j, f'{this_as}']
+                if not level_temp[f'Configuration_{this_as}raw'].isnull().any():
+                    level.loc[i, f'Configuration_{this_as}'] = level_temp.loc[j, f'Configuration_{this_as}']
+                    level.loc[i, f'LSj_{this_as}'] = level_temp.loc[j, f'LSj_{this_as}']
+                    level.loc[i, f'Configuration_{this_as}raw'] = level_temp.loc[j, f'Configuration_{this_as}raw']
+    return level
+
+def level_mcdhf_storage(level, atom, dir, parameters, max_as=np.nan, min_as=0, skipconf=0):
+    for a in range(min_as, max_as+1):
+        level = level_add(level, atom, dir, parameters, a, skipconf)
+    #     level_temp = level_read(atom, dir, parameters, a, skipconf)
+    #     if a == 0:
+    #         level = level_temp.copy()
+    #         level.rename(columns={'Levels': f'{parameters}{a}'}, inplace = True)
+    #     else:
+    #         level[f'{parameters}{a}'] = np.nan
+    #         for i in range(0, len(level)):
+    #             for j in range(0, len(level)):
+    #                 if level.loc[i,'Pos'] == level_temp.loc[j,'Pos'] and level.loc[i,'J'] == level_temp.loc[j,'J'] and level.loc[i,'Parity'] == level_temp.loc[j,'Parity']:
+    #                     level.loc[i,f'{parameters}{a}'] = level_temp.loc[j, 'Levels']
+    level['No'] = level.No.astype(np.int32)
+    level['Comp_of_asf'] = ''
+    return level
+
+
 
 # difference between two as levels
-def level_diff(level,  parameters, max_as):
+def level_diff(level, parameters, max_as):
     for a in range(max_as):
         if a == 0:
             level[f'dE{a+1}'] = level[f'{parameters}{a+1}'] - level[f'{parameters}{a}']
@@ -208,37 +226,17 @@ def level_comp_asf(level, dir, parity, parameters, max_as, min_comp=0.03, skipco
 
         comp_temp['w'] = comp_temp.w.astype(np.float64).round(2)
         comp_temp = comp_temp[comp_temp['w'] >= min_comp]
-        # skipconf = 25
         comp_temp['comp_conf'] = comp_temp['comp_conf'].str[skipconf:]
         print(comp_temp)
         # temp_tlevel = level.loc[lv_index, 'Configuration_as0raw']
         
         for n in range(len(comp_temp['comp_conf'])):
-            conf_temp = comp_temp.loc[n, 'comp_conf'].split('.')
-            temp_comp_conf = ''
             temp_comp_of_asf  = ''
-            for subshell in conf_temp:
-                print(subshell)
-                if '(' and ')' in subshell:
-                    ele_num = re.findall(r"[(](.*?)[)]", subshell)
-                    temp_subshell_LS_transform = ''
-                    if re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", subshell):
-                        temp_subshell_LS = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", subshell)
-                        temp_subshell_LS_transform = f"\\,(^{temp_subshell_LS[0][0]}_{temp_subshell_LS[0][-1]}{temp_subshell_LS[0][1]})"
-                    temp_comp_conf= temp_comp_conf + f'{subshell[0:2]}^{{{ele_num[0]}}}{temp_subshell_LS_transform}\\,' 
-                    print(temp_comp_conf)
-                else:
-                    if subshell != conf_temp[-1]:
-                        temp_subshell_LS_transform = ''
-                        if '_' in subshell:
-                            temp_subshell_LS = re.findall(r"[_]([0-9][A-Z]?)", subshell)
-                            temp_subshell_LS_transform = f"\\,^{temp_subshell_LS[0][0]}{temp_subshell_LS[0][1]}"
-                        temp_comp_conf = temp_comp_conf + f'{subshell[0:2]}{temp_subshell_LS_transform}\\,'
-                    elif subshell == conf_temp[-1]:
-                        temp_comp_conf = temp_comp_conf + f'{subshell[0:2]}\\,'
-                temp_comp_ls = conf_temp[-1][-2:]
-                comp_LS = f"^{temp_comp_ls[0]}{temp_comp_ls[1]}"
-            temp_comp_of_asf = temp_comp_of_asf+ '$' + str(comp_temp.loc[n,'w']) + '\\;'  + temp_comp_conf + '\\,' + comp_LS + '$ + '
+            format_comp_conf_temp, comp_conf_temp = configuration_format(comp_temp.loc[n, 'comp_conf'])
+            
+            temp_comp_ls = comp_conf_temp[-1][-2:]
+            comp_LS = f"^{temp_comp_ls[0]}{temp_comp_ls[1]}"
+            temp_comp_of_asf = temp_comp_of_asf+ '$' + str(comp_temp.loc[n,'w']) + '\\;' + format_comp_conf_temp + '\\,' + comp_LS + '$ + '
 
             level.loc[lv_index, 'Comp_of_asf'] = level.loc[lv_index, 'Comp_of_asf'] + temp_comp_of_asf
         level.loc[lv_index, 'Comp_of_asf'] = level.loc[lv_index, 'Comp_of_asf'][:-2]

@@ -13,13 +13,17 @@
     The function strore the Electric transition in Coulomb gauge. And it can calculate wavelength and uncertainty automatically.
     The function also can search the index from the level DataFrame, and sort the Lower_index from smallest to biggest, so do the Upper_index.
     
-    Version 1.1.1(1/11/2022)
+    Version 1.2.0(04/09/2022)
+    Add four columns in transition_data dataframe
+    respectively they are Upper_J, Lower_J, f_l, f_v
+    
+    Version 1.2.1(04/20/2022)
+    Add a parameter 'Braching_Fraction' in *data_process* function. The default value of 'Braching_Fraction' is 0.0001.
 """
 import os
 import numpy as np
 import pandas as pd
 import re
-
 
 
 def data_load(file):
@@ -28,7 +32,7 @@ def data_load(file):
     transition_data = transition_file.readlines()
     transition_file.close()
     
-    transition_file_df = pd.DataFrame(columns=['Lower_index', 'Lower_conf', 'Lowerlev', 'Upper_index', 'Upper_conf','Upperlev', 'Type', 'deltaE', 'Wavelength', 'A_l', 'gf_l', 'S_l', 'A_v', 'gf_v', 'S_v', 'BR', 'deltaS'])
+    transition_file_df = pd.DataFrame(columns=['Lower_index','Lower_J', 'Lower_conf', 'Lowerlev', 'Upper_index', 'Upper_J', 'Upper_conf','Upperlev', 'Type', 'deltaE', 'Wavelength', 'A_l', 'gf_l', 'f_l', 'S_l', 'A_v', 'gf_v', 'f_v', 'S_v', 'BR', 'A_l_to_A_V', 'deltaS'])
     
     loc_tran_data = []
     """[summary]: This for loop find the location of the start transition data and store them in a list > loc_tran_data
@@ -112,11 +116,11 @@ def data_load(file):
             
     return transition_file_df
 
-def data_process(transition_df, level):
+def data_process(transition_df, level, parameter, a_s, Branching_Fraction=0.0001):
     """[summary]: Find the index of lower and upper levels in level_DataFrame. Add the results into transition_df and sort the Lower_index from smallest to biggest, so do the Upper_index.
 
     Args:
-        transition_df ([type: DataFrame]): [description] : columns=['Lower_index', 'Lower_conf', 'Lowerlev', 'Upper_index', 'Upper_conf','Upperlev', 'Type', 'deltaE', 'Wavelength', 'A', 'gf', 'S', 'deltaS']
+        transition_df ([type: DataFrame]): [description] : columns=['Lower_index','Lower_J', 'Lower_conf', 'Lowerlev', 'Upper_index', 'Upper_J', 'Upper_conf','Upperlev', 'Type', 'deltaE', 'Wavelength', 'A', 'gf', 'S', 'deltaS']
 
     Returns:
         [type : DataFrame]: [description: return transition_df]
@@ -125,17 +129,22 @@ def data_process(transition_df, level):
     #     print(transition_df.loc[line])
         Up_temp = transition_df.loc[line,'Upperlev'].split()
         Low_temp = transition_df.loc[line,'Lowerlev'].split()
-        Up_index = level[(level.Pos == Up_temp[1]) & (level.J == Up_temp[2]) & (level.Parity == Up_temp[3])].index.tolist()[0]
-        Low_index = level[(level.Pos == Low_temp[1]) & (level.J == Low_temp[2]) & (level.Parity == Low_temp[3])].index.tolist()[0]
-                # print(Upper_index)
-                # print(Lower_index)
-        transition_df.loc[line, ['Upper_index', 'Upper_conf', 'Lower_index', 'Lower_conf']] =[level.loc[Up_index, 'No'], level.loc[Up_index, 'Configuration_CIas5raw'], level.loc[Low_index, 'No'], level.loc[Low_index, 'Configuration_CIas5raw']]
+        Up_index_temp = level[(level.Pos == Up_temp[1]) & (level.J == Up_temp[2]) & (level.Parity == Up_temp[3])].index.tolist()[0]
+        Up_J_temp = Up_temp[2]
+        Up_J_temp_value = eval(Up_J_temp)
+        Low_index_temp = level[(level.Pos == Low_temp[1]) & (level.J == Low_temp[2]) & (level.Parity == Low_temp[3])].index.tolist()[0]
+        Low_J_temp = Low_temp[2]
+        Low_J_temp_value = eval(Low_J_temp)
+        
+        transition_df.loc[line, ['Upper_index', 'Upper_conf', 'Upper_J', 'Upper_J_value', 'Lower_index', 'Lower_conf', 'Lower_J', 'Lower_J_value']] =[level.loc[Up_index_temp, 'No'], level.loc[Up_index_temp, f'Configuration_{parameter}{a_s}raw'], Up_J_temp, Up_J_temp_value, level.loc[Low_index_temp, 'No'], level.loc[Low_index_temp, f'Configuration_{parameter}{a_s}raw'], Low_J_temp, Low_J_temp_value]
         transition_df.loc[line, 'Wavelength'] = 10 ** 8 / transition_df.loc[line, 'deltaE'] 
-        
-        
+
     transition_df['Lower_index'] = transition_df.Lower_index.astype(np.int8)
     transition_df['Upper_index'] = transition_df.Upper_index.astype(np.int8)
     transition_df.sort_values(by=['Lower_index', 'Upper_index'], ascending=True, inplace=True)
+    transition_df.f_l = transition_df.gf_l / (2*transition_df.Lower_J_value + 1)
+    transition_df.f_v = transition_df.gf_v / (2*transition_df.Lower_J_value + 1)
+    transition_df.A_l_to_A_V = transition_df.A_l / transition_df.A_v
     level['lifetime_l'] = 0
     level['lifetime_l'] = level.lifetime_l.astype(np.float64)
     level['lifetime_v'] = 0
@@ -160,12 +169,10 @@ def data_process(transition_df, level):
     transition_df['BR'] = np.float64(0)
     for trannum in range(len(transition_df)):
         transition_df.loc[trannum, 'BR'] = transition_df.loc[trannum, 'A_l']/transition_df.loc[trannum, 'sum_A_l']
-        if transition_df.loc[trannum, 'BR'] <= 0.0001:
+        if transition_df.loc[trannum, 'BR'] <= Branching_Fraction:
             transition_df.drop(trannum, axis=0, inplace=True)
     
     return transition_df, level
-
-
 
 def data_collect(dir):
     """
