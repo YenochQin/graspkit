@@ -83,13 +83,6 @@ def configuration_format(this_conf):
 def level_read(atom, dir, parameters, a_s, skipconf=0):
     level_as = f'{dir}/{atom}{parameters}{a_s}'
     print(level_as)
-    # This for strorange configuration' col_index
-    # if 'CI' not in level_as:
-    #     findas = level_as.index('as')
-    #     this_as = level_as[findas: findas+3]
-    # else:
-    #     findas = level_as.index('as')
-    #     this_as = 'CI' + level_as[findas: findas+3]
     this_as = parameters + str(a_s)
     level_file = open(level_as, 'r')
     level_data = level_file.readlines()
@@ -154,16 +147,6 @@ def level_add(level, atom, dir, parameters, a_s=np.nan, skipconf=0):
 def level_mcdhf_storage(level, atom, dir, parameters, max_as=np.nan, min_as=0, skipconf=0):
     for a in range(min_as, max_as+1):
         level = level_add(level, atom, dir, parameters, a, skipconf)
-    #     level_temp = level_read(atom, dir, parameters, a, skipconf)
-    #     if a == 0:
-    #         level = level_temp.copy()
-    #         level.rename(columns={'Levels': f'{parameters}{a}'}, inplace = True)
-    #     else:
-    #         level[f'{parameters}{a}'] = np.nan
-    #         for i in range(0, len(level)):
-    #             for j in range(0, len(level)):
-    #                 if level.loc[i,'Pos'] == level_temp.loc[j,'Pos'] and level.loc[i,'J'] == level_temp.loc[j,'J'] and level.loc[i,'Parity'] == level_temp.loc[j,'Parity']:
-    #                     level.loc[i,f'{parameters}{a}'] = level_temp.loc[j, 'Levels']
     level['No'] = level.No.astype(np.int32)
     level['Comp_of_asf'] = ''
     return level
