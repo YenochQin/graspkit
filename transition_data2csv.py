@@ -90,8 +90,7 @@ def data_load(file):
                 tran_data_temp[['deltaE','A_v', 'A_l', 'gf_v', 'gf_l', 'S_v', 'S_l']] = tran_data_temp[['deltaE', 'A_v', 'A_l', 'gf_v', 'gf_l', 'S_v', 'S_l']].astype(np.float64, errors = 'raise')
                 tran_data_temp = tran_data_temp[(tran_data_temp.S_v != 0) & (tran_data_temp.S_l != 0)]
                 tran_data_temp['deltaS'] = tran_data_temp.apply( lambda x :  abs(x['S_v'] - x['S_l']) / max(x['S_v'], x['S_l']), axis=1)
-                # exec( f"{loc_tran_data[i+1]}_temp = tran_data_temp")
-            # tran_data_temp.rename(columns={'A_l' : 'A', 'gf_l' : 'gf', 'S_l' : 'S' }, inplace=True)
+
             transition_file_df = transition_file_df.append(pd.DataFrame(tran_data_temp, columns=['Upperlev', 'Lowerlev', 'Type' ,'deltaE','A_v', 'A_l', 'gf_v', 'gf_l', 'S_v', 'S_l', 'deltaS']), ignore_index=True)
             
         elif 'M' in loc_tran_data[i+1]:
