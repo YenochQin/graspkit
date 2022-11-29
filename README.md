@@ -1,4 +1,4 @@
-# GRASP_data_to_excel
+# Grasp Data Transfer
 
 A simple data collection tool for grasp2018.
 
