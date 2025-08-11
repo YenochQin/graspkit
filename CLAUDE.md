@@ -104,6 +104,25 @@ pip install -e .
 python -m build
 ```
 
+### Testing
+```bash
+# Run specific tests
+python -m pytest tests/test_pytorch_threads.py
+python -m pytest tests/test_mkdisks_config.py
+
+# Run all tests
+python -m pytest tests/
+```
+
+### Linting
+```bash
+# Run Ruff linting
+ruff check .
+
+# Auto-fix linting issues
+ruff check . --fix
+```
+
 ### Common Workflows
 
 #### Running ML CSF Selection
