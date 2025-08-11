@@ -389,7 +389,7 @@ def main(config):
         current_selected_descriptors = raw_csfs_descriptors[final_chosen_indices]
         is_covered, uncovered_orbitals = validate_csf_descriptors_coverage(
             current_selected_descriptors, 
-            with_subshell_info=config.descriptors_with_subshell_info
+            with_subshell_info=config.ml_config.descriptors_with_subshell_info
         )
         
         if not is_covered:
@@ -405,7 +405,7 @@ def main(config):
                 np.array([]),  # 空数组，因为我们只想选择新的CSF
                 uncovered_orbitals,
                 remaining_descriptors,
-                with_subshell_info=config.descriptors_with_subshell_info
+                with_subshell_info=config.ml_config.descriptors_with_subshell_info
             )
             
             # 将相对索引转换为全局索引
@@ -421,7 +421,7 @@ def main(config):
                 updated_descriptors = raw_csfs_descriptors[final_chosen_indices]
                 is_covered_after, _ = validate_csf_descriptors_coverage(
                     updated_descriptors,
-                    with_subshell_info=config.descriptors_with_subshell_info
+                    with_subshell_info=config.ml_config.descriptors_with_subshell_info
                 )
                 
                 if is_covered_after:
