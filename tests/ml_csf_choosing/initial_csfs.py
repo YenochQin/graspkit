@@ -77,7 +77,7 @@ def process_target_pool_csfs(config):
         descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block(
             target_pool_csfs_data, 
             label_type='sequential',
-            with_subshell_info=config.descriptors_with_subshell_info
+            with_subshell_info=config.ml_config.descriptors_with_subshell_info
         )
         logger.info(f"初始CSFs文件{config.target_pool_file} CSFs 描述符计算成功")
         processing_steps.append({
