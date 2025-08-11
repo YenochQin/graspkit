@@ -35,7 +35,6 @@ important_config_count_history = []
 
 
 def validate_csf_descriptors_coverage(descriptors: np.ndarray, 
-                                    n_orbitals: int = None, 
                                     with_subshell_info: bool = False) -> tuple[bool, list[int]]:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件：
@@ -43,7 +42,6 @@ def validate_csf_descriptors_coverage(descriptors: np.ndarray,
     
     Args:
         descriptors (np.ndarray): 选取出的CSFs描述符数组，形状为 (n_csfs, n_features)
-        n_orbitals (int, optional): 轨道数量。如果为None，则从描述符结构推断
         with_subshell_info (bool): 是否包含子壳层信息
             - False: 使用parse_csf_2_descriptor生成的描述符（每个轨道3个值）
             - True: 使用parse_csf_2_descriptor_with_subshell生成的描述符（每个轨道5个值）
@@ -53,9 +51,7 @@ def validate_csf_descriptors_coverage(descriptors: np.ndarray,
     """
     # 检查输入参数
     if descriptors.size == 0:
-        if n_orbitals is None:
-            return False, []
-        return False, list(range(n_orbitals))
+        return False, []
     
     # 确定每个轨道的电子填充位置索引
     if with_subshell_info:
@@ -66,13 +62,7 @@ def validate_csf_descriptors_coverage(descriptors: np.ndarray,
         electron_index_in_orbital = 0
     
     # 从描述符结构推断轨道数量
-    inferred_n_orbitals = descriptors.shape[1] // values_per_orbital
-    
-    # 如果提供了n_orbitals，验证一致性
-    if n_orbitals is not None and n_orbitals != inferred_n_orbitals:
-        raise ValueError(f"轨道数量不匹配：期望 {n_orbitals}，实际 {inferred_n_orbitals}")
-    
-    actual_n_orbitals = inferred_n_orbitals
+    actual_n_orbitals = descriptors.shape[1] // values_per_orbital
     
     # 直接通过切片获取每个轨道的电子填充
     electron_indices = np.arange(electron_index_in_orbital, 
@@ -94,9 +84,9 @@ def validate_csf_descriptors_coverage(descriptors: np.ndarray,
 
 
 def select_csfs_for_coverage(descriptors: np.ndarray,
-                           uncovered_orbitals: list[int],
-                           full_descriptors: np.ndarray,
-                           with_subshell_info: bool = False) -> tuple[np.ndarray, list[int]]:
+                            uncovered_orbitals: list[int],
+                            full_descriptors: np.ndarray,
+                            with_subshell_info: bool = False) -> tuple[np.ndarray, list[int]]:
     """
     当覆盖验证失败时，从给定的完整描述符中按顺序选取包含缺少轨道的CSF描述符
     
@@ -395,20 +385,15 @@ def main(config):
         final_chosen_indices = np.unique(np.sort(np.concatenate([verified_important_indices, ml_selected_indices])))
         
         # 轨道覆盖检查和补充选择 - 使用新的函数
-        peel_subshells_list = gdp.get_CSFs_peel_subshells(cal_csfs_data)
-        n_orbitals = len(peel_subshells_list)
-        
-        # 检查当前选择是否满足轨道覆盖条件
+        # 直接从描述符结构推断轨道数量
         current_selected_descriptors = raw_csfs_descriptors[final_chosen_indices]
         is_covered, uncovered_orbitals = validate_csf_descriptors_coverage(
             current_selected_descriptors, 
-            n_orbitals, 
             with_subshell_info=config.descriptors_with_subshell_info
         )
         
         if not is_covered:
-            logger.info(f"检测到未覆盖的轨道: {uncovered_orbitals}")
-            logger.info(f"未覆盖轨道名称: {[peel_subshells_list[i] for i in uncovered_orbitals if i < len(peel_subshells_list)]}")
+            logger.info(f"检测到未覆盖的轨道索引: {uncovered_orbitals}")
             logger.info(f"开始补充选择以满足轨道覆盖条件")
             
             # 使用新的函数从剩余未选择的CSFs中选择补充的CSF
@@ -436,7 +421,6 @@ def main(config):
                 updated_descriptors = raw_csfs_descriptors[final_chosen_indices]
                 is_covered_after, _ = validate_csf_descriptors_coverage(
                     updated_descriptors,
-                    n_orbitals,
                     with_subshell_info=config.descriptors_with_subshell_info
                 )
                 
