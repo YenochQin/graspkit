@@ -33,6 +33,140 @@ except ImportError:
 
 important_config_count_history = []
 
+
+def validate_csf_descriptors_coverage(descriptors: np.ndarray, 
+                                    n_orbitals: int = None, 
+                                    with_subshell_info: bool = False) -> tuple[bool, list[int]]:
+    """
+    验证选取的CSFs描述符子集是否满足覆盖条件：
+    对于每个轨道，至少有一个CSF在其对应的电子填充数位置不为零
+    
+    Args:
+        descriptors (np.ndarray): 选取出的CSFs描述符数组，形状为 (n_csfs, n_features)
+        n_orbitals (int, optional): 轨道数量。如果为None，则从描述符结构推断
+        with_subshell_info (bool): 是否包含子壳层信息
+            - False: 使用parse_csf_2_descriptor生成的描述符（每个轨道3个值）
+            - True: 使用parse_csf_2_descriptor_with_subshell生成的描述符（每个轨道5个值）
+    
+    Returns:
+        tuple[bool, list[int]]: (是否满足覆盖条件, 未覆盖的轨道索引列表)
+    """
+    # 检查输入参数
+    if descriptors.size == 0:
+        if n_orbitals is None:
+            return False, []
+        return False, list(range(n_orbitals))
+    
+    # 确定每个轨道的电子填充位置索引
+    if with_subshell_info:
+        values_per_orbital = 5
+        electron_index_in_orbital = 2
+    else:
+        values_per_orbital = 3
+        electron_index_in_orbital = 0
+    
+    # 从描述符结构推断轨道数量
+    inferred_n_orbitals = descriptors.shape[1] // values_per_orbital
+    
+    # 如果提供了n_orbitals，验证一致性
+    if n_orbitals is not None and n_orbitals != inferred_n_orbitals:
+        raise ValueError(f"轨道数量不匹配：期望 {n_orbitals}，实际 {inferred_n_orbitals}")
+    
+    actual_n_orbitals = inferred_n_orbitals
+    
+    # 直接通过切片获取每个轨道的电子填充
+    electron_indices = np.arange(electron_index_in_orbital, 
+                                actual_n_orbitals * values_per_orbital, 
+                                values_per_orbital)
+    
+    # 提取所有CSF的电子数信息
+    electron_counts = descriptors[:, electron_indices]  # 形状为 (n_csfs, actual_n_orbitals)
+    
+    # 检查每个轨道是否至少有一个CSF的电子数不为零
+    has_nonzero_electrons = np.any(electron_counts > 0, axis=0)  # 形状为 (actual_n_orbitals,)
+    
+    # 找出未覆盖的轨道索引
+    uncovered_orbitals = np.where(~has_nonzero_electrons)[0].tolist()
+    
+    # 返回验证结果
+    is_covered = len(uncovered_orbitals) == 0
+    return is_covered, uncovered_orbitals
+
+
+def select_csfs_for_coverage(descriptors: np.ndarray,
+                           uncovered_orbitals: list[int],
+                           full_descriptors: np.ndarray,
+                           with_subshell_info: bool = False) -> tuple[np.ndarray, list[int]]:
+    """
+    当覆盖验证失败时，从给定的完整描述符中按顺序选取包含缺少轨道的CSF描述符
+    
+    Args:
+        descriptors (np.ndarray): 当前的CSFs描述符数组，形状为 (n_csfs, n_features)
+        uncovered_orbitals (list[int]): 未覆盖的轨道索引列表
+        full_descriptors (np.ndarray): 完整的CSFs描述符数组，形状为 (n_full_csfs, n_features)
+        with_subshell_info (bool): 是否包含子壳层信息
+    
+    Returns:
+        tuple[np.ndarray, list[int]]: (更新后的描述符数组, 选取的CSF索引列表)
+            - 更新后的描述符数组包含原有描述符和新选取的描述符
+            - 选取的CSF索引列表对应于full_descriptors中的索引
+    """
+    if not uncovered_orbitals:
+        return descriptors, []
+    
+    # 确定每个轨道的电子填充位置索引
+    if with_subshell_info:
+        values_per_orbital = 5
+        electron_index_in_orbital = 2
+    else:
+        values_per_orbital = 3
+        electron_index_in_orbital = 0
+    
+    # 获取每个轨道的电子填充位置索引
+    n_orbitals = full_descriptors.shape[1] // values_per_orbital
+    electron_indices = np.arange(electron_index_in_orbital, 
+                                n_orbitals * values_per_orbital, 
+                                values_per_orbital)
+    
+    # 提取完整描述符中的电子数信息
+    full_electron_counts = full_descriptors[:, electron_indices]
+    
+    # 找出当前描述符中已包含的CSF索引（避免重复选择）
+    current_csfs_set = set(range(len(descriptors))) if descriptors.size > 0 else set()
+    
+    selected_indices = []
+    remaining_uncovered = set(uncovered_orbitals)
+    
+    # 按顺序遍历完整描述符
+    for idx in range(len(full_descriptors)):
+        if idx in current_csfs_set:
+            continue  # 跳过已包含的CSF
+            
+        # 检查当前CSF是否包含任何剩余未覆盖的轨道
+        csf_electrons = full_electron_counts[idx]
+        covers_orbitals = [orb for orb in remaining_uncovered if csf_electrons[orb] > 0]
+        
+        if covers_orbitals:
+            selected_indices.append(idx)
+            remaining_uncovered -= set(covers_orbitals)
+            
+            # 如果所有轨道都已覆盖，提前退出
+            if not remaining_uncovered:
+                break
+    
+    if not selected_indices:
+        return descriptors, []
+    
+    # 构建更新后的描述符数组
+    new_descriptors = full_descriptors[selected_indices]
+    
+    if descriptors.size == 0:
+        updated_descriptors = new_descriptors
+    else:
+        updated_descriptors = np.vstack([descriptors, new_descriptors])
+    
+    return updated_descriptors, selected_indices
+
 def main(config):
     """主程序逻辑"""
     config.file_name = f'{config.conf}_{config.cal_loop_num}'
@@ -260,19 +394,74 @@ def main(config):
         # 最终选择：已验证重要组态 + ML选择的新组态
         final_chosen_indices = np.unique(np.sort(np.concatenate([verified_important_indices, ml_selected_indices])))
         
+        # 轨道覆盖检查和补充选择 - 使用新的函数
+        peel_subshells_list = gdp.get_CSFs_peel_subshells(cal_csfs_data)
+        n_orbitals = len(peel_subshells_list)
+        
+        # 检查当前选择是否满足轨道覆盖条件
+        current_selected_descriptors = raw_csfs_descriptors[final_chosen_indices]
+        is_covered, uncovered_orbitals = validate_csf_descriptors_coverage(
+            current_selected_descriptors, 
+            n_orbitals, 
+            with_subshell_info=config.descriptors_with_subshell_info
+        )
+        
+        if not is_covered:
+            logger.info(f"检测到未覆盖的轨道: {uncovered_orbitals}")
+            logger.info(f"未覆盖轨道名称: {[peel_subshells_list[i] for i in uncovered_orbitals if i < len(peel_subshells_list)]}")
+            logger.info(f"开始补充选择以满足轨道覆盖条件")
+            
+            # 使用新的函数从剩余未选择的CSFs中选择补充的CSF
+            remaining_unselected_indices = np.setdiff1d(unselected_indices, ml_selected_indices)
+            remaining_descriptors = raw_csfs_descriptors[remaining_unselected_indices]
+            
+            # 使用select_csfs_for_coverage函数选择补充的CSF
+            _, additional_indices_relative = select_csfs_for_coverage(
+                np.array([]),  # 空数组，因为我们只想选择新的CSF
+                uncovered_orbitals,
+                remaining_descriptors,
+                with_subshell_info=config.descriptors_with_subshell_info
+            )
+            
+            # 将相对索引转换为全局索引
+            additional_indices = remaining_unselected_indices[additional_indices_relative].tolist()
+            
+            # 将补充选择的CSF添加到最终选择中
+            if additional_indices:
+                additional_indices_array = np.array(additional_indices)
+                final_chosen_indices = np.unique(np.sort(np.concatenate([final_chosen_indices, additional_indices_array])))
+                logger.info(f"使用新函数补充选择了 {len(additional_indices)} 个CSF以满足轨道覆盖条件")
+                
+                # 验证更新后的覆盖情况
+                updated_descriptors = raw_csfs_descriptors[final_chosen_indices]
+                is_covered_after, _ = validate_csf_descriptors_coverage(
+                    updated_descriptors,
+                    n_orbitals,
+                    with_subshell_info=config.descriptors_with_subshell_info
+                )
+                
+                if is_covered_after:
+                    logger.info("✓ 更新后所有轨道均已覆盖")
+                else:
+                    logger.warning("⚠ 更新后仍有未覆盖的轨道")
+            else:
+                logger.warning("未能找到合适的CSF来覆盖所有未覆盖轨道")
+        else:
+            logger.info("✓ 所有轨道均已覆盖，无需补充选择")
+        
         logger.info(f"第{config.cal_loop_num + 1}次迭代计算组态数为：{len(final_chosen_indices)}")
         logger.info(f"其中已验证重要组态：{len(verified_important_indices)}")
         logger.info(f"其中ML新增组态：{len(ml_selected_indices)}")
         
         # 数据一致性检查：确保CSFs数量的两个来源一致
-        csfs_count_from_cal = cal_csfs_data.CSFs_block_length[0]
+        csfs_count_from_cfile = cal_csfs_data.CSFs_block_length[0]
         csfs_count_from_rmix = rmix_file_data.block_CSFs_nums[0]
         
-        if csfs_count_from_cal != csfs_count_from_rmix:
-            logger.error(f"CSFs数量不一致: cal_csfs_data.CSFs_block_length[0]={csfs_count_from_cal}, rmix_file_data.block_CSFs_nums[0]={csfs_count_from_rmix}")
+        if csfs_count_from_cfile != csfs_count_from_rmix:
+            logger.error(f"CSFs数量不一致: cal_csfs_data.CSFs_block_length[0]={csfs_count_from_cfile}, rmix_file_data.block_CSFs_nums[0]={csfs_count_from_rmix}")
             raise ValueError("本轮计算的CSFs数量数据不一致，请检查数据文件")
         
-        current_calculation_csfs = csfs_count_from_cal
+        current_calculation_csfs = csfs_count_from_cfile
         logger.info(f"本轮计算CSFs数量: {current_calculation_csfs}")
         
         # 计算数据留存率
