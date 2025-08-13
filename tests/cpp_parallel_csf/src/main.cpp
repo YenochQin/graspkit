@@ -1,9 +1,11 @@
 #include <iostream>
 #include <chrono>
 #include <cstdlib>
+#include <iostream>
 #include "csf_parser.h"
 #include "parallel_processor.h"
 #include "descriptor_generator.h"
+#include "npy_writer.h"
 
 using namespace csf;
 
@@ -12,7 +14,7 @@ void print_usage(const char* program_name) {
     std::cout << "Options:\n";
     std::cout << "  -e, --extended    Use extended descriptor format (5 values per orbital)\n";
     std::cout << "  -t, --threads N   Use N threads (default: auto-detect)\n";
-    std::cout << "  -o, --output FILE Output file (default: stdout)\n";
+    std::cout << "  -o, --output FILE Output file (.npy format) (default: input_prefix_descriptors.npy)\n";
     std::cout << "  -q, --quiet       Suppress progress output\n";
     std::cout << "  -h, --help        Show this help message\n";
 }
@@ -102,27 +104,25 @@ int main(int argc, char* argv[]) {
         
         auto result = ParallelProcessor::process_csf_data(csf_data, options);
         
-        // 输出结果
-        std::ostream* output = &std::cout;
-        std::ofstream file_output;
-        
-        if (!output_file.empty()) {
-            file_output.open(output_file);
-            if (!file_output.is_open()) {
-                std::cerr << "Error: Cannot open output file " << output_file << "\n";
-                return 1;
-            }
-            output = &file_output;
+        // 如果没有指定输出文件，生成默认文件名
+        if (output_file.empty()) {
+            output_file = NPYWriter::generate_default_output_filename(input_file);
         }
         
-        // 输出描述符
-        for (size_t i = 0; i < result.descriptors.size(); ++i) {
-            const auto& descriptor = result.descriptors[i];
-            *output << "CSF_" << i << "_" << result.labels[i];
-            for (double value : descriptor) {
-                *output << "," << value;
-            }
-            *output << "\n";
+        // 确保输出文件有.npy扩展名
+        if (NPYWriter::get_file_extension(output_file) != ".npy") {
+            output_file += ".npy";
+        }
+        
+        // 写入.npy文件
+        if (!quiet) {
+            std::cout << "Writing descriptors to: " << output_file << "\n";
+        }
+        
+        bool success = NPYWriter::write_descriptors(output_file, result.descriptors, result.labels);
+        if (!success) {
+            std::cerr << "Error: Failed to write output file " << output_file << "\n";
+            return 1;
         }
         
         if (!quiet) {
