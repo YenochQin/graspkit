@@ -2,6 +2,8 @@
 
 C++并行实现的CSF(Configuration State Function)描述符生成器，用于将GRASP计算的CSF数据转换为机器学习可用的数值描述符。
 
+**重要更新**：已从cnpy(.npy格式)迁移到HDF5(.h5格式)，提供更高的数据存储效率和更好的跨平台兼容性。
+
 ## 功能特性
 
 - **高性能并行处理**：使用OpenMP并行化CSF处理
@@ -18,6 +20,7 @@ C++并行实现的CSF(Configuration State Function)描述符生成器，用于�
 - C++17编译器
 - CMake 3.10+
 - OpenMP支持
+- HDF5库 (libhdf5-dev)
 
 ### 构建步骤
 
@@ -55,7 +58,7 @@ make install
 ./csf_descriptor -t 8 input.csf
 
 # 输出到文件
-./csf_descriptor -o output.csv input.csf
+./csf_descriptor -o output.h5 input.csf
 
 # 静默模式
 ./csf_descriptor -q input.csf
@@ -64,9 +67,15 @@ make install
 ### 命令行参数
 - `-e, --extended`：使用扩展描述符格式
 - `-t, --threads N`：使用N个线程
-- `-o, --output FILE`：输出到文件
+- `-o, --output FILE`：输出到HDF5文件(.h5格式)
 - `-q, --quiet`：静默模式（无进度显示）
 - `-h, --help`：显示帮助
+
+### HDF5输出格式
+生成的HDF5文件包含以下数据集：
+- `/descriptors`：2D数组，形状为[num_csfs, descriptor_size]
+- `/labels`：1D数组，形状为[num_csfs]（可选）
+- 属性信息：存储数据集的维度信息
 
 ## 性能对比
 

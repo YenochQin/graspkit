@@ -133,6 +133,8 @@ ParallelProcessor::ProcessingResult ParallelProcessor::process_csf_data(
 void ParallelProcessor::set_num_threads(int num_threads) {
     #ifdef _OPENMP
     omp_set_num_threads(num_threads);
+    #else
+    (void)num_threads;  // 避免编译警告
     #endif
     
     // 设置线程池大小（如果使用std::thread）
@@ -147,7 +149,7 @@ int ParallelProcessor::get_optimal_thread_count() {
     #endif
 }
 
-void ParallelProcessor::show_progress_bar(size_t current, size_t total, int thread_id) {
+void ParallelProcessor::show_progress_bar(size_t current, size_t total, int /*thread_id*/) {
     static std::mutex progress_mutex;
     std::lock_guard<std::mutex> lock(progress_mutex);
     

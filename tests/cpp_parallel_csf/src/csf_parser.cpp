@@ -42,6 +42,8 @@ CSFFileData CSFParser::parse_lines(const std::vector<std::string>& lines) {
         }
     }
     
+    (void)core_line;  // 标记已使用，避免编译警告
+    
     if (peel_line == 0 || csf_start == 0) {
         throw std::runtime_error("Invalid GRASP CSF file format: missing required sections");
     }
