@@ -14,14 +14,21 @@ if(OpenMP_CXX_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+# 查找ZLIB（cnpy依赖）
+find_package(ZLIB REQUIRED)
+
 # 包含目录
 include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# cnpy库
+include_directories(${CMAKE_SOURCE_DIR}/cmake/cnpy)
 
 # 核心库源文件（不包括main.cpp）
 set(LIB_SOURCES
     src/csf_parser.cpp
     src/descriptor_generator.cpp
     src/parallel_processor.cpp
+    src/npy_writer.cpp
 )
 
 # 创建静态库
@@ -35,10 +42,10 @@ add_executable(csf_descriptor ${MAIN_SOURCES})
 
 # 链接库
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(csf_lib OpenMP::OpenMP_CXX)
-    target_link_libraries(csf_descriptor csf_lib OpenMP::OpenMP_CXX)
+    target_link_libraries(csf_lib OpenMP::OpenMP_CXX ZLIB::ZLIB)
+    target_link_libraries(csf_descriptor csf_lib OpenMP::OpenMP_CXX ZLIB::ZLIB)
 else()
-    target_link_libraries(csf_descriptor csf_lib)
+    target_link_libraries(csf_descriptor csf_lib ZLIB::ZLIB)
 endif()
 
 
