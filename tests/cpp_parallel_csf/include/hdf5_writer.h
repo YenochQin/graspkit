@@ -6,9 +6,9 @@
 
 namespace csf {
 
-class NPYWriter {
+class HDF5Writer {
 public:
-    // 写入描述符到.npy文件
+    // 写入描述符到HDF5文件
     static bool write_descriptors(const std::string& filename,
                                   const DescriptorArray& descriptors,
                                   const std::vector<int>& labels = std::vector<int>());

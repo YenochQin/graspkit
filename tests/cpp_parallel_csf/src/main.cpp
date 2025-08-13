@@ -5,7 +5,7 @@
 #include "csf_parser.h"
 #include "parallel_processor.h"
 #include "descriptor_generator.h"
-#include "npy_writer.h"
+#include "hdf5_writer.h"
 
 using namespace csf;
 
@@ -14,7 +14,7 @@ void print_usage(const char* program_name) {
     std::cout << "Options:\n";
     std::cout << "  -e, --extended    Use extended descriptor format (5 values per orbital)\n";
     std::cout << "  -t, --threads N   Use N threads (default: auto-detect)\n";
-    std::cout << "  -o, --output FILE Output file (.npy format) (default: input_prefix_descriptors.npy)\n";
+    std::cout << "  -o, --output FILE Output file (.h5 format) (default: input_prefix_descriptors.h5)\n";
     std::cout << "  -q, --quiet       Suppress progress output\n";
     std::cout << "  -h, --help        Show this help message\n";
 }
@@ -106,20 +106,20 @@ int main(int argc, char* argv[]) {
         
         // 如果没有指定输出文件，生成默认文件名
         if (output_file.empty()) {
-            output_file = NPYWriter::generate_default_output_filename(input_file);
+            output_file = HDF5Writer::generate_default_output_filename(input_file);
         }
         
-        // 确保输出文件有.npy扩展名
-        if (NPYWriter::get_file_extension(output_file) != ".npy") {
-            output_file += ".npy";
+        // 确保输出文件有.h5扩展名
+        if (HDF5Writer::get_file_extension(output_file) != ".h5") {
+            output_file += ".h5";
         }
         
-        // 写入.npy文件
+        // 写入HDF5文件
         if (!quiet) {
             std::cout << "Writing descriptors to: " << output_file << "\n";
         }
         
-        bool success = NPYWriter::write_descriptors(output_file, result.descriptors, result.labels);
+        bool success = HDF5Writer::write_descriptors(output_file, result.descriptors, result.labels);
         if (!success) {
             std::cerr << "Error: Failed to write output file " << output_file << "\n";
             return 1;

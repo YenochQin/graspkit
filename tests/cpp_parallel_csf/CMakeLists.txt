@@ -9,26 +9,34 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -O3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
 # 查找OpenMP
-find_package(OpenMP REQUIRED)
+find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+else()
+    # macOS fallback - try to find OpenMP manually
+    find_library(OMP_LIBRARY NAMES omp)
+    if(OMP_LIBRARY)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fopenmp")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OMP_LIBRARY}")
+        set(OpenMP_CXX_FOUND TRUE)
+    else()
+        message(WARNING "OpenMP not found - compiling without parallel support")
+    endif()
 endif()
 
-# 查找ZLIB（cnpy依赖）
-find_package(ZLIB REQUIRED)
+# 查找HDF5
+find_package(HDF5 REQUIRED COMPONENTS CXX)
 
 # 包含目录
 include_directories(${CMAKE_SOURCE_DIR}/include)
-
-# cnpy库
-include_directories(${CMAKE_SOURCE_DIR}/cmake/cnpy)
+include_directories(${HDF5_INCLUDE_DIRS})
 
 # 核心库源文件（不包括main.cpp）
 set(LIB_SOURCES
     src/csf_parser.cpp
     src/descriptor_generator.cpp
     src/parallel_processor.cpp
-    src/npy_writer.cpp
+    src/hdf5_writer.cpp
 )
 
 # 创建静态库
@@ -42,10 +50,13 @@ add_executable(csf_descriptor ${MAIN_SOURCES})
 
 # 链接库
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(csf_lib OpenMP::OpenMP_CXX ZLIB::ZLIB)
-    target_link_libraries(csf_descriptor csf_lib OpenMP::OpenMP_CXX ZLIB::ZLIB)
+    if(TARGET OpenMP::OpenMP_CXX)
+        target_link_libraries(csf_descriptor csf_lib OpenMP::OpenMP_CXX ${HDF5_CXX_LIBRARIES})
+    else()
+        target_link_libraries(csf_descriptor csf_lib ${HDF5_CXX_LIBRARIES} ${OMP_LIBRARY})
+    endif()
 else()
-    target_link_libraries(csf_descriptor csf_lib ZLIB::ZLIB)
+    target_link_libraries(csf_descriptor csf_lib ${HDF5_CXX_LIBRARIES})
 endif()
 
 
