@@ -15,8 +15,28 @@ static inline std::string_view trim_view(std::string_view str) {
     return str.substr(first, last - first + 1);
 }
 
-static inline std::string_view trim(const std::string& str) {
-    return trim_view(std::string_view(str));
+static inline std::string trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\n\r");
+    return str.substr(first, last - first + 1);
+}
+
+// 添加缺失的chunk_string_fixed函数
+static inline std::vector<std::string> chunk_string_fixed(const std::string& str, size_t chunk_size) {
+    std::vector<std::string> chunks;
+    if (chunk_size == 0 || str.empty()) {
+        return chunks;
+    }
+    
+    chunks.reserve((str.length() + chunk_size - 1) / chunk_size);
+    
+    for (size_t i = 0; i < str.length(); i += chunk_size) {
+        size_t end = std::min(i + chunk_size, str.length());
+        chunks.emplace_back(str.substr(i, end - i));
+    }
+    
+    return chunks;
 }
 
 // 优化的分块处理 - 避免创建临时字符串
@@ -202,7 +222,7 @@ Descriptor DescriptorGenerator::generate_basic_descriptor(const CSFData& csf,
     
     // 为未占用轨道填充最终J值 - 优化处理
     for (size_t i = 0; i < peel_subshells.size(); ++i) {
-        if (!occupied_orbs[i]) {
+        if (!occupied_orbits[i]) {
             descriptor[i * 3 + 2] = static_cast<double>(final_double_J);
         }
     }
