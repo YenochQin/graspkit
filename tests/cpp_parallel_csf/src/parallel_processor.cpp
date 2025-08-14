@@ -42,10 +42,9 @@ ParallelProcessor::ProcessingResult ParallelProcessor::process_csf_data(
     result.descriptors.resize(total_csfs);
     result.labels.resize(total_csfs);
     
-    // 优化的chunk划分策略
-    const size_t min_chunk_size = 10000; // 增大最小chunk大小以减少开销
-    const size_t cache_line_size = 64;   // CPU缓存行大小
-    std::vector<std::pair<size_t, size_t>> work_chunks;
+    // 如果只有一个块，将其分割成多个chunk以实现并行处理
+    const size_t min_chunk_size = 1000; // 最小chunk大小
+    std::vector<std::pair<size_t, size_t>> work_chunks; // (start_index, end_index) pairs
     
     size_t current_global_index = 0;
     for (size_t block_idx = 0; block_idx < csf_data.csf_blocks.size(); ++block_idx) {
@@ -57,17 +56,10 @@ ParallelProcessor::ProcessingResult ParallelProcessor::process_csf_data(
             work_chunks.emplace_back(current_global_index, current_global_index + block_size);
             current_global_index += block_size;
         } else {
-            // 优化的chunk划分：按缓存行对齐并考虑负载均衡
-            size_t optimal_chunk_size = std::max(
-                min_chunk_size,
-                ((block_size + num_threads * 4 - 1) / (num_threads * 4))  // 每个线程4个chunk
-            );
-            
-            // 确保chunk大小是缓存行大小的倍数
-            optimal_chunk_size = (optimal_chunk_size + cache_line_size - 1) / cache_line_size * cache_line_size;
-            
-            for (size_t start = 0; start < block_size; start += optimal_chunk_size) {
-                size_t end = std::min(start + optimal_chunk_size, block_size);
+            // 大块分割成多个chunk
+            size_t chunk_size = std::max(min_chunk_size, (block_size + num_threads - 1) / num_threads);
+            for (size_t start = 0; start < block_size; start += chunk_size) {
+                size_t end = std::min(start + chunk_size, block_size);
                 work_chunks.emplace_back(current_global_index + start, current_global_index + end);
             }
             current_global_index += block_size;
@@ -76,31 +68,30 @@ ParallelProcessor::ProcessingResult ParallelProcessor::process_csf_data(
     
     // 并行处理所有work chunks
     std::atomic<int> completed_chunks{0};
-    const int total_chunks = static_cast<int>(work_chunks.size());
     
-    #pragma omp parallel for num_threads(num_threads) schedule(dynamic) if(options.use_openmp)
-    for (int chunk_idx = 0; chunk_idx < total_chunks; ++chunk_idx) {
+    #pragma omp parallel for num_threads(num_threads) if(options.use_openmp)
+    for (int chunk_idx = 0; chunk_idx < static_cast<int>(work_chunks.size()); ++chunk_idx) {
         const auto& chunk = work_chunks[chunk_idx];
         size_t start_global = chunk.first;
         size_t end_global = chunk.second;
         
-        // 优化的块查找：使用二分查找替代线性查找
-        size_t accumulated = 0;
+        // 找到对应的块和起始位置
         size_t block_idx = 0;
+        size_t block_start = 0;
+        size_t accumulated = 0;
         
-        // 快速查找对应的块
         for (size_t i = 0; i < csf_data.csf_blocks.size(); ++i) {
-            size_t next_accumulated = accumulated + csf_data.csf_blocks[i].size();
-            if (start_global < next_accumulated) {
+            if (start_global < accumulated + csf_data.csf_blocks[i].size()) {
                 block_idx = i;
+                block_start = accumulated;
                 break;
             }
-            accumulated = next_accumulated;
+            accumulated += csf_data.csf_blocks[i].size();
         }
         
         const auto& block = csf_data.csf_blocks[block_idx];
-        size_t local_start = start_global - accumulated;
-        size_t local_end = std::min(end_global - accumulated, block.size());
+        size_t local_start = start_global - block_start;
+        size_t local_end = std::min(end_global - block_start, block.size());
         
         // 处理chunk中的每个CSF
         for (size_t i = local_start; i < local_end; ++i) {
@@ -118,15 +109,12 @@ ParallelProcessor::ProcessingResult ParallelProcessor::process_csf_data(
             result.labels[start_global + (i - local_start)] = static_cast<int>(block_idx);
         }
         
-        // 进度显示 - 减少更新频率以提高性能
+        // 进度显示
         if (options.show_progress) {
             int current_completed = ++completed_chunks;
-            // 每1%更新一次进度条
-            if (current_completed % (total_chunks / 100 + 1) == 0 || current_completed == total_chunks) {
-                #pragma omp critical(progress_display)
-                {
-                    show_progress_bar(current_completed, total_chunks);
-                }
+            #pragma omp critical(progress_display)
+            {
+                show_progress_bar(current_completed, work_chunks.size());
             }
         }
     }
