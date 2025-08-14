@@ -4,68 +4,38 @@
 #include <stdexcept>
 #include <sstream>
 #include <cctype>
+#include <unordered_map>
 
 namespace csf {
 
-// 优化的字符串处理函数
-static inline std::string_view trim_view(std::string_view str) {
-    size_t first = str.find_first_not_of(" \t\n\r");
-    if (first == std::string_view::npos) return "";
-    size_t last = str.find_last_not_of(" \t\n\r");
-    return str.substr(first, last - first + 1);
-}
-
-static inline std::string trim(const std::string& str) {
+// 辅助函数：清理字符串
+static std::string trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\n\r");
     if (first == std::string::npos) return "";
     size_t last = str.find_last_not_of(" \t\n\r");
-    return str.substr(first, last - first + 1);
+    return str.substr(first, (last - first + 1));
 }
 
-// 添加缺失的chunk_string_fixed函数
-static inline std::vector<std::string> chunk_string_fixed(const std::string& str, size_t chunk_size) {
+// 辅助函数：按固定长度分块
+static std::vector<std::string> chunk_string_fixed(const std::string& str, size_t chunk_size) {
     std::vector<std::string> chunks;
-    if (chunk_size == 0 || str.empty()) {
-        return chunks;
-    }
-    
-    chunks.reserve((str.length() + chunk_size - 1) / chunk_size);
-    
     for (size_t i = 0; i < str.length(); i += chunk_size) {
-        size_t end = std::min(i + chunk_size, str.length());
-        chunks.emplace_back(str.substr(i, end - i));
+        chunks.push_back(str.substr(i, std::min(chunk_size, str.length() - i)));
     }
-    
     return chunks;
 }
 
-// 优化的分块处理 - 避免创建临时字符串
-static inline std::string_view get_chunk(std::string_view str, size_t pos, size_t chunk_size) {
-    if (pos >= str.length()) return "";
-    return str.substr(pos, std::min(chunk_size, str.length() - pos));
-}
-
-// 优化的J值转换函数
-static inline int j_to_double_j_fixed(std::string_view j_str) {
-    j_str = trim_view(j_str);
-    size_t slash_pos = j_str.find('/');
-    if (slash_pos != std::string_view::npos) {
+// 辅助函数：将J字符串转换为2J值
+static int j_to_double_j_fixed(const std::string& j_str) {
+    std::string clean_j = trim(j_str);
+    size_t slash_pos = clean_j.find('/');
+    if (slash_pos != std::string::npos) {
         // 半整数情况，如 "3/2"
-        int numerator = 0;
-        for (size_t i = 0; i < slash_pos; ++i) {
-            if (std::isdigit(j_str[i])) {
-                numerator = numerator * 10 + (j_str[i] - '0');
-            }
-        }
+        int numerator = std::stoi(clean_j.substr(0, slash_pos));
         return numerator;
     } else {
         // 整数情况，如 "2"
-        int value = 0;
-        for (char c : j_str) {
-            if (std::isdigit(c)) {
-                value = value * 10 + (c - '0');
-            }
-        }
+        int value = std::stoi(clean_j);
         return value * 2;
     }
 }
@@ -149,14 +119,8 @@ Descriptor DescriptorGenerator::generate_basic_descriptor(const CSFData& csf,
     std::vector<std::string> middle_line_List = chunk_string_fixed(middle_line, 9);
     std::vector<std::string> coupling_line_List = chunk_string_fixed(coupling_line, 9);
     
-    // 预创建子壳层到索引的映射
-    static thread_local std::unordered_map<std::string, size_t> subshell_map;
-    if (subshell_map.empty()) {
-        subshell_map = create_subshell_index_map(peel_subshells);
-    }
-    
-    // 使用固定大小的数组替代vector，避免动态分配
-    std::array<bool, 50> occupied_orbits{};  // 假设最多50个轨道
+    // 初始化描述符数组和已占用轨道索引列表
+    std::vector<int> orbs_occupied_indices;
     
     // 遍历每个子壳层块，提取和处理信息
     for (size_t i = 0; i < subshell_List.size(); ++i) {
@@ -166,65 +130,76 @@ Descriptor DescriptorGenerator::generate_basic_descriptor(const CSFData& csf,
         
         if (subshell_charges.length() < 8) continue;
         
-        // 提取子壳层名称和电子数 - 优化字符串处理
-        std::string subshell = trim(subshell_charges.substr(0, 5));
-        int subshell_electron_num = (subshell_charges[6] - '0') * 10 + (subshell_charges[7] - '0');
+        // 提取子壳层名称和电子数
+        std::string subshell = subshell_charges.substr(0, 5);
+        subshell = trim(subshell);
+        int subshell_electron_num = std::stoi(subshell_charges.substr(6, 2));
         bool is_last = (i == subshell_List.size() - 1);
-        
-        // 快速查找索引 - O(1)哈希查找替代O(n)线性查找
-        auto it = subshell_map.find(subshell);
-        if (it == subshell_map.end()) {
-            continue;
-        }
-        size_t orbs_index = it->second;
-        if (orbs_index >= peel_subshells.size()) continue;
-        
-        size_t descriptor_index = orbs_index * 3;
-        occupied_orbits[orbs_index] = true;
         
         // 处理第二行数据（中间J耦合值）
         int temp_middle_item = 0;
-        if (!middle_line_item.empty()) {
-            std::string middle_item = trim(middle_line_item);
+        std::string middle_item = trim(middle_line_item);
+        if (!middle_item.empty() && middle_item.find_first_not_of(" \t") != std::string::npos) {
+            // 如果有分号分隔的多个值，取最后一个
+            size_t semicolon_pos = middle_item.find_last_of(';');
+            if (semicolon_pos != std::string::npos) {
+                middle_item = middle_item.substr(semicolon_pos + 1);
+            }
+            middle_item = trim(middle_item);
             if (!middle_item.empty()) {
-                // 快速处理最后一个分号后的值
-                size_t semicolon_pos = middle_item.rfind(';');
-                if (semicolon_pos != std::string::npos) {
-                    middle_item = trim(middle_item.substr(semicolon_pos + 1));
-                }
-                if (!middle_item.empty()) {
-                    temp_middle_item = j_to_double_j_fixed(middle_item);
-                }
+                temp_middle_item = j_to_double_j_fixed(middle_item);
             }
         }
         
         // 处理第三行数据（耦合J值）
         int temp_coupling_item = 0;
-        if (!coupling_line_item.empty()) {
-            std::string coupling_item = trim(coupling_line_item);
+        std::string coupling_item = trim(coupling_line_item);
+        if (!coupling_item.empty() && coupling_item.find_first_not_of(" \t") != std::string::npos) {
+            coupling_item = trim(coupling_item);
             if (!coupling_item.empty()) {
                 temp_coupling_item = j_to_double_j_fixed(coupling_item);
             }
         } else if (temp_middle_item != 0) {
-            temp_coupling_item = temp_middle_item;
+            temp_coupling_item = temp_middle_item;  // 使用第二行的值
         }
 
-        // 特殊处理：最后一个子壳层使用最终J值
+        // 特殊处理：如果是最后一个子壳层，使用最终J值
         if (is_last) {
             temp_coupling_item = final_double_J;
         }
         
-        // 直接填充描述符数组
-        descriptor[descriptor_index] = static_cast<double>(subshell_electron_num);
-        descriptor[descriptor_index + 1] = static_cast<double>(temp_middle_item);
-        descriptor[descriptor_index + 2] = static_cast<double>(temp_coupling_item);
+        // 在轨道列表中查找当前子壳层的索引
+        auto it = std::find(peel_subshells.begin(), peel_subshells.end(), subshell);
+        if (it == peel_subshells.end()) {
+            continue;  // 跳过未找到的子壳层
+        }
+        
+        size_t orbs_index = std::distance(peel_subshells.begin(), it);
+        size_t descriptor_index = orbs_index * 3;
+        
+        // 记录已占用轨道并填充描述符数组
+        orbs_occupied_indices.push_back(orbs_index);
+        descriptor[descriptor_index] = static_cast<double>(subshell_electron_num);  // 电子数
+        descriptor[descriptor_index + 1] = static_cast<double>(temp_middle_item);   // 中间J值
+        descriptor[descriptor_index + 2] = static_cast<double>(temp_coupling_item); // 耦合J值
     }
     
-    // 为未占用轨道填充最终J值 - 优化处理
+    // 处理未占用的轨道（使用集合运算找到差集）
+    std::vector<int> all_orbs_indices(peel_subshells.size());
     for (size_t i = 0; i < peel_subshells.size(); ++i) {
-        if (!occupied_orbits[i]) {
-            descriptor[i * 3 + 2] = static_cast<double>(final_double_J);
+        all_orbs_indices[i] = static_cast<int>(i);
+    }
+    
+    std::vector<int> remaining_orbs_indices;
+    for (int index : all_orbs_indices) {
+        if (std::find(orbs_occupied_indices.begin(), orbs_occupied_indices.end(), index) == orbs_occupied_indices.end()) {
+            remaining_orbs_indices.push_back(index);
         }
+    }
+    
+    // 为未占用轨道填充最终J值
+    for (int index : remaining_orbs_indices) {
+        descriptor[index * 3 + 2] = static_cast<double>(final_double_J);
     }
     
     return descriptor;
@@ -303,17 +278,14 @@ Descriptor DescriptorGenerator::generate_extended_descriptor(const CSFData& csf,
     std::vector<std::string> middle_line_List = chunk_string_fixed(middle_line, 9);
     std::vector<std::string> coupling_line_List = chunk_string_fixed(coupling_line, 9);
     
-    // 预创建子壳层到索引的映射
-    static thread_local std::unordered_map<std::string, size_t> subshell_map;
-    if (subshell_map.empty()) {
-        subshell_map = create_subshell_index_map(peel_subshells);
-    }
+    // 初始化描述符数组和已占用轨道索引列表
+    std::vector<int> orbs_occupied_indices;
     
     // 预填充子壳层信息（主量子数和kappa值）
     for (size_t i = 0; i < peel_subshells.size(); ++i) {
         const auto& subshell = peel_subshells[i];
         
-        // 快速解析主量子数
+        // 解析主量子数
         int n = 0;
         size_t j = 0;
         while (j < subshell.size() && std::isdigit(subshell[j])) {
@@ -321,7 +293,7 @@ Descriptor DescriptorGenerator::generate_extended_descriptor(const CSFData& csf,
             ++j;
         }
         
-        // 快速解析轨道类型
+        // 解析轨道类型
         std::string orbital_part = subshell.substr(j);
         if (!orbital_part.empty() && orbital_part.back() != '-' && orbital_part.back() != ' ') {
             orbital_part += ' ';
@@ -333,9 +305,6 @@ Descriptor DescriptorGenerator::generate_extended_descriptor(const CSFData& csf,
         descriptor[i * 5 + 1] = static_cast<double>(kappa);
     }
     
-    // 使用固定大小的数组跟踪已占用轨道
-    std::array<bool, 50> occupied_orbits{};
-    
     // 遍历每个子壳层块，提取和处理信息
     for (size_t i = 0; i < subshell_List.size(); ++i) {
         const std::string& subshell_charges = subshell_List[i];
@@ -344,69 +313,91 @@ Descriptor DescriptorGenerator::generate_extended_descriptor(const CSFData& csf,
         
         if (subshell_charges.length() < 8) continue;
         
-        // 快速提取子壳层名称和电子数
-        std::string subshell = trim(subshell_charges.substr(0, 5));
-        int subshell_electron_num = (subshell_charges[6] - '0') * 10 + (subshell_charges[7] - '0');
+        // 提取子壳层名称和电子数
+        std::string subshell = subshell_charges.substr(0, 5);
+        subshell = trim(subshell);
+        int subshell_electron_num = std::stoi(subshell_charges.substr(6, 2));
         bool is_last = (i == subshell_List.size() - 1);
         
-        // 快速查找索引
-        auto it = subshell_map.find(subshell);
-        if (it == subshell_map.end()) continue;
-        
-        size_t orbs_index = it->second;
-        if (orbs_index >= peel_subshells.size()) continue;
-        
+        // 判断轨道是否填满
         bool is_full = is_subshell_full_fixed(subshell, subshell_electron_num);
-        occupied_orbits[orbs_index] = true;
         
-        // 处理第二行数据
+        // 处理第二行数据（中间J耦合值）
         int temp_middle_item = 0;
-        if (!middle_line_item.empty()) {
-            std::string middle_item = trim(middle_line_item);
+        std::string middle_item = trim(middle_line_item);
+        if (!middle_item.empty() && middle_item.find_first_not_of(" \t") != std::string::npos) {
+            // 如果有分号分隔的多个值，取最后一个
+            size_t semicolon_pos = middle_item.find_last_of(';');
+            if (semicolon_pos != std::string::npos) {
+                middle_item = middle_item.substr(semicolon_pos + 1);
+            }
+            middle_item = trim(middle_item);
             if (!middle_item.empty()) {
-                size_t semicolon_pos = middle_item.rfind(';');
-                if (semicolon_pos != std::string::npos) {
-                    middle_item = trim(middle_item.substr(semicolon_pos + 1));
-                }
-                if (!middle_item.empty()) {
-                    temp_middle_item = j_to_double_j_fixed(middle_item);
-                    if (!is_full) temp_middle_item *= 2;
+                temp_middle_item = j_to_double_j_fixed(middle_item);
+                // 未填满轨道J值乘以2增强特征
+                if (!is_full) {
+                    temp_middle_item *= 2;
                 }
             }
         }
         
-        // 处理第三行数据
+        // 处理第三行数据（耦合J值）
         int temp_coupling_item = 0;
-        if (!coupling_line_item.empty()) {
-            std::string coupling_item = trim(coupling_line_item);
+        std::string coupling_item = trim(coupling_line_item);
+        if (!coupling_item.empty() && coupling_item.find_first_not_of(" \t") != std::string::npos) {
+            coupling_item = trim(coupling_item);
             if (!coupling_item.empty()) {
                 temp_coupling_item = j_to_double_j_fixed(coupling_item);
-                if (!is_full) temp_coupling_item *= 2;
+                if (!is_full) {
+                    temp_coupling_item *= 2;
+                }
             }
         } else if (temp_middle_item != 0) {
-            temp_coupling_item = temp_middle_item;
+            temp_coupling_item = temp_middle_item;  // 使用第二行的值
         }
         
+        // 特殊处理：如果是最后一个子壳层，使用最终J值
         if (is_last) {
             temp_coupling_item = final_double_J * (is_full ? 1 : 2);
         }
         
+        // 填满的轨道J值设为0
         if (is_full) {
             temp_middle_item = 0;
             temp_coupling_item = 0;
         }
         
-        // 直接填充描述符
-        descriptor[orbs_index * 5 + 2] = static_cast<double>(subshell_electron_num);
-        descriptor[orbs_index * 5 + 3] = static_cast<double>(temp_middle_item);
-        descriptor[orbs_index * 5 + 4] = static_cast<double>(temp_coupling_item);
+        // 在轨道列表中查找当前子壳层的索引
+        auto it = std::find(peel_subshells.begin(), peel_subshells.end(), subshell);
+        if (it == peel_subshells.end()) {
+            continue;  // 跳过未找到的子壳层
+        }
+        
+        size_t orbs_index = std::distance(peel_subshells.begin(), it);
+        
+        // 记录已占用轨道并填充描述符数组
+        orbs_occupied_indices.push_back(orbs_index);
+        descriptor[orbs_index * 5 + 2] = static_cast<double>(subshell_electron_num);  // 第3位：电子数
+        descriptor[orbs_index * 5 + 3] = static_cast<double>(temp_middle_item);       // 第4位：中间J值
+        descriptor[orbs_index * 5 + 4] = static_cast<double>(temp_coupling_item);     // 第5位：耦合J值
+    }
+    
+    // 处理未占用的轨道（使用集合运算找到差集）
+    std::vector<int> all_orbs_indices(peel_subshells.size());
+    for (size_t i = 0; i < peel_subshells.size(); ++i) {
+        all_orbs_indices[i] = static_cast<int>(i);
+    }
+    
+    std::vector<int> remaining_orbs_indices;
+    for (int index : all_orbs_indices) {
+        if (std::find(orbs_occupied_indices.begin(), orbs_occupied_indices.end(), index) == orbs_occupied_indices.end()) {
+            remaining_orbs_indices.push_back(index);
+        }
     }
     
     // 为未占用轨道填充最终J值的二倍
-    for (size_t i = 0; i < peel_subshells.size(); ++i) {
-        if (!occupied_orbits[i]) {
-            descriptor[i * 5 + 4] = static_cast<double>(final_double_J * 2);
-        }
+    for (int index : remaining_orbs_indices) {
+        descriptor[index * 5 + 4] = static_cast<double>(final_double_J * 2);
     }
     
     return descriptor;
