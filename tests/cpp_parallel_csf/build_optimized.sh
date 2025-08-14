@@ -13,7 +13,6 @@ cd build
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_FLAGS="-O3 -march=native -mtune=native -DNDEBUG -fno-math-errno -ffast-math" \
-    -DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
     -DCMAKE_VERBOSE_MAKEFILE=ON
 
 # 并行编译
