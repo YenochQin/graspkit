@@ -344,7 +344,84 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, X_unselected, config
         }
     }
 
-def check_grasp_cal_convergence(config, logger, current_calculation_csfs=None):
+def check_energy_convergence(config, logger, current_energy_data: pd.DataFrame) -> bool:
+    """
+    检查能量收敛性：比较当前轮与上一轮的能量差异
+    
+    Args:
+        config: 配置对象
+        logger: 日志记录器
+        current_energy_data: 当前轮的能量数据DataFrame
+    
+    Returns:
+        bool: True表示继续计算，False表示需要回退到上一轮重算
+    """
+    if config.cal_loop_num < 2:
+        logger.info("第一轮计算，跳过能量收敛检查")
+        return True
+    
+    try:
+        # 获取上一轮的能量数据文件路径
+        previous_energy_path = config.scf_cal_path / f'{config.conf}_{config.cal_loop_num-1}_correct_levels.csv'
+        
+        if not previous_energy_path.exists():
+            logger.warning(f"未找到上一轮能量数据: {previous_energy_path}")
+            return True
+        
+        # 加载上一轮能量数据
+        previous_energy_data = pd.read_csv(previous_energy_path)
+        
+        # 检查数据一致性
+        if len(current_energy_data) != len(previous_energy_data):
+            logger.warning(f"当前轮与能量数据数量不一致: 当前{len(current_energy_data)} vs 上轮{len(previous_energy_data)}")
+            return True
+        
+        # 获取能量列（假设是'EnergyTotal'列）
+        current_energies = np.asarray(current_energy_data['EnergyTotal'], dtype=np.float64)
+        previous_energies = np.asarray(previous_energy_data['EnergyTotal'], dtype=np.float64)
+        
+        # 计算能量差异
+        energy_diffs = np.abs(current_energies - previous_energies)
+        
+        # 安全检查：避免除零错误
+        previous_energies_abs = np.abs(previous_energies)
+        zero_energy_mask = previous_energies_abs == 0
+        if np.any(zero_energy_mask):
+            logger.warning("检测到零能量值，跳过这些能级的收敛检查")
+            # 移除零能量值
+            valid_mask = ~zero_energy_mask
+            current_energies = current_energies[valid_mask]
+            previous_energies = previous_energies[valid_mask]
+            energy_diffs = energy_diffs[valid_mask]
+            previous_energies_abs = previous_energies_abs[valid_mask]
+        
+        relative_diffs = energy_diffs / previous_energies_abs
+        
+        # 检查是否有能量绝对值增加超过0.1%的情况
+        max_relative_increase = 0.001  # 0.1%
+        
+        # 找出能量增加的能级（当前值 > 上一轮的值）
+        energy_increase_mask = current_energies > previous_energies
+        if np.any(energy_increase_mask):
+            # 对于能量增加的能级，检查相对差异
+            increase_diffs = relative_diffs[energy_increase_mask]
+            if np.any(increase_diffs > max_relative_increase):
+                max_diff_idx = np.argmax(increase_diffs)
+                max_diff_percent = increase_diffs[max_diff_idx] * 100
+                logger.warning(f"检测到能量不收敛: 第{max_diff_idx+1}个能级能量增加{max_diff_percent:.4f}%")
+                logger.warning(f"当前能量: {current_energies[energy_increase_mask][max_diff_idx]:.7f}")
+                logger.warning(f"上轮能量: {previous_energies[energy_increase_mask][max_diff_idx]:.7f}")
+                return False
+        
+        logger.info("能量收敛检查通过，继续计算")
+        return True
+        
+    except Exception as e:
+        logger.error(f"能量收敛检查过程中发生错误: {str(e)}")
+        return True  # 发生错误时继续计算，避免阻塞
+
+
+def evaluate_calculation_convergence(config, logger, current_calculation_csfs=None):
     """
     检查GRASP计算的收敛性
     
