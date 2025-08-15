@@ -132,7 +132,7 @@ if not load_status['success']:
 ```
 
 3. **`gdp.check_configuration_coupling(config, energy_level_data_pd)`**
-4. **`gdp.check_grasp_cal_convergence(config, current_calculation_csfs)`**
+4. **`gdp.evaluate_calculation_convergence(config, current_calculation_csfs)`**
 5. **`gdp.generate_chosen_csfs_descriptors(...)`**
 6. **`gdp.get_unselected_descriptors(...)`**
 7. **`gdp.train_model(...)`**

@@ -218,7 +218,7 @@ def main(config):
             logger.info(f"当前轮CSFs数量: {current_calculation_csfs}")
             
             # 传递当前轮CSFs数量给收敛性检查函数
-            should_continue = gdp.check_grasp_cal_convergence(config, logger, current_calculation_csfs)
+            should_continue = gdp.evaluate_calculation_convergence(config, logger, current_calculation_csfs)
             
             logger.info(f"检查收敛性结果: {'继续计算' if should_continue else '已收敛，停止计算'}")
             
@@ -227,6 +227,32 @@ def main(config):
                 logger.info("计算已收敛，跳过机器学习训练，停止计算")
                 gdp.update_config(config_file_path, {'continue_cal': False})
                 return
+
+        # 在cal_loop_num >= 2时检查能量收敛性
+        if config.cal_loop_num >= 2:
+            logger.info("开始检查能量收敛性...")
+            energy_converged = gdp.check_energy_convergence(config, logger, selected_energy_data)
+            
+            if not energy_converged:
+                logger.warning("检测到能量不收敛，需要回退到上一轮重新计算")
+                
+                if config.cal_loop_num <= 1:
+                    logger.error("已经是第一轮计算，无法回退到上一轮，使用原有错误处理机制")
+                    gdp.handle_calculation_error(config, logger)
+                else:
+                    logger.info(f"从第 {config.cal_loop_num} 轮回退到第 {config.cal_loop_num - 1} 轮重新计算")
+                    
+                    # 设置回退标志和目标轮次
+                    gdp.update_config(config_file_path, {
+                        'backward_loop_needed': True,
+                        'target_backward_loop': config.cal_loop_num - 1,
+                        'cal_loop_num': config.cal_loop_num - 1,
+                        'continue_cal': True,
+                        'cal_error_num': 0
+                    })
+                    
+                    logger.info("已设置回退标志，脚本将回退到上一轮重新执行")
+                    return
 
         # 提取特征
         logger.info("数据预处理")
