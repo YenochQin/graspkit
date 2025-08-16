@@ -1354,7 +1354,23 @@ log_with_timestamp "Current loop: \$(highlight_number "\$loop" "\$COLOR_CYAN")"
 backward_loop_needed=\$(safe_get_config_value "\${config_file}" "backward_loop_needed" "backward loop needed")
 if [[ "\$backward_loop_needed" == "true" ]]; then
     target_backward_loop=\$(safe_get_config_value "\${config_file}" "target_backward_loop" "target backward loop")
+    cal_error_num=\$(safe_get_config_value "\${config_file}" "cal_error_num" "calculation error count")
     log_with_timestamp "🔄 检测到回退标志: 需要回退到第 \$target_backward_loop 轮重新训练"
+    
+    # 重命名当前轮次目录为错误目录
+    current_dir="\${conf}_\${loop}"
+    error_dir="\${conf}_\${loop}_err_\${cal_error_num}"
+    
+    if [[ -d "\$current_dir" ]]; then
+        log_with_timestamp "📁 重命名当前计算目录: \$current_dir -> \$error_dir"
+        mv "\$current_dir" "\$error_dir"
+        if [[ \$? -eq 0 ]]; then
+            log_with_timestamp "✅ 目录重命名成功"
+        else
+            log_with_timestamp "❌ 目录重命名失败"
+            exit 1
+        fi
+    fi
     
     # 验证回退的合理性
     if [[ "\$loop" == "\$target_backward_loop" ]]; then
