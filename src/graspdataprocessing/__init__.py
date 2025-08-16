@@ -86,7 +86,10 @@ from .CSFs_processing import (
     parse_csf_2_descriptor_with_subshell,
     batch_process_csfs_to_descriptors,
     batch_process_csfs_with_multi_block,
-    create_csf_dataset_for_ml
+    create_csf_dataset_for_ml,
+    CppDescriptorGenerator,
+    batch_process_csfs_with_multi_block_cpp,
+    batch_process_csfs_to_descriptors_cpp
 )
 
 from .processing import (
@@ -201,6 +204,9 @@ __all__ = [
     'batch_process_csfs_to_descriptors',
     'batch_process_csfs_with_multi_block',
     'create_csf_dataset_for_ml',
+    'CppDescriptorGenerator',
+    'batch_process_csfs_with_multi_block_cpp',
+    'batch_process_csfs_to_descriptors_cpp',
     
     # processing
     'ConfigurationFormat',

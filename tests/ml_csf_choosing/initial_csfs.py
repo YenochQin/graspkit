@@ -73,18 +73,31 @@ def process_target_pool_csfs(config):
             'block_count': target_pool_csfs_data.block_num
         })
         
-        # 步骤2：计算描述符
-        descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block(
-            target_pool_csfs_data, 
-            label_type='sequential',
-            with_subshell_info=config.ml_config.get('descriptors_with_subshell_info', False)
-        )
-        logger.info(f"初始CSFs文件{config.target_pool_file} CSFs 描述符计算成功")
+        # 步骤2：计算描述符 (使用C++并行版本)
+        use_cpp = config.ml_config.get('use_cpp_descriptor_generator', True)
+        if use_cpp:
+            # 使用C++并行计算
+            descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block_cpp(
+                target_pool_csfs_data, 
+                label_type='sequential',
+                with_subshell_info=config.ml_config.get('descriptors_with_subshell_info', False),
+                num_threads=config.ml_config.get('cpp_threads', None)
+            )
+        else:
+            # 回退到Python版本
+            descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block(
+                target_pool_csfs_data, 
+                label_type='sequential',
+                with_subshell_info=config.ml_config.get('descriptors_with_subshell_info', False)
+            )
+        backend = "C++并行" if use_cpp else "Python"
+        logger.info(f"初始CSFs文件{config.target_pool_file} CSFs 描述符计算成功 (使用{backend}版本)")
         processing_steps.append({
             'step': 'descriptor_calculation',
             'success': True,
-            'message': f'{config.target_pool_file} CSFs 描述符计算成功',
-            'descriptor_shape': [arr.shape for arr in descriptors_array]
+            'message': f'{config.target_pool_file} CSFs 描述符计算成功 (使用{backend}版本)',
+            'descriptor_shape': [arr.shape for arr in descriptors_array],
+            'backend_used': backend
         })
 
         # 步骤3：保存描述符
