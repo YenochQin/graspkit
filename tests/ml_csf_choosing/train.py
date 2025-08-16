@@ -209,50 +209,49 @@ def main(config):
         logger.info("耦合正确")
         logger.info("************************************************")
 
-        # 先检查收敛性，如果已收敛则跳过机器学习训练
+        # 统一收敛性检查，仅在cal_loop_num >= 3时进行
         should_continue = True
         if config.cal_loop_num >= 3:
-            logger.info("开始检查收敛性...")
-            # 获取当前轮的CSFs数量（从已加载的数据中获取）
+            logger.info("开始统一收敛性检查...")
+            
+            # 获取当前轮的CSFs数量
             current_calculation_csfs = cal_csfs_data.CSFs_block_length[0]
             logger.info(f"当前轮CSFs数量: {current_calculation_csfs}")
             
-            # 传递当前轮CSFs数量给收敛性检查函数
-            should_continue = gdp.evaluate_calculation_convergence(config, logger, current_calculation_csfs)
-            
-            logger.info(f"检查收敛性结果: {'继续计算' if should_continue else '已收敛，停止计算'}")
-            
-            if not should_continue:
-                logger.info("************************************************")
-                logger.info("计算已收敛，跳过机器学习训练，停止计算")
-                gdp.update_config(config_file_path, {'continue_cal': False})
-                return
-
-        # 在cal_loop_num >= 2时检查能量收敛性
-        if config.cal_loop_num >= 2:
-            logger.info("开始检查能量收敛性...")
+            # 1. 先检查能量收敛性
+            logger.info("步骤1: 检查能量收敛性...")
             energy_converged = gdp.check_energy_convergence(config, logger, selected_energy_data)
             
             if not energy_converged:
-                logger.warning("检测到能量不收敛，需要回退到上一轮重新计算")
+                logger.info(f"检测到能量不收敛，从第 {config.cal_loop_num} 轮回退到第 {config.cal_loop_num - 1} 轮重新计算")
                 
-                if config.cal_loop_num <= 1:
-                    logger.error("已经是第一轮计算，无法回退到上一轮，使用原有错误处理机制")
-                    gdp.handle_calculation_error(config, logger)
-                else:
-                    logger.info(f"从第 {config.cal_loop_num} 轮回退到第 {config.cal_loop_num - 1} 轮重新计算")
-                    
-                    # 设置回退标志和目标轮次
-                    gdp.update_config(config_file_path, {
-                        'backward_loop_needed': True,
-                        'target_backward_loop': config.cal_loop_num - 1,
-                        'cal_loop_num': config.cal_loop_num - 1,
-                        'continue_cal': True,
-                        'cal_error_num': 0
-                    })
-                    
-                    logger.info("已设置回退标志，脚本将回退到上一轮重新执行")
-                    return
+                # 设置回退标志和目标轮次
+                gdp.update_config(config_file_path, {
+                    'backward_loop_needed': True,
+                    'target_backward_loop': config.cal_loop_num - 1,
+                    'cal_loop_num': config.cal_loop_num - 1,
+                    'continue_cal': True,
+                    'cal_error_num': config.cal_error_num + 1
+                })
+                
+                logger.info("已设置回退标志，脚本将回退到上一轮重新执行")
+                return
+            
+            logger.info("✓ 能量收敛性检查通过")
+            
+            # 2. 再检查整体计算收敛性
+            logger.info("步骤2: 检查整体计算收敛性...")
+            should_continue = gdp.evaluate_calculation_convergence(config, logger, current_calculation_csfs)
+            
+            logger.info(f"整体收敛性结果: {'继续计算' if should_continue else '已收敛，停止计算'}")
+            
+            if not should_continue:
+                logger.info("************************************************")
+                logger.info("整体计算已收敛，跳过机器学习训练，停止计算")
+                gdp.update_config(config_file_path, {'continue_cal': False})
+                return
+                
+            logger.info("✓ 整体收敛性检查通过")
 
         # 提取特征
         logger.info("数据预处理")
@@ -653,7 +652,7 @@ def main(config):
                 'target_backward_loop': config.cal_loop_num - 1,
                 'cal_loop_num': config.cal_loop_num - 1,
                 'continue_cal': True,
-                'cal_error_num': 0
+                'cal_error_num': config.cal_error_num + 1
             })
             
             logger.info("已设置回退标志，脚本将回退到上一轮重新执行train.py")
