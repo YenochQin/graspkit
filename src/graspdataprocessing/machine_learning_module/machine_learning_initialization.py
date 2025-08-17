@@ -104,18 +104,18 @@ def initialize_iteration_results_csv(config, logger=None):
 
 def validate_initial_files(config, logger) -> None:
     """验证初始文件的存在和有效性"""
-    # 验证初始CSFs文件
+    # 验证目标总组态文件
     target_pool_file_path = config.root_path / config.target_pool_file
     try:
         if not target_pool_file_path.is_file():
-            logger.error(f"初始CSFs文件无效或不存在: {target_pool_file_path}")
-            raise FileNotFoundError(f"初始CSFs文件无效或不存在: {target_pool_file_path}")
-        logger.info(f"成功加载初始CSFs文件: {target_pool_file_path}")
+            logger.error(f"目标总组态文件无效或不存在: {target_pool_file_path}")
+            raise FileNotFoundError(f"目标总组态文件无效或不存在: {target_pool_file_path}")
+        logger.info(f"成功加载目标总组态文件: {target_pool_file_path}")
     except PermissionError as e:
-        logger.error(f"无权限访问CSFs文件: {target_pool_file_path}")
+        logger.error(f"无权限访问目标总组态文件: {target_pool_file_path}")
         raise
     except Exception as e:
-        logger.error(f"加载CSFs文件时发生未知错误: {str(e)}")
+        logger.error(f"加载目标总组态文件时发生未知错误: {str(e)}")
         raise
 
 
