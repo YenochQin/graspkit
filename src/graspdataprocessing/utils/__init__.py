@@ -44,6 +44,16 @@ from .progress_manager import (
     log_stage_end
 )
 
+from .toml_config import (
+    CPUConfig,
+    StepControl,
+    MLConfig,
+    ModelParams,
+    Config,
+    load_config,
+    save_config
+)
+
 __all__ = [
     # 数据类
     'MixCoefficientData',
@@ -78,4 +88,13 @@ __all__ = [
     'progress_context',
     'log_stage_start',
     'log_stage_end'
+    
+    # TOML配置
+    'CPUConfig',
+    'StepControl',
+    'MLConfig',
+    'ModelParams',
+    'Config',
+    'load_config',
+    'save_config'
 ]

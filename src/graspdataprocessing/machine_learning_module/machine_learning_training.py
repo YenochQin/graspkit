@@ -118,7 +118,7 @@ def train_model(
         cpu_count = os.cpu_count() or 4  # 如果无法获取则默认使用4核
         
         # 从配置文件读取PyTorch线程数，如果未设置则使用默认值
-        config_threads = getattr(config, 'pytorch_threads', None)
+        config_threads = config.ml_config.get('pytorch_threads', None)
         if config_threads is not None:
             try:
                 config_threads = int(config_threads)
