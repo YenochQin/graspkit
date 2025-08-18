@@ -14,7 +14,7 @@ import shutil
 import numpy as np
 import h5py
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class CppDescriptorGenerator:
         logger.info(f"Using C++ descriptor generator: {self.cpp_executable}")
     
     def generate_descriptors(self, 
-                           csf_file_path: str, 
+                           csf_file_path: Union[str, Path], 
                            with_subshell_info: bool = False,
                            cpu_threads: Optional[int] = None,
                            output_dir: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray]:
