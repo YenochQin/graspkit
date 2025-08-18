@@ -38,11 +38,7 @@ from .CSFs_compress_extract import (
     create_csf_dataset_for_ml
 )
 
-from .cpp_descriptor_wrapper import (
-    CppDescriptorGenerator,
-    batch_process_csfs_with_multi_block_cpp,
-    batch_process_csfs_to_descriptors_cpp
-)
+
 
 __all__ = [
     # CSFs_choosing
@@ -73,10 +69,5 @@ __all__ = [
     'parse_csf_2_descriptor_with_subshell',
     'batch_process_csfs_to_descriptors',
     'batch_process_csfs_with_multi_block',
-    'create_csf_dataset_for_ml',
-    
-    # cpp_descriptor_wrapper
-    'CppDescriptorGenerator',
-    'batch_process_csfs_with_multi_block_cpp',
-    'batch_process_csfs_to_descriptors_cpp'
+    'create_csf_dataset_for_ml'
 ]

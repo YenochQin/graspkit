@@ -33,6 +33,11 @@ from .processing_data_load import (
     load_descriptors_with_multi_block
 )
 
+from .cpp_descriptor_wrapper import (
+    CppDescriptorGenerator,
+    batch_process_csfs_with_multi_block_cpp,
+)
+
 # 显式导出所有需要的函数
 __all__ = [
     # grasp_raw_data_load
@@ -57,5 +62,9 @@ __all__ = [
     'load_large_hash',
     'load_config',
     'load_descriptors',
-    'load_descriptors_with_multi_block'
+    'load_descriptors_with_multi_block',
+    
+    # cpp_descriptor_wrapper
+    'CppDescriptorGenerator',
+    'batch_process_csfs_with_multi_block_cpp'
 ]
