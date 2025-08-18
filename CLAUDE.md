@@ -40,7 +40,7 @@ python -m build
 ### Testing
 ```bash
 # Run specific tests
-python -m pytest tests/test_pytorch_threads.py
+python -m pytest tests/test_cpu_threads.py
 python -m pytest tests/test_mkdisks_config.py
 
 # Run all tests
@@ -139,6 +139,6 @@ The system integrates with GRASP2018 through automated shell scripts:
 - ML training requires completed GRASP calculations with energy level data
 
 ### Performance Considerations
-- PyTorch thread count configurable via `cpu_config.pytorch_threads`
+- PyTorch thread count configurable via `cpu_config.cpu_threads`
 - MPI temporary file paths configurable to avoid I/O bottlenecks
 - Large CSF sets require careful memory management

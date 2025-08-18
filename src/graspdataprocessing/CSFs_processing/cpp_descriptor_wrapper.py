@@ -32,9 +32,7 @@ class CppDescriptorGenerator:
         if cpp_executable_path is None:
             # Try to find the executable in common locations
             possible_paths = [
-                "/Users/yiqin/Documents/PythonProjects/CSFs_2_descripors-dev/build/csf_descriptor",
-                "/usr/local/bin/csf_descriptor",
-                "/opt/local/bin/csf_descriptor",
+                "/usr/bin/csf_descriptor",
                 "csf_descriptor"
             ]
             
@@ -53,7 +51,7 @@ class CppDescriptorGenerator:
     def generate_descriptors(self, 
                            csf_file_path: str, 
                            with_subshell_info: bool = False,
-                           num_threads: Optional[int] = None,
+                           cpu_threads: Optional[int] = None,
                            output_dir: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Generate descriptors using C++ program
@@ -61,15 +59,15 @@ class CppDescriptorGenerator:
         Args:
             csf_file_path: Path to the input CSF file
             with_subshell_info: Whether to use extended descriptor format
-            num_threads: Number of threads to use (None for auto-detect)
+            cpu_threads: Number of threads to use (None for auto-detect)
             output_dir: Directory to save output files (temp dir if None)
             
         Returns:
             Tuple of (descriptors_array, labels_array)
         """
-        csf_file_path = Path(csf_file_path)
-        if not csf_file_path.exists():
-            raise FileNotFoundError(f"CSF file not found: {csf_file_path}")
+        csf_path = Path(csf_file_path)
+        if not csf_path.exists():
+            raise FileNotFoundError(f"CSF file not found: {csf_path}")
         
         # Create temporary directory if not provided
         if output_dir is None:
@@ -81,21 +79,16 @@ class CppDescriptorGenerator:
             os.makedirs(temp_dir, exist_ok=True)
         
         try:
-            # Generate output filename
-            output_file = Path(temp_dir) / f"{csf_file_path.stem}_descriptors.h5"
+            # Build command in the format: csf_descriptor -t [threads] -e input.csf
+            cmd = [self.cpp_executable]
             
-            # Build command
-            cmd = [
-                self.cpp_executable,
-                str(csf_file_path),
-                "-o", str(output_file)
-            ]
+            if cpu_threads is not None and cpu_threads > 0:
+                cmd.extend(["-t", str(cpu_threads)])
             
             if with_subshell_info:
                 cmd.append("-e")
             
-            if num_threads is not None and num_threads > 0:
-                cmd.extend(["-t", str(num_threads)])
+            cmd.append(str(csf_path))
             
             # Run C++ program
             logger.info(f"Running C++ descriptor generator: {' '.join(cmd)}")
@@ -112,9 +105,22 @@ class CppDescriptorGenerator:
                     f"stdout: {result.stdout}\nstderr: {result.stderr}"
                 )
             
-            # Read results from HDF5 file
-            if not output_file.exists():
-                raise FileNotFoundError(f"Output file not created: {output_file}")
+            # Find output file - C++ program creates files with .h5 extension
+            expected_output = csf_path.with_suffix('.h5')
+            if expected_output.exists():
+                output_file = expected_output
+            else:
+                # Try alternative naming patterns
+                alt_output = csf_path.with_name(f"{csf_path.stem}_descriptors.h5")
+                if alt_output.exists():
+                    output_file = alt_output
+                else:
+                    # Look for any .h5 file in the same directory
+                    h5_files = list(csf_path.parent.glob("*.h5"))
+                    if h5_files:
+                        output_file = h5_files[0]
+                    else:
+                        raise FileNotFoundError(f"No HDF5 output file found after C++ processing")
             
             descriptors, labels = self._read_hdf5_output(output_file)
             
@@ -130,9 +136,20 @@ class CppDescriptorGenerator:
         """Read descriptors and labels from HDF5 file"""
         try:
             with h5py.File(hdf5_file, 'r') as f:
-                descriptors = f['/descriptors'][:]
+                if '/descriptors' not in f:
+                    raise KeyError("'/descriptors' dataset not found in HDF5 file")
+                
+                descriptors_ds = f['/descriptors']
+                if not isinstance(descriptors_ds, h5py.Dataset):
+                    raise TypeError("'/descriptors' is not a valid HDF5 dataset")
+                
+                descriptors = np.array(descriptors_ds[:])
+                
                 if '/labels' in f:
-                    labels = f['/labels'][:]
+                    labels_ds = f['/labels']
+                    if not isinstance(labels_ds, h5py.Dataset):
+                        raise TypeError("'/labels' is not a valid HDF5 dataset")
+                    labels = np.array(labels_ds[:])
                 else:
                     # Generate sequential labels if not provided
                     labels = np.arange(len(descriptors))
@@ -141,10 +158,10 @@ class CppDescriptorGenerator:
             raise RuntimeError(f"Failed to read HDF5 output: {e}")
     
     def batch_process_with_multi_block(self, 
-                                     csfs_file_data,
-                                     label_type: str = 'sequential',
-                                     with_subshell_info: bool = False,
-                                     num_threads: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
+            csfs_file_data,
+            label_type: str = 'sequential',
+            with_subshell_info: bool = False,
+            cpu_threads: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Wrapper function compatible with existing Python API
         
@@ -152,7 +169,7 @@ class CppDescriptorGenerator:
             csfs_file_data: CSFs file data object (from GraspFileLoad)
             label_type: Label type ('sequential', 'block', 'global_sequential')
             with_subshell_info: Whether to use extended descriptor format
-            num_threads: Number of threads to use
+            cpu_threads: Number of threads to use
             
         Returns:
             Tuple of (descriptors_array, labels_array)
@@ -169,7 +186,7 @@ class CppDescriptorGenerator:
             descriptors, _ = self.generate_descriptors(
                 temp_csf_path,
                 with_subshell_info=with_subshell_info,
-                num_threads=num_threads
+                cpu_threads=cpu_threads
             )
             
             # Generate labels according to label_type
@@ -225,30 +242,30 @@ class CppDescriptorGenerator:
 
 # Convenience functions for backward compatibility
 def batch_process_csfs_with_multi_block_cpp(
-    csfs_file_data,
-    label_type: str = 'sequential',
-    with_subshell_info: bool = False,
-    num_threads: Optional[int] = None
-) -> Tuple[np.ndarray, np.ndarray]:
+                csfs_file_data,
+                label_type: str = 'sequential',
+                with_subshell_info: bool = False,
+                cpu_threads: Optional[int] = None
+            ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Drop-in replacement for batch_process_csfs_with_multi_block using C++ backend
     """
     generator = CppDescriptorGenerator()
     return generator.batch_process_with_multi_block(
-        csfs_file_data, label_type, with_subshell_info, num_threads
+        csfs_file_data, label_type, with_subshell_info, cpu_threads
 )
 
 def batch_process_csfs_to_descriptors_cpp(
-    csfs_file_data,
-    with_subshell_info: bool = False,
-    num_threads: Optional[int] = None
-) -> np.ndarray:
+                csfs_file_data,
+                with_subshell_info: bool = False,
+                cpu_threads: Optional[int] = None
+            ) -> np.ndarray:
     """
     Drop-in replacement for batch_process_csfs_to_descriptors using C++ backend
     """
     generator = CppDescriptorGenerator()
     descriptors, _ = generator.batch_process_with_multi_block(
         csfs_file_data, label_type='sequential', 
-        with_subshell_info=with_subshell_info, num_threads=num_threads
+        with_subshell_info=with_subshell_info, cpu_threads=cpu_threads
     )
     return descriptors

@@ -118,18 +118,18 @@ def train_model(
         cpu_count = os.cpu_count() or 4  # 如果无法获取则默认使用4核
         
         # 从配置文件读取PyTorch线程数，如果未设置则使用默认值
-        config_threads = config.ml_config.get('pytorch_threads', None)
+        config_threads = config.ml_config.get('cpu_threads', None)
         if config_threads is not None:
             try:
                 config_threads = int(config_threads)
                 optimal_threads = min(config_threads, cpu_count)  # 不超过系统核心数
                 logger.info(f"使用配置文件中的PyTorch线程数: {config_threads}")
             except (ValueError, TypeError):
-                logger.warning(f"配置文件中的pytorch_threads值无效: {config_threads}，使用默认值")
+                logger.warning(f"配置文件中的cpu_threads值无效: {config_threads}，使用默认值")
                 optimal_threads = min(32, cpu_count)
         else:
             optimal_threads = min(32, cpu_count)  # 默认最多使用32线程
-            logger.info(f"配置文件中未设置pytorch_threads，使用默认值")
+            logger.info(f"配置文件中未设置cpu_threads，使用默认值")
         
         # 设置PyTorch线程数
         torch.set_num_threads(optimal_threads)
