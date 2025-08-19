@@ -329,7 +329,8 @@ class GraspFileLoad:
 
         return self.grasp_data_file_path_list
 
-    def data_file_process(self):
+    def data_file_process(self) -> "list[str] | tuple[list, list] | pd.DataFrame | CSFs | MixCoefficientData | int | None":
+
         '''
         The data_file_process method in the GraspFileLoad class is designed to identify the data type of the input file and process it accordingly. 
         '''

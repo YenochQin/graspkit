@@ -124,7 +124,7 @@ def _process_config_data(config):
     # 浮点数转换
     config['cutoff_value'] = float(config['cutoff_value'])
     config['chosen_ratio'] = float(config['chosen_ratio'])
-    config['expansion_ratio'] = float(config['expansion_ratio'])
+    config['ml_config']['expansion_ratio'] = float(config['ml_config']['expansion_ratio'])
     
     # 整数转换
     config['cal_loop_num'] = int(config['cal_loop_num'])
@@ -173,8 +173,8 @@ def _validate_config_data(config):
         if not (0 < config['chosen_ratio'] <= 1):
             raise ValueError("chosen_ratio 必须在 (0, 1] 范围内")
     
-    if 'expansion_ratio' in config:
-        if config['expansion_ratio'] < 1:
+    if 'expansion_ratio' in config['ml_config']:
+        if config['ml_config']['expansion_ratio'] < 1:
             raise ValueError("expansion_ratio 必须大于等于 1")
     
     # 验证光谱项列表
