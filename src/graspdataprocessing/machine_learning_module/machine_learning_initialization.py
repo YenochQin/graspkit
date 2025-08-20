@@ -14,6 +14,7 @@ import pandas as pd
 from typing import Dict, Tuple, List, Optional
 
 from ..data_IO import GraspFileLoad, load_csfs_binary, load_descriptors, csfs_index_load, save_descriptors, load_descriptors_with_multi_block
+from ..data_IO.h5_descriptor_load import load_hdf5_descriptors
 from ..processing.ASF_data_collection import LevelsEnergyData
 from ..CSFs_processing import batch_asfs_mix_square_above_threshold
 from ..utils.data_modules import MixCoefficientData
@@ -119,8 +120,17 @@ def validate_initial_files(config, logger) -> None:
         raise
 
 
-def load_data_files(config, logger) -> tuple:
-    """加载数据文件"""
+def load_data_files(config, logger, use_cpp: bool = False) -> tuple:
+    """加载数据文件
+    
+    Args:
+        config: 配置对象
+        logger: 日志记录器
+        use_cpp: 是否使用C++生成的HDF5文件格式
+    
+    Returns:
+        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict)
+    """
     # config.yaml文件读取时已经处理好root_path和config.scf_cal_path路径
     
     # 加载能级文件
@@ -142,18 +152,31 @@ def load_data_files(config, logger) -> tuple:
     rmix_file_data = rmix_file_load.data_file_process()
     logger.info(f"加载 *.m 文件数据: {rmix_file_path}")
     
-    # # 加载初始 CSFs 文件
-    target_pool_file_path = config.root_path / f'{config.conf}'
-    # target_pool_binary_file_path = target_pool_file_path.with_suffix('.pkl.gz')
-    # target_pool_csfs_data = load_csfs_binary(target_pool_binary_file_path)
-    # logger.info(f"加载初始 CSFs 文件: {target_pool_binary_file_path}")
-    
     # 加载初始 CSFs 描述符文件
-    result = load_descriptors_with_multi_block(target_pool_file_path, 'npy')
-    if result is None:
-        raise FileNotFoundError(f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}")
-    raw_csfs_descriptors, raw_csfs_indices = result
-    logger.info(f"加载初始 CSFs 描述符文件: {target_pool_file_path}")
+    target_pool_file_path = config.root_path / f'{config.conf}'
+    
+    if use_cpp:
+        # 使用C++生成的HDF5文件
+        hdf5_file_path = target_pool_file_path.with_suffix('.h5')
+        try:
+            hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
+            raw_csfs_descriptors = hdf5_data['descriptors']
+            raw_csfs_indices = hdf5_data.get('labels', None)
+            logger.info(f"使用C++ HDF5文件加载初始 CSFs 描述符: {hdf5_file_path}")
+        except Exception as e:
+            logger.warning(f"C++ HDF5文件加载失败: {e}，回退到传统文件格式")
+            # 回退到传统文件格式
+            result = load_descriptors_with_multi_block(target_pool_file_path, 'npy')
+            if result is None:
+                raise FileNotFoundError(f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}")
+            raw_csfs_descriptors, raw_csfs_indices = result
+    else:
+        # 使用传统文件格式
+        result = load_descriptors_with_multi_block(target_pool_file_path, 'npy')
+        if result is None:
+            raise FileNotFoundError(f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}")
+        raw_csfs_descriptors, raw_csfs_indices = result
+        logger.info(f"加载初始 CSFs 描述符文件: {target_pool_file_path}")
     
     # 加载本轮计算CSFs文件
     cal_csfs_file_path = config.scf_cal_path / f'{config.conf}_{config.cal_loop_num}.c'
@@ -166,12 +189,6 @@ def load_data_files(config, logger) -> tuple:
     caled_csfs_indices_dict = csfs_index_load(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
     
-    # 加载本轮未选择的CSFs的索引文件
-    # unselected_csfs_indices_file_path = config.scf_cal_path / f'{config.conf}_{config.cal_loop_num}_unselected_indices.pkl'
-    # unselected_csfs_indices_dict = csfs_index_load(unselected_csfs_indices_file_path)
-    # logger.info(f"加载本轮选择的 CSFs 的索引文件: {unselected_csfs_indices_file_path}")
-
-    # return energy_level_data_pd, rmix_file_data, target_pool_csfs_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict, unselected_csfs_indices_dict
     return energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict
 
 def check_configuration_coupling(config, energy_level_data_pd, logger):

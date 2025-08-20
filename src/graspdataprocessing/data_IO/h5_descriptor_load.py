@@ -16,9 +16,9 @@ class CSFDescriptorError(Exception):
     """Custom exception for CSF descriptor related errors."""
     pass
 
-def read_results(self, hdf5_file: str) -> Dict[str, np.ndarray]:
+def load_hdf5_descriptors(hdf5_file: str) -> Dict[str, np.ndarray]:
     """
-    Read results from an HDF5 file.
+    Load descriptors from C++ generated HDF5 file.
     
     Args:
         hdf5_file: Path to the HDF5 file
