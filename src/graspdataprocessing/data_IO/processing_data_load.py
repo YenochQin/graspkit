@@ -18,6 +18,7 @@ import rtoml
 
 import numpy as np
 import pandas as pd
+import h5py
 
 
 from ..utils.tool_function import *
@@ -189,14 +190,16 @@ def _validate_config_data(config):
 
 def load_descriptors(
                         load_path: Union[str, Path], 
-                        file_format: Optional[str] = None
+                        file_format: Optional[str] = None,
+                        use_cpp: bool = False
                         ) -> Optional[np.ndarray]:
     """
     加载描述符数组
     
     Args:
         load_path (Union[str, Path]): 加载路径（可含或不含扩展名）
-        file_format (Optional[str]): 文件格式，如果为None则从文件扩展名自动推断
+        file_format (Optional[str]): 文件格式，如果为None则自动推断
+        use_cpp (bool): 是否使用C++生成的HDF5文件
     
     Returns:
         Optional[np.ndarray]: 描述符数组，加载失败返回None
@@ -204,13 +207,30 @@ def load_descriptors(
     Example:
         >>> descriptors = load_descriptors('output/csf_descriptors.npy')
         >>> descriptors = load_descriptors(Path('output/csf_descriptors.npy'))
-        >>> descriptors = load_descriptors('output/csf_descriptors', 'csv')
+        >>> descriptors = load_descriptors('output/csf_descriptors', use_cpp=True)
     """
     
     # 转换为Path对象
     load_path = Path(load_path)
     
-    # 自动推断文件格式
+    # 如果使用C++ HDF5文件
+    if use_cpp:
+        hdf5_path = load_path.with_suffix('.h5')
+        if hdf5_path.exists():
+            try:
+                with h5py.File(hdf5_path, 'r') as f:
+                    if 'descriptors' in f:
+                        descriptors = f['descriptors'][:]
+                        print(f"Descriptors loaded from HDF5: {hdf5_path}")
+                        return descriptors
+                    else:
+                        print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
+            except Exception as e:
+                print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
+        else:
+            print(f"Error: HDF5 file not found: {hdf5_path}")
+    
+    # 原有的文件格式支持
     if file_format is None:
         if load_path.suffix == '.npy':
             file_format = 'npy'
@@ -273,7 +293,8 @@ def load_descriptors(
 
 def load_descriptors_with_multi_block(
                                         load_path: Union[str, Path], 
-                                        file_format: Optional[str] = None
+                                        file_format: Optional[str] = None,
+                                        use_cpp: bool = False
                                         ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     加载带标签的描述符数组
@@ -281,6 +302,7 @@ def load_descriptors_with_multi_block(
     Args:
         load_path (Union[str, Path]): 加载路径（不含扩展名）
         file_format (Optional[str]): 文件格式，如果为None则自动推断
+        use_cpp (bool): 是否使用C++生成的HDF5文件
     
     Returns:
         Optional[Tuple[np.ndarray, np.ndarray]]: (描述符数组, 标签数组)，加载失败返回None
@@ -288,13 +310,43 @@ def load_descriptors_with_multi_block(
     Example:
         >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features')
         >>> descriptors, labels = load_descriptors_with_block_indices(Path('ml_data/features'))
-        >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features', 'csv')
+        >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features', use_cpp=True)
     """
     
     # 转换为Path对象
     load_path = Path(load_path)
     
-    # 自动推断文件格式
+    # 如果使用C++ HDF5文件
+    if use_cpp:
+        hdf5_path = load_path.with_suffix('.h5')
+        if hdf5_path.exists():
+            try:
+                with h5py.File(hdf5_path, 'r') as f:
+                    descriptors = None
+                    labels = None
+                    
+                    if 'descriptors' in f:
+                        descriptors = f['descriptors'][:]
+                    
+                    if 'labels' in f:
+                        labels = f['labels'][:]
+                    
+                    if descriptors is not None:
+                        print(f"Descriptors loaded from HDF5: {hdf5_path}")
+                        if labels is not None:
+                            print(f"Labels loaded from HDF5: {hdf5_path}")
+                        return descriptors, labels
+                    else:
+                        print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
+                        return None
+                        
+            except Exception as e:
+                print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
+                return None
+        else:
+            print(f"Error: HDF5 file not found: {hdf5_path}")
+    
+    # 原有的文件格式支持
     if file_format is None:
         if (load_path.parent / f"{load_path.name}_descriptors_block_indices.csv").exists():
             file_format = 'csv'
