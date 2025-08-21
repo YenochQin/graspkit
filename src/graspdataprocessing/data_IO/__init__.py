@@ -38,6 +38,11 @@ from .cpp_descriptor_wrapper import (
     batch_process_csfs_with_multi_block_cpp,
 )
 
+from .h5_descriptor_load import (
+    load_hdf5_descriptors
+)
+
+
 # 显式导出所有需要的函数
 __all__ = [
     # grasp_raw_data_load
@@ -66,5 +71,9 @@ __all__ = [
     
     # cpp_descriptor_wrapper
     'CppDescriptorGenerator',
-    'batch_process_csfs_with_multi_block_cpp'
+    'batch_process_csfs_with_multi_block_cpp',
+    
+    # h5_descriptor_load
+    'load_hdf5_descriptors'
+
 ]
