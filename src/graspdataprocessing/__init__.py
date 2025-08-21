@@ -28,7 +28,9 @@ from .data_IO import (
     load_large_hash,
     load_config,
     load_descriptors,
-    load_descriptors_with_multi_block
+    load_descriptors_with_multi_block,
+    CppDescriptorGenerator,
+    batch_process_csfs_with_multi_block_cpp
 )
 
 from .utils import (
@@ -86,10 +88,7 @@ from .CSFs_processing import (
     parse_csf_2_descriptor_with_subshell,
     batch_process_csfs_to_descriptors,
     batch_process_csfs_with_multi_block,
-    create_csf_dataset_for_ml,
-    CppDescriptorGenerator,
-    batch_process_csfs_with_multi_block_cpp,
-    batch_process_csfs_to_descriptors_cpp
+    create_csf_dataset_for_ml
 )
 
 from .processing import (
@@ -155,6 +154,8 @@ __all__ = [
     'load_config',
     'load_descriptors',
     'load_descriptors_with_multi_block',
+    'CppDescriptorGenerator',
+    'batch_process_csfs_with_multi_block_cpp',
     
     # utils
     'MixCoefficientData',
@@ -204,9 +205,7 @@ __all__ = [
     'batch_process_csfs_to_descriptors',
     'batch_process_csfs_with_multi_block',
     'create_csf_dataset_for_ml',
-    'CppDescriptorGenerator',
-    'batch_process_csfs_with_multi_block_cpp',
-    'batch_process_csfs_to_descriptors_cpp',
+
     
     # processing
     'ConfigurationFormat',
