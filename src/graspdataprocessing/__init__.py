@@ -30,7 +30,9 @@ from .data_IO import (
     load_descriptors,
     load_descriptors_with_multi_block,
     CppDescriptorGenerator,
-    batch_process_csfs_with_multi_block_cpp
+    batch_process_csfs_with_multi_block_cpp,
+    load_hdf5_descriptors
+
 )
 
 from .utils import (
@@ -156,6 +158,8 @@ __all__ = [
     'load_descriptors_with_multi_block',
     'CppDescriptorGenerator',
     'batch_process_csfs_with_multi_block_cpp',
+    'load_hdf5_descriptors',
+
     
     # utils
     'MixCoefficientData',
