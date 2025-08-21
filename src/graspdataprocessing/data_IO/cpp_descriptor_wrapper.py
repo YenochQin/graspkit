@@ -53,18 +53,22 @@ class CppDescriptorGenerator:
         logger.info(f"Using C++ descriptor generator: {self.executable_path}")
     def _find_executable(self, custom_path: Optional[str] = None) -> Optional[str]:
         """Find the CSF descriptor executable."""
-        if custom_path is None:
-            # Common locations to search
-            search_paths = [
-                "csf_descriptor",
-                "/usr/bin/csf_descriptor",
-                "/opt/bin/csf_descriptor",
-                shutil.which("csf_descriptor"),
-            ]
-        
-            for path in search_paths:
-                if os.path.isfile(path) and os.access(path, os.X_OK):
-                    return path
+        if custom_path is not None:
+            if os.path.isfile(custom_path) and os.access(custom_path, os.X_OK):
+                return custom_path
+            return None
+            
+        # Common locations to search
+        search_paths = [
+            "csf_descriptor",
+            "/usr/bin/csf_descriptor",
+            "/opt/bin/csf_descriptor",
+            shutil.which("csf_descriptor"),
+        ]
+    
+        for path in search_paths:
+            if path is not None and os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
 
         return None
     
