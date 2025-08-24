@@ -61,34 +61,47 @@ def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
 
 #######################################################################
 
-def csfs_index_load(load_csfs_index_file_path):
+def csfs_index_load(load_csfs_index_file_path) -> Dict[int, List[int]]:
+    """
+    加载CSF索引文件（pickle格式）。
     
-    # 转换为Path对象便于处理
+    Args:
+        load_csfs_index_file_path: 索引文件路径
+        
+    Returns:
+        Dict[int, List[int]]: 块索引到CSF索引列表的映射
+        
+    Raises:
+        TypeError: 如果加载的数据不是Dict[int, List[int]]格式
+        FileNotFoundError: 如果文件不存在
+    """
+    
     file_path = Path(load_csfs_index_file_path)
     
-    # 检查路径是否有扩展名
+    # 自动添加.pkl扩展名（如果没有）
     if not file_path.suffix:
-        # 没有扩展名时，按优先级尝试不同格式
-        for ext in ['.pkl', '.msgpack']:
-            full_path = file_path.with_suffix(ext)
-            if full_path.exists():
-                file_path = full_path
-                break
-        else:
-            # 如果都不存在，默认使用.pkl扩展名（会在下面报错）
-            file_path = file_path.with_suffix('.pkl')
+        file_path = file_path.with_suffix('.pkl')
     
-    # 根据文件扩展名选择加载方式
-    if file_path.suffix == '.msgpack':
-        # 向后兼容：加载旧的msgpack格式文件
-        import msgpack
-        with open(file_path, 'rb') as f:
-            blocks_csfs_index = msgpack.load(f, strict_map_key=False)
-    else:
-        # 默认使用pickle格式
-        with open(file_path, 'rb') as f:
-            blocks_csfs_index = pickle.load(f)
-        
+    if not file_path.exists():
+        raise FileNotFoundError(f"CSF索引文件不存在: {file_path}")
+    
+    # 直接加载pickle文件
+    with open(file_path, 'rb') as f:
+        blocks_csfs_index = pickle.load(f)
+    
+    # 类型检查和转换
+    if not isinstance(blocks_csfs_index, dict):
+        raise TypeError(f"Expected dict, got {type(blocks_csfs_index)}")
+    
+    # 验证字典内容格式
+    for key, value in blocks_csfs_index.items():
+        if not isinstance(key, int):
+            raise TypeError(f"Expected int key, got {type(key)}: {key}")
+        if not isinstance(value, list):
+            raise TypeError(f"Expected list value, got {type(value)} for key {key}")
+        if not all(isinstance(item, int) for item in value):
+            raise TypeError(f"Expected list of int, got non-int items in list for key {key}")
+    
     return blocks_csfs_index
 
 #######################################################################
