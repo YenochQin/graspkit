@@ -91,7 +91,10 @@ def single_asf_mix_square_above_threshold(asf_mix_data_array: np.ndarray, thresh
     # 返回索引元组列表
     return [(idx,) for idx in sorted_indices]
 
-def batch_asfs_mix_square_above_threshold(asfs_mix_data: MixCoefficientData, threshold: float = 0.1) -> Dict[int, np.ndarray]:
+def batch_asfs_mix_square_above_threshold(
+                    asfs_mix_data: MixCoefficientData, 
+                    asfs_position: List = [],
+                    threshold: float = 0.1) -> Dict[int, np.ndarray]:
     """
     批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
     
@@ -106,7 +109,8 @@ def batch_asfs_mix_square_above_threshold(asfs_mix_data: MixCoefficientData, thr
         如果没有满足条件的索引，对应的值为空数组
     """
     result = {}
-    
+    if asfs_position == []:
+        asfs_position = asfs_mix_data.block_levels_index_List[0].tolist()
     for block in range(asfs_mix_data.block_num):
         # 检查块是否存在或数据是否有效
         if (block >= len(asfs_mix_data.mix_coefficient_List) or 
@@ -117,10 +121,11 @@ def batch_asfs_mix_square_above_threshold(asfs_mix_data: MixCoefficientData, thr
         # 使用集合来存储索引以实现去重
         unique_indices = set()
         
-        for level_data in asfs_mix_data.mix_coefficient_List[block]:
+        # for level_data in asfs_mix_data.mix_coefficient_List[block]:
+        for level in asfs_position:
+            level_data = asfs_mix_data.mix_coefficient_List[block][level]
             if level_data is None:
                 continue
-                
             # 获取该层级的重要系数索引并添加到集合中
             level_indices = single_asf_mix_square_above_threshold(level_data, threshold)
             unique_indices.update(idx[0] for idx in level_indices)  # 解包单元素元组
@@ -256,7 +261,7 @@ def single_asf_csfs_final_coupling_J_mix_coefficient_sum(block_csfs_coupling_J_c
 
 def single_block_batch_asfs_CSFs_final_coupling_J_collection(
                                     block_CSFs: List, 
-                                    block_asfs_mix_coefficient_List: List, 
+                                    block_asfs_mix_coefficient_List: Union[List, np.ndarray], 
                                     asfs_position: List = [], 
                                     coupling_level: int = -1) -> Dict:
     # 获取初始耦合信息
@@ -333,6 +338,7 @@ def union_lists_with_order(*lists):
     for lst in lists:
         all_elements.extend(lst)
     return list(dict.fromkeys(all_elements))
+
 
 def merge_multiple_dicts_with_ordered_union(*dicts: Dict[Tuple[int], List]) -> dict:
     """
