@@ -61,7 +61,7 @@ def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
 
 #######################################################################
 
-def csfs_index_load(load_csfs_index_file_path) -> Dict[int, List[int]]:
+def csfs_index_load(load_csfs_index_file_path) -> Dict[int, Union[List[int], np.ndarray]]:
     """
     加载CSF索引文件（pickle格式）。
     
@@ -69,10 +69,10 @@ def csfs_index_load(load_csfs_index_file_path) -> Dict[int, List[int]]:
         load_csfs_index_file_path: 索引文件路径
         
     Returns:
-        Dict[int, List[int]]: 块索引到CSF索引列表的映射
+        Dict[int, Union[List[int], np.ndarray]]: 块索引到CSF索引列表/数组的映射
         
     Raises:
-        TypeError: 如果加载的数据不是Dict[int, List[int]]格式
+        TypeError: 如果加载的数据不是正确格式
         FileNotFoundError: 如果文件不存在
     """
     
@@ -97,10 +97,14 @@ def csfs_index_load(load_csfs_index_file_path) -> Dict[int, List[int]]:
     for key, value in blocks_csfs_index.items():
         if not isinstance(key, int):
             raise TypeError(f"Expected int key, got {type(key)}: {key}")
-        if not isinstance(value, list):
-            raise TypeError(f"Expected list value, got {type(value)} for key {key}")
-        if not all(isinstance(item, int) for item in value):
-            raise TypeError(f"Expected list of int, got non-int items in list for key {key}")
+        if not isinstance(value, (list, np.ndarray)):
+            raise TypeError(f"Expected list or np.ndarray value, got {type(value)} for key {key}")
+        if isinstance(value, list):
+            if not all(isinstance(item, int) for item in value):
+                raise TypeError(f"Expected list of int, got non-int items in list for key {key}")
+        elif isinstance(value, np.ndarray):
+            if value.dtype.kind not in ['i', 'u']:  # integer or unsigned integer
+                raise TypeError(f"Expected np.ndarray of integers, got {value.dtype} for key {key}")
     
     return blocks_csfs_index
 
