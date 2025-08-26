@@ -254,32 +254,42 @@ def single_asf_csfs_final_coupling_J_mix_coefficient_sum(block_csfs_coupling_J_c
     # return sorted_block_csfs_coupling_J_collection_dict
     return block_csfs_coupling_J_collection_dict
 
-def single_block_batch_asfs_CSFs_final_coupling_J_collection(block_CSFs: List, block_asfs_mix_coefficient_List: List, coupling_level: int = -1) -> Dict:
+def single_block_batch_asfs_CSFs_final_coupling_J_collection(
+                                    block_CSFs: List, 
+                                    block_asfs_mix_coefficient_List: List, 
+                                    asfs_position: List = [], 
+                                    coupling_level: int = -1) -> Dict:
     # 获取初始耦合信息
     base_coupling_dict = single_block_csfs_final_coupling_J_collection(block_CSFs, coupling_level)
-    
-    # block_asfs_coupling_J_sum_ci = {}
-    
+    if asfs_position == []:
+        asfs_position = [i for i in range(len(block_asfs_mix_coefficient_List))]
     for index, element in enumerate(base_coupling_dict):
         base_coupling_dict[element]['sum_ci'] = []
         for asf_index, asf_mix_coefficient in enumerate(block_asfs_mix_coefficient_List):
             sum_ci = 0
-            for csf_index in base_coupling_dict[element]['indices']:
-                sum_ci += asf_mix_coefficient[csf_index]**2
+            if asf_index in asfs_position:
+                for csf_index in base_coupling_dict[element]['indices']:
+                    sum_ci += asf_mix_coefficient[csf_index]**2
 
             base_coupling_dict[element]['sum_ci'].append(sum_ci)
 
     # return block_asfs_coupling_J_sum_ci
     return base_coupling_dict
 
-def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(blocks_CSFs_list: List, blocks_asfs_mix_coefficient_List: List, coupling_level: int = -1) -> Dict:
+def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
+                                    blocks_CSFs_list: List, 
+                                    blocks_asfs_mix_coefficient_List: List, 
+                                    coupling_level: int = -1) -> Dict:
     blocks_asfs_coupling_J_sum_ci = {}
     for block, (block_csfs, block_asfs_mix) in enumerate(zip(blocks_CSFs_list, blocks_asfs_mix_coefficient_List)):
         print(f"第{block+1}个block包含{len(block_asfs_mix)}个asf")
         if any(len(asf_mix) != len(block_csfs)  for asf_mix in block_asfs_mix):
             raise ValueError("block_CSFs和block_asfs_mix_coefficient长度不匹配")
         
-        block_asfs_coupling_J_collection = single_block_batch_asfs_CSFs_final_coupling_J_collection(block_csfs, block_asfs_mix, coupling_level)
+        block_asfs_coupling_J_collection = single_block_batch_asfs_CSFs_final_coupling_J_collection(
+                                                    block_CSFs = block_csfs, 
+                                                    block_asfs_mix_coefficient_List = block_asfs_mix, 
+                                                    coupling_level = coupling_level)
         
         blocks_asfs_coupling_J_sum_ci[block] = block_asfs_coupling_J_collection
 
