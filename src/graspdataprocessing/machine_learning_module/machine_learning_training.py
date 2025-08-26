@@ -360,7 +360,7 @@ def check_energy_convergence(config, logger, current_energy_data: pd.DataFrame, 
     
     try:
         # 获取上一轮的能量数据文件路径
-        previous_energy_path = config.scf_cal_path / f'{config.conf}_{config.cal_loop_num-1}_correct_levels.csv'
+        previous_energy_path = config.root_path / f'{config.conf}_{config.loop_num}' / f'{config.conf}_{config.cal_loop_num-1}_correct_levels.csv'
         
         if not previous_energy_path.exists():
             logger.warning(f"未找到上一轮能量数据: {previous_energy_path}")
