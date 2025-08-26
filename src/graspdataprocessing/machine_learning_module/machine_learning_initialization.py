@@ -150,7 +150,7 @@ def load_data_files(config, logger) -> tuple:
     
     rmix_file_load = GraspFileLoad.from_filepath(str(rmix_file_path), 'mix')
     rmix_file_data = rmix_file_load.data_file_process()
-    logger.info(f"加载 *.m 文件数据: {rmix_file_path}")
+    logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
     
     # 加载初始 CSFs 描述符文件
     target_pool_file_path = config.root_path / f'{config.conf}'
