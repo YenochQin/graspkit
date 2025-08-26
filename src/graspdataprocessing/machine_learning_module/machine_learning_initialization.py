@@ -120,7 +120,7 @@ def validate_initial_files(config, logger) -> None:
         raise
 
 
-def load_data_files(config, logger, use_cpp: bool = False) -> tuple:
+def load_data_files(config, logger) -> tuple:
     """加载数据文件
     
     Args:
@@ -154,7 +154,7 @@ def load_data_files(config, logger, use_cpp: bool = False) -> tuple:
     
     # 加载初始 CSFs 描述符文件
     target_pool_file_path = config.root_path / f'{config.conf}'
-    
+    use_cpp = config.ml_config.get('use_cpp_descriptor_generator', False)
     if use_cpp:
         # 使用C++生成的HDF5文件
         hdf5_file_path = target_pool_file_path.with_suffix('.h5')
@@ -164,12 +164,8 @@ def load_data_files(config, logger, use_cpp: bool = False) -> tuple:
             raw_csfs_indices = hdf5_data.get('labels', None)
             logger.info(f"使用C++ HDF5文件加载初始 CSFs 描述符: {hdf5_file_path}")
         except Exception as e:
-            logger.warning(f"C++ HDF5文件加载失败: {e}，回退到传统文件格式")
-            # 回退到传统文件格式
-            result = load_descriptors_with_multi_block(target_pool_file_path, 'npy')
-            if result is None:
-                raise FileNotFoundError(f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}")
-            raw_csfs_descriptors, raw_csfs_indices = result
+            logger.warning(f"C++ HDF5文件加载失败: {e}")
+            raise FileNotFoundError(f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}")
     else:
         # 使用传统文件格式
         result = load_descriptors_with_multi_block(target_pool_file_path, 'npy')
