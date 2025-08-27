@@ -177,7 +177,7 @@ def asf_mix_square_above_threshold_coupling_info(mix_square_data_above_threshold
 
 #######################################################################
 
-def CSFs_block_get_CSF(CSFs_block: List, CSf_index: Tuple) -> List:
+def CSFs_block_get_CSF(CSFs_block: List, CSf_index: Union[List, np.ndarray]) -> List:
     """
     根据CSF的索引获取对应的CSF
 
@@ -188,11 +188,9 @@ def CSFs_block_get_CSF(CSFs_block: List, CSf_index: Tuple) -> List:
     返回：
         对应的CSF，如果索引无效则返回None
     """
-    # 检查索引是否有效
-    if CSf_index[0] < 0 and len(CSFs_block) < 0:
-        raise ValueError("CSF index and CSFs_block length must be non-negative.")
+    selected_data = [CSFs_block[i] for i in CSf_index]
     
-    return CSFs_block[CSf_index[0]]
+    return selected_data
 
 #######################################################################
 
