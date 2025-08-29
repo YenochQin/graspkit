@@ -18,7 +18,7 @@
 - **性能提升**: 按顺序选择，避免重复，最小化新增CSF数量
 
 ### 3. 导入清理
-- 移除了从`graspdataprocessing.CSFs_processing.csf_coverage_validator`的导入依赖
+- 移除了从`graspkit.CSFs_processing.csf_coverage_validator`的导入依赖
 - train.py现在完全自包含，不依赖外部模块中的这些特定函数
 
 ## 技术细节

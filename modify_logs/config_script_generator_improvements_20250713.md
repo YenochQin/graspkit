@@ -81,8 +81,8 @@ include_wrong_level_negatives = true
 
 #### 3.1 环境变量自动设置
 ```bash
-# 自动设置GraspDataProcessing包路径和工具脚本路径
-GRASP_DATA_PROCESSING_ROOT="/home/workstation3/AppFiles/GraspDataProcessing"
+# 自动设置graspkit包路径和工具脚本路径
+GRASP_DATA_PROCESSING_ROOT="/home/workstation3/AppFiles/graspkit"
 export PYTHONPATH="${GRASP_DATA_PROCESSING_ROOT}/src:${PYTHONPATH}"
 export PATH="${GRASP_DATA_PROCESSING_ROOT}/scripts:${PATH}"
 ```
@@ -132,7 +132,7 @@ $nuclear_quadrupole"
 
 ### 4. 配置工具权限设置
 ```bash
-chmod +x /home/computer-0-2/AppFiles/GraspDataProcessing/scripts/csfs_ml_choosing_config_load.py
+chmod +x /home/computer-0-2/AppFiles/graspkit/scripts/csfs_ml_choosing_config_load.py
 ```
 
 ## 实现的目标
@@ -146,7 +146,7 @@ chmod +x /home/computer-0-2/AppFiles/GraspDataProcessing/scripts/csfs_ml_choosin
 - 所有配置通过csfs_ml_choosing_config_load.py从config.toml读取
 
 ### ✅ 目标3：自动环境变量设置
-- 脚本自动将GraspDataProcessing/scripts添加到PATH
+- 脚本自动将graspkit/scripts添加到PATH
 - csfs_ml_choosing_config_load.py可以直接调用，无需绝对路径
 
 ## 技术改进

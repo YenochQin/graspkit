@@ -41,7 +41,7 @@
 ## 修改的文件列表
 
 ### 1. Shell脚本修改
-**文件:** `/home/qqqyy/AppFiles/GraspDataProcessing/scripts/run_script.sh`
+**文件:** `/home/qqqyy/AppFiles/graspkit/scripts/run_script.sh`
 
 **修改内容:**
 - 第312行: 使用 `log_config_params` 替代 `log_with_timestamp` 进行配置参数日志
@@ -90,7 +90,7 @@ log_with_timestamp_and_path "进入计算目录" "${conf}_${loop}"
 ```
 
 ### 2. Python脚本修改
-**文件:** `/home/qqqyy/AppFiles/GraspDataProcessing/tests/ml_csf_choosing/choosing_csfs.py`
+**文件:** `/home/qqqyy/AppFiles/graspkit/tests/ml_csf_choosing/choosing_csfs.py`
 
 **新增内容:**
 - 第15行: 添加 `import os` 模块
