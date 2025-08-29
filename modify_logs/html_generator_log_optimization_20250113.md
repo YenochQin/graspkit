@@ -1,7 +1,7 @@
 # HTML生成器日志优化修改总结
 
 **修改日期**: 2025-01-13  
-**修改文件**: `GraspDataProcessing/scripts/grasp_dual_generator.html`  
+**修改文件**: `graspkit/scripts/grasp_dual_generator.html`  
 **修改目标**: 使HTML生成器生成的文件符合日志优化方案
 
 ## 修改概述
@@ -20,7 +20,7 @@ HTML生成器是一个用于生成`config.toml`配置文件和`run_script.sh`脚
   ```bash
   # 加载公共函数库（包含日志优化功能）
   GRASP_DATA_PROCESSING_ROOT="${config.grasp_data_processing_root}"
-  source "${GRASP_DATA_PROCESSING_ROOT}/src/graspdataprocessing/utils/common_functions.sh"
+  source "${GRASP_DATA_PROCESSING_ROOT}/src/graspkit/utils/common_functions.sh"
   ```
 - **效果**：生成的脚本自动获得日志优化功能
 
@@ -63,7 +63,7 @@ HTML生成器是一个用于生成`config.toml`配置文件和`run_script.sh`脚
 ### 函数库集成方式
 ```javascript
 // 在generateShellScript函数中
-source "${GRASP_DATA_PROCESSING_ROOT}/src/graspdataprocessing/utils/common_functions.sh"
+source "${GRASP_DATA_PROCESSING_ROOT}/src/graspkit/utils/common_functions.sh"
 ```
 
 ### Python调用标准化
@@ -135,7 +135,7 @@ source "$(dirname "$0")/common_functions.sh"
 2. **使用绝对路径引用**
    ```bash
    # 设置根路径（脚本开头）
-   GRASP_DATA_PROCESSING_ROOT="/home/workstation3/AppFiles/GraspDataProcessing"
+   GRASP_DATA_PROCESSING_ROOT="/home/workstation3/AppFiles/graspkit"
    export PYTHONPATH="${GRASP_DATA_PROCESSING_ROOT}/src:${PYTHONPATH}"
    export PATH="${GRASP_DATA_PROCESSING_ROOT}/scripts:${PATH}"
    

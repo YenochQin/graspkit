@@ -13,7 +13,7 @@
 
 ### 1. 新增文件
 ```
-src/graspdataprocessing/CSFs_processing/cpp_descriptor_wrapper.py
+src/graspkit/CSFs_processing/cpp_descriptor_wrapper.py
 ```
 - Python包装器类 `CppDescriptorGenerator`
 - 兼容API函数 `batch_process_csfs_with_multi_block_cpp`
@@ -89,7 +89,7 @@ descriptors, labels = generator.generate_descriptors(
 ## 验证步骤
 1. 确保C++程序已构建: `cd CSFs_2_descripors-dev && ./build_and_package.sh`
 2. 检查可执行文件: `ls build/csf_descriptor`
-3. 运行测试: `python -c "import graspdataprocessing; print(gk.CppDescriptorGenerator())"`
+3. 运行测试: `python -c "import graspkit; print(gk.CppDescriptorGenerator())"`
 
 ## 注意事项
 - 需要安装HDF5库用于结果存储
@@ -98,5 +98,5 @@ descriptors, labels = generator.generate_descriptors(
 
 ## 相关文件
 - C++源码: `CSFs_2_descripors-dev/`
-- Python包装器: `src/graspdataprocessing/CSFs_processing/cpp_descriptor_wrapper.py`
+- Python包装器: `src/graspkit/CSFs_processing/cpp_descriptor_wrapper.py`
 - 使用示例: `tests/ml_csf_choosing/initial_csfs.py`

@@ -10,7 +10,7 @@ This session continued from a previous conversation focused on GRASP data proces
 ### Completed Work
 
 #### 1. Code Verification ✅
-- **File Analyzed**: `/home/qqqyy/AppFiles/GraspDataProcessing/tests/ml_csf_choosing/choosing_csfs.py`
+- **File Analyzed**: `/home/qqqyy/AppFiles/graspkit/tests/ml_csf_choosing/choosing_csfs.py`
 - **Status**: Expansion logic **already correctly implemented** at lines 499-511
 - **Functionality**: Handles first-time calculations where selected CSFs count is orders of magnitude smaller than target pool
 
@@ -61,13 +61,13 @@ if ratio_selected_to_pool < 0.01:  # 小于1%，约两个数量级
 3. **Expansion Logic Implementation** ✅ - Added first-time calculation expansion functionality
 
 ### Files Modified in This Session
-- **Created**: `/home/qqqyy/AppFiles/GraspDataProcessing/modify_logs/session_completion_summary.md`
+- **Created**: `/home/qqqyy/AppFiles/graspkit/modify_logs/session_completion_summary.md`
 
 ### Files NOT Modified (Already Complete)
-- `/home/qqqyy/AppFiles/GraspDataProcessing/tests/ml_csf_choosing/choosing_csfs.py` - Expansion logic already implemented
-- `/home/qqqyy/AppFiles/GraspDataProcessing/scripts/grasp_dual_generator.html` - Configuration support already present  
-- `/home/qqqyy/AppFiles/GraspDataProcessing/scripts/run_script.sh` - Shell orchestration already optimized
-- `/home/qqqyy/AppFiles/GraspDataProcessing/scripts/common_functions.sh` - Supporting functions already available
+- `/home/qqqyy/AppFiles/graspkit/tests/ml_csf_choosing/choosing_csfs.py` - Expansion logic already implemented
+- `/home/qqqyy/AppFiles/graspkit/scripts/grasp_dual_generator.html` - Configuration support already present  
+- `/home/qqqyy/AppFiles/graspkit/scripts/run_script.sh` - Shell orchestration already optimized
+- `/home/qqqyy/AppFiles/graspkit/scripts/common_functions.sh` - Supporting functions already available
 
 ### Technical Verification
 

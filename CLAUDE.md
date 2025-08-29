@@ -9,7 +9,7 @@ A Python package for data collection and processing of results from GRASP (Gener
 ## Core Architecture
 
 ### Package Structure
-- **graspdataprocessing/** - Main Python package (in `src/`)
+- **graspkit/** - Main Python package (in `src/`)
   - **CSFs_choosing/** - Configuration State Function selection with ML
   - **data_IO/** - Data input/output, plotting, and visualization  
   - **machine_learning_module/** - ANN models and training infrastructure
@@ -64,11 +64,11 @@ ruff check . --fix
 cd /path/to/calculation/directory
 
 # Interactive mode (recommended)
-/path/to/GraspDataProcessing/tests/ml_csf_choosing/quick_run.sh
+/path/to/graspkit/tests/ml_csf_choosing/quick_run.sh
 
 # Command line mode
-/path/to/GraspDataProcessing/tests/ml_csf_choosing/run_ml.sh train
-/path/to/GraspDataProcessing/tests/ml_csf_choosing/run_ml.sh all
+/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh train
+/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh all
 ```
 
 #### Key Programs

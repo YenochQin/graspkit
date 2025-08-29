@@ -6,7 +6,7 @@
 
 ## 问题描述
 
-训练脚本 `/home/computer-0-2/AppFiles/GraspDataProcessing/tests/ml_csf_choosing/train.py` 运行时报错：
+训练脚本 `/home/computer-0-2/AppFiles/graspkit/tests/ml_csf_choosing/train.py` 运行时报错：
 
 ```
 Descriptors saved to: /home/workstation3/caldata/GdI/cv6odd1/as5/j3/cv6odd1_j3as5_4/cv6odd1_j3as5_4_descriptors.npy
@@ -24,7 +24,7 @@ Descriptors saved to: /home/workstation3/caldata/GdI/cv6odd1/as5/j3/cv6odd1_j3as
 
 ## 修改方案
 
-**修改文件：** `/home/computer-0-2/AppFiles/GraspDataProcessing/src/graspdataprocessing/machine_learning_module/ANN.py`
+**修改文件：** `/home/computer-0-2/AppFiles/graspkit/src/graspkit/machine_learning_module/ANN.py`
 
 ### 具体修改内容
 

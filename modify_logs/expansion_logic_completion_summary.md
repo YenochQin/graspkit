@@ -7,7 +7,7 @@ The expansion logic for first-time calculations in `choosing_csfs.py` has been s
 
 ### Implementation Details
 
-**Location**: `/home/qqqyy/AppFiles/GraspDataProcessing/tests/ml_csf_choosing/choosing_csfs.py`  
+**Location**: `/home/qqqyy/AppFiles/graspkit/tests/ml_csf_choosing/choosing_csfs.py`  
 **Lines**: 499-511
 
 ### Code Implementation

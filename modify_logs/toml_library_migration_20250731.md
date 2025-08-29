@@ -62,7 +62,7 @@ import rtoml
 ```
 
 ### 4. 数据处理模块更新
-**文件**: `src/graspdataprocessing/data_IO/produced_data_write.py`
+**文件**: `src/graspkit/data_IO/produced_data_write.py`
 ```diff
 - import tomllib
 + import rtoml
@@ -84,7 +84,7 @@ import rtoml
 + rtoml.dump(config, config_path)
 ```
 
-**文件**: `src/graspdataprocessing/data_IO/processing_data_load.py`
+**文件**: `src/graspkit/data_IO/processing_data_load.py`
 ```diff
 - import tomllib
 + import rtoml
@@ -137,8 +137,8 @@ print('rtoml import test passed')
 2. `requirements-gpu.txt` - 依赖更新  
 3. `pyproject.toml` - 添加依赖声明
 4. `scripts/csfs_ml_choosing_config_load.py` - 大幅简化
-5. `src/graspdataprocessing/data_IO/produced_data_write.py` - 简化写入逻辑
-6. `src/graspdataprocessing/data_IO/processing_data_load.py` - 统一导入
+5. `src/graspkit/data_IO/produced_data_write.py` - 简化写入逻辑
+6. `src/graspkit/data_IO/processing_data_load.py` - 统一导入
 
 ### 向后兼容性
 - API接口保持一致，不影响现有调用代码
