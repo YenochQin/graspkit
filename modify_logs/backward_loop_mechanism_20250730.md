@@ -24,13 +24,13 @@ Implemented a sophisticated backward loop mechanism to handle configuration mism
 #### `tests/ml_csf_choosing/train.py` (lines 441-461)
 ```python
 # OLD: Direct error handling
-gdp.handle_calculation_error(config, logger)
+gk.handle_calculation_error(config, logger)
 
 # NEW: Intelligent backward loop mechanism
 if config.cal_loop_num <= 1:
-    gdp.handle_calculation_error(config, logger)  # Fallback for loop 1
+    gk.handle_calculation_error(config, logger)  # Fallback for loop 1
 else:
-    gdp.update_config(config_file_path, {
+    gk.update_config(config_file_path, {
         'backward_loop_needed': True,
         'target_backward_loop': config.cal_loop_num - 1,
         'cal_loop_num': config.cal_loop_num - 1,

@@ -13,7 +13,7 @@ import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..data_IO.grasp_raw_data_load import GraspFileLoad, EnergyFile2csv
+from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
 
 #######################################################################
 class ConfigurationFormat:

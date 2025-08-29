@@ -20,11 +20,10 @@ import numpy as np
 import pandas as pd
 import h5py
 
-
 from ..utils.tool_function import *
 from ..utils.data_modules import *
-from ..CSFs_processing.CSFs_choosing import *
-from ..CSFs_processing.CSFs_compress_extract import *
+from ..CSFs_processor.CSFs_choosing import *
+from ..CSFs_processor.CSFs_compress_extract import *
 
 
 

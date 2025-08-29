@@ -17,7 +17,7 @@ from tqdm import tqdm
 # if TYPE_CHECKING:
 #     from ..data_IO.processing_data_load import load_large_hash
 #     from ..utils.data_modules import MixCoefficientData
-from ..data_IO.processing_data_load import load_large_hash
+from ..data_IO.processing_data_loader import load_large_hash
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
 from .CSFs_compress_extract import CSF_item_2_dict
