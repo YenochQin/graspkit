@@ -30,14 +30,14 @@ src/graspdataprocessing/CSFs_processing/cpp_descriptor_wrapper.py
 #### 2.3 tests/ml_csf_choosing/initial_csfs.py
 ```python
 # 原代码 (第77-88行):
-descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block(...)
+descriptors_array, labels_array = gk.batch_process_csfs_with_multi_block(...)
 
 # 新代码 (第77-92行):
 use_cpp = config.ml_config.get('use_cpp_descriptor_generator', True)
 if use_cpp:
-    descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block_cpp(...)
+    descriptors_array, labels_array = gk.batch_process_csfs_with_multi_block_cpp(...)
 else:
-    descriptors_array, labels_array = gdp.batch_process_csfs_with_multi_block(...)
+    descriptors_array, labels_array = gk.batch_process_csfs_with_multi_block(...)
 ```
 
 - 新增配置选项: `use_cpp_descriptor_generator` (默认True)
@@ -57,10 +57,10 @@ descriptors_with_subshell_info = false # 基本格式(3值/轨道)
 
 ### Python API使用
 ```python
-import graspdataprocessing as gdp
+import graspkit as gk
 
 # 方法1: 使用兼容API
-X, y = gdp.batch_process_csfs_with_multi_block_cpp(
+X, y = gk.batch_process_csfs_with_multi_block_cpp(
     csfs_data,
     label_type='sequential',
     with_subshell_info=True,    # 控制描述符格式
@@ -68,7 +68,7 @@ X, y = gdp.batch_process_csfs_with_multi_block_cpp(
 )
 
 # 方法2: 使用包装器类
-generator = gdp.CppDescriptorGenerator()
+generator = gk.CppDescriptorGenerator()
 descriptors, labels = generator.generate_descriptors(
     csf_file_path="target_pool.c",
     with_subshell_info=False,   # 基本格式
@@ -89,7 +89,7 @@ descriptors, labels = generator.generate_descriptors(
 ## 验证步骤
 1. 确保C++程序已构建: `cd CSFs_2_descripors-dev && ./build_and_package.sh`
 2. 检查可执行文件: `ls build/csf_descriptor`
-3. 运行测试: `python -c "import graspdataprocessing; print(gdp.CppDescriptorGenerator())"`
+3. 运行测试: `python -c "import graspdataprocessing; print(gk.CppDescriptorGenerator())"`
 
 ## 注意事项
 - 需要安装HDF5库用于结果存储

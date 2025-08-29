@@ -6,53 +6,64 @@
 @author :YenochQin (秦毅)
 '''
 
-from .ANN import ANNClassifier
-from .machine_learning_initialization import (
+from .neural_network import ANNClassifier
+from .ml_initializer import (
     setup_logging,
     setup_directories,
     initialize_iteration_results_csv,
     validate_initial_files,
     load_data_files,
     check_configuration_coupling,
+    check_energy_convergence,
+    evaluate_calculation_convergence,
     generate_chosen_csfs_descriptors,
+    get_unselected_descriptors,
     get_stay_descriptors
 )
 
 
-from .machine_learning_training import (
+from .ml_trainer import (
     train_model,
     evaluate_model,
-    save_iteration_results,
-    check_energy_convergence,
-    evaluate_calculation_convergence,
     handle_calculation_error,
-    get_unselected_descriptors,
-    save_and_plot_results,
     calculate_dynamic_chosen_ratio
 )
 
+from .ml_results_analyzer import (
+    validate_csf_descriptors_coverage,
+    select_csfs_for_coverage,
+    save_iteration_results,
+    save_and_plot_results,
+    
+)
+
 __all__ = [
-    # ANN
+    # neural_network
     'ANNClassifier',
     
-    # machine_learning_initialization
+    # ml_initializer
     'setup_logging',
     'setup_directories',
     'initialize_iteration_results_csv',
     'validate_initial_files',
     'load_data_files',
     'check_configuration_coupling',
-    'generate_chosen_csfs_descriptors',
-    'get_stay_descriptors',
-    
-    # machine_learning_training
-    'train_model',
-    'evaluate_model',
-    'save_iteration_results',
     'check_energy_convergence',
     'evaluate_calculation_convergence',
-    'handle_calculation_error',
+    'generate_chosen_csfs_descriptors',
     'get_unselected_descriptors',
+    'get_stay_descriptors',
+    
+    # ml_trainer
+    'train_model',
+    'evaluate_model',
+    'handle_calculation_error',
+    'calculate_dynamic_chosen_ratio',
+    
+    # ml_results_analyzer
+    'validate_csf_descriptors_coverage',
+    'select_csfs_for_coverage',
+    'save_iteration_results',
     'save_and_plot_results',
-    'calculate_dynamic_chosen_ratio'
+    
 ]

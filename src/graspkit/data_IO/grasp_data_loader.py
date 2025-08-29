@@ -16,11 +16,11 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import struct
-from ..utils.progress_manager import wrap_iterator
 
+from ..utils.progress_manager import wrap_iterator
 from ..utils.tool_function import *
 from ..utils.data_modules import *
-from ..CSFs_processing.CSFs_compress_extract import *
+from ..CSFs_processor.CSFs_compress_extract import *
 
 class GraspFileLoad:
     # the initialization function of the class "GraspFileLoad"

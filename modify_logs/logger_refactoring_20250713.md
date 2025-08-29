@@ -107,11 +107,11 @@ logger.info(f"{load_status['message']}: {load_status['file_path']}")
 #### 3.1 GDP函数调用重构
 重构了11个gdp模块函数调用，全部改为返回状态信息模式：
 
-1. **`gdp.validate_initial_files(config)`**
+1. **`gk.validate_initial_files(config)`**
 ```python
-# 修改前：gdp.validate_initial_files(config, logger)
+# 修改前：gk.validate_initial_files(config, logger)
 # 修改后：
-validation_result = gdp.validate_initial_files(config)
+validation_result = gk.validate_initial_files(config)
 if not validation_result['success']:
     logger.error(f"初始文件验证失败: {validation_result['error']}")
     if 'missing_files' in validation_result:
@@ -119,11 +119,11 @@ if not validation_result['success']:
     raise FileNotFoundError(validation_result['error'])
 ```
 
-2. **`gdp.load_data_files(config)`**
+2. **`gk.load_data_files(config)`**
 ```python
-# 修改前：data_files_result = gdp.load_data_files(config, logger)
+# 修改前：data_files_result = gk.load_data_files(config, logger)
 # 修改后：
-data_files_result, load_status = gdp.load_data_files(config)
+data_files_result, load_status = gk.load_data_files(config)
 if not load_status['success']:
     logger.error(f"数据文件加载失败: {load_status['error']}")
     if 'failed_files' in load_status:
@@ -131,20 +131,20 @@ if not load_status['success']:
     raise Exception(load_status['error'])
 ```
 
-3. **`gdp.check_configuration_coupling(config, energy_level_data_pd)`**
-4. **`gdp.evaluate_calculation_convergence(config, current_calculation_csfs)`**
-5. **`gdp.generate_chosen_csfs_descriptors(...)`**
-6. **`gdp.get_unselected_descriptors(...)`**
-7. **`gdp.train_model(...)`**
-8. **`gdp.evaluate_model(...)`**
-9. **`gdp.save_and_plot_results(...)`**
-10. **`gdp.save_iteration_results(...)`**
-11. **`gdp.handle_calculation_error(config)`**
+3. **`gk.check_configuration_coupling(config, energy_level_data_pd)`**
+4. **`gk.evaluate_calculation_convergence(config, current_calculation_csfs)`**
+5. **`gk.generate_chosen_csfs_descriptors(...)`**
+6. **`gk.get_unselected_descriptors(...)`**
+7. **`gk.train_model(...)`**
+8. **`gk.evaluate_model(...)`**
+9. **`gk.save_and_plot_results(...)`**
+10. **`gk.save_iteration_results(...)`**
+11. **`gk.handle_calculation_error(config)`**
 
 #### 3.2 状态信息处理模式
 每个函数调用都遵循统一的错误处理模式：
 ```python
-result, status = gdp.function_name(...)
+result, status = gk.function_name(...)
 if not status['success']:
     logger.error(f"操作失败: {status['error']}")
     # 记录额外的错误详情

@@ -64,7 +64,7 @@ from .utils import (
     log_stage_end
 )
 
-from .CSFs_processing import (
+from .CSFs_processor import (
     batch_asfs_mix_square_above_threshold,
     asf_mix_square_above_threshold_coupling_info,
     CSFs_block_get_CSF,
@@ -93,7 +93,7 @@ from .CSFs_processing import (
     create_csf_dataset_for_ml
 )
 
-from .processing import (
+from .grasp_data_extractor import (
     ConfigurationFormat,
     LevelsEnergyData,
     mcdhf_energy_data_collection,
@@ -108,7 +108,7 @@ from .processing import (
     data_process
 )
 
-from .machine_learning_module import (
+from .ml_module import (
     ANNClassifier,
     setup_logging,
     setup_directories,
@@ -126,7 +126,10 @@ from .machine_learning_module import (
     handle_calculation_error,
     get_unselected_descriptors,
     save_and_plot_results,
-    calculate_dynamic_chosen_ratio
+    calculate_dynamic_chosen_ratio,
+    validate_csf_descriptors_coverage
+    ,
+    select_csfs_for_coverage
 )
 
 __all__ = [
@@ -180,7 +183,7 @@ __all__ = [
     'chunk_string',
     'level_data_compare',
 
-    ## CSFs_processing
+    ## CSFs_processor
     'batch_asfs_mix_square_above_threshold',
     'asf_mix_square_above_threshold_coupling_info',
     'CSFs_block_get_CSF',
@@ -211,7 +214,7 @@ __all__ = [
     'create_csf_dataset_for_ml',
 
     
-    # processing
+    # grasp_data_extractor
     'ConfigurationFormat',
     'LevelsEnergyData',
     'mcdhf_energy_data_collection',
@@ -225,28 +228,34 @@ __all__ = [
     'TransitionDataBlock',
     'data_process',
     
-    # machine_learning_module
-    ## ANN
+    # ml_module
+    # neural_network
     'ANNClassifier',
-    ## machine_learning_initialization
+    
+    # ml_initializer
     'setup_logging',
     'setup_directories',
     'initialize_iteration_results_csv',
     'validate_initial_files',
     'load_data_files',
     'check_configuration_coupling',
-    'generate_chosen_csfs_descriptors',
-    'get_stay_descriptors',
-    ## machine_learning_training
-    'train_model',
-    'evaluate_model',
-    'save_iteration_results',
     'check_energy_convergence',
     'evaluate_calculation_convergence',
-    'handle_calculation_error',
+    'generate_chosen_csfs_descriptors',
     'get_unselected_descriptors',
-    'save_and_plot_results',
+    'get_stay_descriptors',
+    
+    # ml_trainer
+    'train_model',
+    'evaluate_model',
+    'handle_calculation_error',
     'calculate_dynamic_chosen_ratio',
+    
+    # ml_results_analyzer
+    'validate_csf_descriptors_coverage',
+    'select_csfs_for_coverage',
+    'save_iteration_results',
+    'save_and_plot_results',
     
     # 环境配置和进度管理
     'get_environment_config',

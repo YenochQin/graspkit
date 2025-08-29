@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..utils.progress_manager import wrap_iterator, progress_range
-from ..data_IO.grasp_raw_data_load import GraspFileLoad
+from ..data_IO.grasp_data_loader import GraspFileLoad
 from ..utils.tool_function import transition_dT_cal, doubleJ_to_J
 
 class TransitionDataCollection:
