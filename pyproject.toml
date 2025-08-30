@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-# version = '2.6.dev1'
-version = '2.6.1'
+version = '2.7.dev1'
+# version = '2.6.1'
 description = "Grasp toolkit package"
 
 requires-python = ">= 3.12"
@@ -51,8 +51,8 @@ classifiers = [
   # How mature is this project? Common values are
   #   3 - Alpha
   #   4 - Beta
-  "Development Status :: 5 - Production/Stable",
-  # "Development Status :: 4 - Beta",
+  # "Development Status :: 5 - Production/Stable",
+  "Development Status :: 4 - Beta",
 
   # Specify the Python versions you support here.
   "Programming Language :: Python",
