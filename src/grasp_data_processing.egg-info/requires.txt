@@ -1,4 +1,0 @@
-matplotlib
-numpy>=2.0
-pandas
-tqdm
