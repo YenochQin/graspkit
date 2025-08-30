@@ -1,4 +1,4 @@
-# Grasp Data Processing
+# Grasp tookit
 
 A simple data collection & processing tool for grasp2018.
 
@@ -39,8 +39,3 @@ python -m build
 pip install dist/grasp_data_processing-*.whl
 ```
 
-### 使用pip安装
-
-```bash
-pip install -i https://test.pypi.org/simple/ grasp-data-processing
-```
