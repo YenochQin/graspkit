@@ -10,16 +10,16 @@ A Python package for data collection and processing of results from GRASP (Gener
 
 ### Package Structure
 - **graspkit/** - Main Python package (in `src/`)
-  - **CSFs_choosing/** - Configuration State Function selection with ML
-  - **data_IO/** - Data input/output, plotting, and visualization  
-  - **machine_learning_module/** - ANN models and training infrastructure
-  - **processing/** - ASF/transition data collection and analysis
-  - **utils/** - Utilities, environment config, progress management
+  - **CSFs_processor/** - Configuration State Function processing and selection
+  - **data_IO/** - Data input/output handling, including specialized loaders for different data formats
+  - **grasp_data_extractor/** - Data extraction from GRASP2018 calculations (ASF and transition data)
+  - **ml_module/** - Machine learning infrastructure (neural networks, training, analysis)
+  - **utils/** - Utility functions (environment config, progress management, tool functions)
 
 ### Key Components
 
 1. **ML-driven CSF Selection Pipeline** - Uses machine learning to optimize Configuration State Function selection for quantum mechanical calculations
-2. **GRASP Integration** - Automated workflow management for GRASP calculations via shell scripts
+2. **GRASP Integration** - Automated workflow management for GRASP2018 calculations via shell scripts
 3. **Data Processing** - Comprehensive tools for atomic physics data analysis and visualization
 
 ## Development Commands
@@ -37,16 +37,6 @@ pip install -e .
 python -m build
 ```
 
-### Testing
-```bash
-# Run specific tests
-python -m pytest tests/test_cpu_threads.py
-python -m pytest tests/test_mkdisks_config.py
-
-# Run all tests
-python -m pytest tests/
-```
-
 ### Linting
 ```bash
 # Run Ruff linting
@@ -58,87 +48,76 @@ ruff check . --fix
 
 ### Common Workflows
 
-#### Running ML CSF Selection
+#### Package Installation and Verification
 ```bash
-# Navigate to work directory containing config.toml
-cd /path/to/calculation/directory
+# Install from source
+pip install -e .
 
-# Interactive mode (recommended)
-/path/to/graspkit/tests/ml_csf_choosing/quick_run.sh
+# Verify installation
+python -c "import graspkit; print('✅ Package OK')"
 
-# Command line mode
-/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh train
-/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh all
+# Check version
+python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-#### Key Programs
-- **initial_csfs.py** - Initialize CSF configurations and descriptors
-- **choosing_csfs.py** - Strategy-based CSF selection for next calculation round  
-- **train.py** - ML model training and intelligent CSF selection
+#### Data Processing Workflow
+```bash
+# Process HDF5 descriptors
+python read_hdf5_descriptors.py
+```
 
 ### Configuration Management
 
-#### Main Config (config.toml)
-The `config.toml` file controls all aspects of calculations:
-- Atomic parameters (atom, conf, active_space, cal_levels)
-- ML parameters (expansion_ratio, chosen_ratio, model_params)
-- Step control for checkpoint/restart functionality
-- CPU optimization settings
+#### Main Package Configuration
+- **pyproject.toml** - Modern Python packaging configuration using Hatchling
+- **Version management** - Dynamic versioning from `src/graspkit/version.py`
+- **Linting** - Ruff with NumPy 2.0 compatibility rules
 
-#### Step-Level Control
-Advanced checkpoint/restart system allows granular control:
-```toml
-[step_control]
-enable_step_control = true
-target_loop = 3              # Specific loop to control
-start_step = "rmcdhf"        # Start from specific step
-end_step = "rmcdhf"          # Stop after specific step
-skip_completed_steps = true  # Auto-skip completed steps
-```
+#### Dependencies
+- **requirements-cpu.txt** - CPU-optimized dependencies with PyTorch CPU version
+- **requirements-gpu.txt** - GPU-enabled dependencies with CUDA support
 
-Available steps: `initial_csfs`, `choosing_csfs`, `mkdisks`, `rangular`, `rwfnestimate`, `rmcdhf`, `rci`, `rsave`, `jj2lsj`, `rlevels`, `train`
+## Important Implementation Notes
 
-### GRASP Integration
+### Current Repository Status
+- **Version**: 2.7.dev1 (development version)
+- **Python Version**: Requires 3.12+
+- **Package Manager**: Hatchling (modern Python packaging)
+- **No test suite** - Tests mentioned in previous CLAUDE.md are not present in current repository
+- **No script directories** - The ml_CSFs_selection_scripts/ directory exists in parent project structure but not in this repository
 
-The system integrates with GRASP2018 through automated shell scripts:
-- **run_script.sh** - Main SLURM job script with comprehensive error handling
-- **common_functions.sh** - Shared utilities for logging and configuration
-- Supports MPI parallel execution with configurable thread counts
-- Automated error detection and file validation
+### Key Dependencies
+- **PyTorch >= 2.0.0** - Machine learning framework (CPU/GPU versions)
+- **NumPy >= 2.0.0** - Numerical computing
+- **Pandas >= 2.2.2** - Data manipulation and analysis
+- **Scikit-learn >= 1.3.0** - Traditional machine learning algorithms
+- **Matplotlib >= 3.8.4** - Data visualization
+- **rtoml >= 0.9.0** - TOML configuration file handling
+
+### Development Patterns
+
+#### Package Import Structure
+The package uses a centralized import system in `src/graspkit/__init__.py` that exposes key functionality:
+- Data I/O operations (GraspFileLoad, descriptor loading/saving)
+- Utility functions (CSFs, energy calculations, transition data)
+- Machine learning modules
+- Data processing tools
+
+#### Module Organization
+- **data_IO/** - Handles all file I/O operations with support for multiple formats
+- **ml_module/** - Contains neural network implementations and training logic
+- **grasp_data_extractor/** - Specialized tools for extracting data from GRASP calculations
+- **utils/** - Shared utilities and data structures
+- **CSFs_processor/** - Core CSF processing and selection algorithms
 
 ### Build System
-
-- **Package Manager**: Hatchling (modern Python packaging)
-- **Dependencies**: PyTorch, scikit-learn, pandas, numpy 2.0+
-- **Python Version**: Requires 3.12+
-- **Linting**: Ruff with NumPy 2.0 compatibility rules
-
-### File Organization Patterns
-
-#### ML Training Data Flow
-1. GRASP calculations produce `.level` files with energy data
-2. CSF selection tools process `.c` and `.cm` files  
-3. ML models train on energy convergence patterns
-4. New CSF selections written for next iteration
-
-#### Configuration Precedence
-1. Command line arguments override config.toml
-2. config.toml overrides package defaults
-3. Environment variables for system paths (PYTHONPATH, conda environments)
-
-## Important Notes
-
-### Environment Requirements
-- Must run in correct conda environment with GRASP modules loaded
-- Requires MPI (OpenMPI) for parallel GRASP calculations
-- Python environment must include all scientific computing dependencies
-
-### Workflow Dependencies  
-- Each calculation step depends on previous step outputs
-- Step control system allows selective re-execution but requires understanding of dependencies
-- ML training requires completed GRASP calculations with energy level data
+- Uses modern Python packaging with `pyproject.toml`
+- Dynamic version management from `version.py`
+- Ruff linting with NumPy 2.0 compatibility focus
+- Pre-built distributions available in `dist/` directory
 
 ### Performance Considerations
-- PyTorch thread count configurable via `cpu_config.cpu_threads`
-- MPI temporary file paths configurable to avoid I/O bottlenecks
-- Large CSF sets require careful memory management
+- PyTorch thread count should be configured based on available CPU cores
+- Large CSF datasets require careful memory management
+- Multi-block processing available for descriptor generation
+- HDF5 format supported for efficient large dataset handling

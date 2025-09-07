@@ -10,7 +10,7 @@
 import re
 import csv
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Union
+from typing import Dict, Tuple, List, Optional, Union, overload, Literal, TypeVar, cast
 from types import SimpleNamespace
 from dataclasses import dataclass
 import numpy as np
@@ -329,7 +329,7 @@ class GraspFileLoad:
 
         return self.grasp_data_file_path_list
 
-    def data_file_process(self) -> "list[str] | tuple[list, list] | pd.DataFrame | CSFs | MixCoefficientData | int | None":
+    def data_file_process(self) -> Union[List[str], Tuple[List, List], pd.DataFrame, CSFs, MixCoefficientData, int, None]:
 
         '''
         The data_file_process method in the GraspFileLoad class is designed to identify the data type of the input file and process it accordingly. 
@@ -398,10 +398,23 @@ class GraspFileLoad:
                 self.load_file_path = Path(self.data_file_dir).joinpath(self.file_name)
             temp_plot_data = GraspFileLoad.file_read(self)
             print("data file type: plot_data")
-            self.plot_data = [line.split() for line in temp_plot_data[1:]]
-            self.radial_wavefunction_data = pd.DataFrame(self.plot_data, columns=temp_plot_data[0].split())
-
-            return self.radial_wavefunction_data
+            
+            # Validate data before creating DataFrame
+            if not temp_plot_data:
+                return pd.DataFrame()
+            
+            # Ensure we have at least a header row and data rows
+            if len(temp_plot_data) < 2:
+                return pd.DataFrame()
+            
+            try:
+                self.plot_data = [line.split() for line in temp_plot_data[1:]]
+                header_columns = temp_plot_data[0].split()
+                self.radial_wavefunction_data = pd.DataFrame(self.plot_data, columns=header_columns)
+                return self.radial_wavefunction_data
+            except (ValueError, IndexError) as e:
+                print(f"Warning: Could not create DataFrame from plot data: {e}")
+                return pd.DataFrame()
         
         elif "WAVEFUNCTION" in self.file_type.upper():
             self.file_type = "BINARY_RADIAL_WAVEFUNCTIONS"
@@ -414,20 +427,29 @@ class GraspFileLoad:
                 self.file_name = f"{self.atom}{self.level_parameter}{self.this_as}.w"
                 self.load_file_path = Path(self.data_file_dir).joinpath(self.file_name)
 
-            GraspFileLoad.radial_wavefunction_binary_file_read(self)
-            print("data file type: radial_wavefunction_data")
-            rg_list_len = [len(self.rg_list[i]) for i in range(len(self.rg_list))]
-            self.max_rg_index = rg_list_len.index(max(rg_list_len))
-            self.radial_wavefunction_data[f'r(a.u)'] = self.rg_list[self.max_rg_index]
-            pg_aligned_list = align_2d_list_columns(self.pg_list)
-            qg_aligned_list = align_2d_list_columns(self.qg_list)
+            try:
+                GraspFileLoad.radial_wavefunction_binary_file_read(self)
+                print("data file type: radial_wavefunction_data")
+                
+                # Validate data before processing
+                if not self.rg_list or not self.pg_list or not self.qg_list:
+                    return pd.DataFrame()
+                
+                rg_list_len = [len(self.rg_list[i]) for i in range(len(self.rg_list))]
+                self.max_rg_index = rg_list_len.index(max(rg_list_len))
+                self.radial_wavefunction_data[f'r(a.u)'] = self.rg_list[self.max_rg_index]
+                pg_aligned_list = align_2d_list_columns(self.pg_list)
+                qg_aligned_list = align_2d_list_columns(self.qg_list)
 
-            for n in range(len(self.nn_list)):
-                str_nl = int_nl_2_str_nl(self.nn_list[n], self.laky_list[n])
-                self.radial_wavefunction_data[f'P({str_nl})'] = pg_aligned_list[n]
-                self.radial_wavefunction_data[f'Q({str_nl})'] = qg_aligned_list[n]
+                for n in range(len(self.nn_list)):
+                    str_nl = int_nl_2_str_nl(self.nn_list[n], self.laky_list[n])
+                    self.radial_wavefunction_data[f'P({str_nl})'] = pg_aligned_list[n]
+                    self.radial_wavefunction_data[f'Q({str_nl})'] = qg_aligned_list[n]
 
-            return self.radial_wavefunction_data
+                return self.radial_wavefunction_data
+            except Exception as e:
+                print(f"Warning: Could not process wavefunction data: {e}")
+                return pd.DataFrame()
 
         elif "MIX" in self.file_type.upper() or "COEF" in self.file_type.upper():
             if "CI" in self.file_type.upper():
@@ -530,6 +552,46 @@ class GraspFileLoad:
 
         else:
             return 0
+
+    def get_level_data(self) -> List[str]:
+        """Get level/energy data with proper type safety"""
+        result = self.data_file_process()
+        if isinstance(result, list) and all(isinstance(item, str) for item in result):
+            return result
+        else:
+            raise TypeError(f"Expected list of strings, got {type(result)}")
+    
+    def get_transition_data(self) -> List[str]:
+        """Get transition data with proper type safety"""
+        result = self.data_file_process()
+        if isinstance(result, list) and all(isinstance(item, str) for item in result):
+            return result
+        else:
+            raise TypeError(f"Expected list of strings, got {type(result)}")
+    
+    def get_plot_data(self) -> pd.DataFrame:
+        """Get plot data as DataFrame with proper type safety"""
+        result = self.data_file_process()
+        if isinstance(result, pd.DataFrame):
+            return result
+        else:
+            raise TypeError(f"Expected pandas DataFrame, got {type(result)}")
+    
+    def get_csfs_data(self) -> CSFs:
+        """Get CSFs data with proper type safety"""
+        result = self.data_file_process()
+        if isinstance(result, CSFs):
+            return result
+        else:
+            raise TypeError(f"Expected CSFs object, got {type(result)}")
+    
+    def get_mix_coefficient_data(self) -> MixCoefficientData:
+        """Get mix coefficient data with proper type safety"""
+        result = self.data_file_process()
+        if isinstance(result, MixCoefficientData):
+            return result
+        else:
+            raise TypeError(f"Expected MixCoefficientData object, got {type(result)}")
 
 
 #######################################################################
