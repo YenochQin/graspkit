@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-version = '2.7.dev1'
+version = '2.7.dev2'
 # version = '2.6.1'
 description = "Grasp toolkit package"
 
