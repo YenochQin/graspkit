@@ -8,7 +8,6 @@
 
 # 标准库导入
 import argparse
-import csv
 import logging
 import math
 import os
@@ -49,7 +48,7 @@ def train_model(
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # 初始化或加载模型
-    models_dir = Path("models")
+    models_dir = Path(config.root_path) / "models"
     models_dir.mkdir(exist_ok=True)
     
     # 检查数据平衡性 (移到最前面)
