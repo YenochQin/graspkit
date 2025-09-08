@@ -26,7 +26,10 @@ from ..CSFs_processor.CSFs_choosing import *
 from ..CSFs_processor.CSFs_compress_extract import *
 
 # TODO not good enough
-def write_sorted_CSFs_to_cfile(CSFs_file_info: List, sorted_CSFs_data_list: List, output_file: str):
+def write_sorted_CSFs_to_cfile(
+                    CSFs_file_info: List, 
+                    sorted_CSFs_data_list: List, 
+                    output_file: Union[str, Path]):
     """
     将排序后的CSFs数据写入到指定的输出文件中。
 
