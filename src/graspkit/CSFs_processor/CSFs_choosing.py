@@ -7,6 +7,7 @@
 '''
 import re
 import random
+from pathlib import Path
 from typing import Dict, Tuple, List, TYPE_CHECKING
 from collections import Counter, defaultdict
 import math
@@ -529,9 +530,9 @@ def process_block(args):
     ]
 
 def maping_two_csfs_indices(
-    small_as_csfs_data: List[List[List[str]]],
-    large_hash_file: str = "large_data_hash.pkl"
-) -> Dict[int, List[int]]:
+            small_as_csfs_data: List[List[List[str]]],
+            large_hash_file: Union[Path, str]
+            ) -> Dict[int, List[int]]:
     """
     将 small_as_csfs_data 映射到预计算的 large_hash
     
