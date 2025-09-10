@@ -88,9 +88,11 @@ def save_csf_metadata(
 
 #######################################################################
 
-def save_csfs_binary(csf_obj: CSFs, filepath: Union[str, Path]):
-    filepath = Path(filepath)
+def save_csfs_binary(
+                csf_obj: CSFs, 
+                filepath: Union[str, Path]):
     
+    filepath = Path(filepath)
     # 元数据存储
     metadata = {
         'subshell_info_raw': csf_obj.subshell_info_raw,
@@ -159,7 +161,7 @@ def csfs_index_storange(blocks_csfs_index: Dict, save_file_path):
 #######################################################################
 def precompute_large_hash(
                             large_data: List[List[List[str]]], 
-                            save_path: Union[str, Path] = "large_data_hash.pkl"
+                            save_path: Union[str, Path]
                             ):
     """
     预计算 large_data 的哈希映射（双层字典结构）
