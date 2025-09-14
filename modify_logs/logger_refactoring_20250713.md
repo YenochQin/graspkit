@@ -133,7 +133,7 @@ if not load_status['success']:
 
 3. **`gk.check_configuration_coupling(config, energy_level_data_pd)`**
 4. **`gk.evaluate_calculation_convergence(config, current_calculation_csfs)`**
-5. **`gk.generate_chosen_csfs_descriptors(...)`**
+5. **`gk.generate_train_csfs_descriptors(...)`**
 6. **`gk.get_unselected_descriptors(...)`**
 7. **`gk.train_model(...)`**
 8. **`gk.evaluate_model(...)`**

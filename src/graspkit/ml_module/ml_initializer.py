@@ -20,6 +20,106 @@ from ..CSFs_processor import batch_asfs_mix_square_above_threshold
 from ..utils.data_modules import MixCoefficientData
 from ..utils.environment_config import get_environment_config
 
+
+def load_historical_ci_squared_data(config, logger):
+    """
+    读取历次迭代保存的CI系数平方数据
+
+    Args:
+        config: 配置对象
+        logger: 日志记录器
+
+    Returns:
+        List[Dict]: 历史CI数据列表，每个元素包含indices和ci_squared
+    """
+    historical_data = []
+    results_dir = config.root_path / 'results'
+
+    if not results_dir.exists():
+        logger.info("结果目录不存在，无法读取历史CI数据")
+        return historical_data
+
+    # 查找所有CI系数平方数据文件
+    ci_squared_files = sorted(results_dir.glob(f'{config.conf}_*_ci_squared.pkl'))
+
+    for ci_file in ci_squared_files:
+        try:
+            # 从文件名提取迭代轮次
+            parts = ci_file.stem.split('_')
+            if len(parts) >= 3:
+                try:
+                    loop_num = int(parts[-2])  # 提取轮次数
+                except ValueError:
+                    continue
+
+                # 只读取当前轮次之前的数据
+                if loop_num < config.cal_loop_num:
+                    ci_data = csfs_index_load(ci_file)
+                    if ci_data and 0 in ci_data:
+                        historical_data.append({
+                            'loop_num': loop_num,
+                            'indices': ci_data[0][0],  # CSF索引
+                            'ci_squared': ci_data[0][1]  # CI系数平方
+                        })
+                        logger.info(f"读取第{loop_num}轮CI数据: {len(ci_data[0][0])}个CSF, {ci_data[0][1].shape[0]}个能级")
+
+        except Exception as e:
+            logger.warning(f"读取CI文件失败 {ci_file}: {e}")
+            continue
+
+    logger.info(f"成功读取 {len(historical_data)} 轮历史CI系数数据")
+    return historical_data
+
+
+def merge_historical_ci_data(historical_data, logger):
+    """
+    合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
+
+    Args:
+        historical_data: 历史CI数据列表
+        logger: 日志记录器
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
+    """
+    if not historical_data:
+        return None, None
+
+    logger.info("开始合并历史CI系数数据")
+
+    # 第一步：收集所有唯一的CSF索引
+    all_indices = set()
+    for data in historical_data:
+        all_indices.update(data['indices'])
+    all_indices = sorted(list(all_indices))
+    logger.info(f"历史数据并集CSF总数: {len(all_indices)}")
+
+    # 第二步：创建索引到位置的映射
+    index_to_pos = {idx: pos for pos, idx in enumerate(all_indices)}
+    n_levels = historical_data[0]['ci_squared'].shape[0]  # 假设所有轮次的能级数相同
+
+    # 第三步：初始化合并后的CI系数数组
+    merged_ci_squared = np.zeros((n_levels, len(all_indices)))
+
+    # 第四步：填充数据，对共有索引取CI系数较大值
+    for data in historical_data:
+        current_indices = np.array(data['indices'])
+        current_ci = data['ci_squared']
+
+        # 找到当前数据在合并数组中的位置
+        positions = [index_to_pos[idx] for idx in current_indices]
+
+        # 对共有索引比较CI系数大小，取较大值
+        for i, pos in enumerate(positions):
+            # 如果该位置已有数据，比较取较大值；否则直接赋值
+            if np.any(merged_ci_squared[:, pos] > 0):
+                merged_ci_squared[:, pos] = np.maximum(merged_ci_squared[:, pos], current_ci[:, i])
+            else:
+                merged_ci_squared[:, pos] = current_ci[:, i]
+
+    logger.info(f"CI系数数据合并完成，维度: {merged_ci_squared.shape}")
+    return np.array(all_indices), merged_ci_squared
+
 def setup_logging(config):
     """配置日志系统，支持环境感知"""
     env_config = get_environment_config()
@@ -463,113 +563,144 @@ def evaluate_calculation_convergence(config, logger, current_calculation_csfs=No
         return True  # 出错时继续计算
 
 
-def generate_chosen_csfs_descriptors(
-                                    config, 
-                                    chosen_csfs_indices_dict: Dict, 
-                                    raw_csfs_descriptors: np.ndarray, 
-                                    rmix_file_data: MixCoefficientData, asfs_position: List[int], 
-                                    logger, 
-                                    include_wrong_level_negatives: bool = False) -> np.ndarray:
+def generate_train_csfs_descriptors(
+                                    config,
+                                    raw_csfs_descriptors: np.ndarray,
+                                    logger) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
-    
+    基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
+
     Args:
         config: 配置对象
-        chosen_csfs_indices_dict: 选中的CSFs索引字典
         raw_csfs_descriptors: 原始CSFs描述符数组
-        rmix_file_data: 混合系数数据
-        asfs_position: 正确能级位置索引列表
         logger: 日志记录器
-        include_wrong_level_negatives: 是否包含错误能级的组态作为负样本
-        
+
     Returns:
         np.ndarray: 包含描述符和标签的训练数据
     """
-    
-    # 验证字典并安全获取block 0的索引
-    if not chosen_csfs_indices_dict:
-        raise ValueError("chosen_csfs_indices_dict为空，无法获取选中的CSFs索引")
-    
-    if 0 not in chosen_csfs_indices_dict:
-        raise KeyError(f"chosen_csfs_indices_dict中缺少键0，可用键: {list(chosen_csfs_indices_dict.keys())}")
-    
-    selected_indices = np.array(chosen_csfs_indices_dict[0])
+
+    # 加载当前轮次的CSF索引和CI系数数据（从保存的文件中读取）
+    logger.info("加载当前轮次保存的CSF索引和CI系数数据")
+
+    # 加载当前轮次选择的CSF索引
+    current_indices_path = config.root_path / 'results' / f'{config.conf}_{config.cal_loop_num}_final_chosen_indices.pkl'
+    if not current_indices_path.exists():
+        raise FileNotFoundError(f"当前轮次CSF索引文件不存在: {current_indices_path}")
+
+    current_indices_dict = csfs_index_load(current_indices_path)
+    if not current_indices_dict or 0 not in current_indices_dict:
+        raise ValueError(f"无法从文件加载当前轮次CSF索引: {current_indices_path}")
+
+    selected_indices = np.array(current_indices_dict[0])
     selected_csfs_descriptors = raw_csfs_descriptors[selected_indices]
-    
-    # 获取所有能级的混合系数数据
-    cal_mix_coeffs = rmix_file_data.mix_coefficient_List[0]  # shape: (n_levels, n_csfs)
-    
-    ## 方案1：仅使用正确能级位置的数据（原有方案）
-    if not include_wrong_level_negatives:
-        # 获取正确能级位置的混合系数平方和
-        correct_mix_coeff_squared_sum = np.sum(cal_mix_coeffs[asfs_position]**2, axis=0)
-        
-        # 生成标签（只基于正确能级位置的混合系数）
-        csf_mix_coeff_descriptors = correct_mix_coeff_squared_sum >= np.float64(config.cutoff_value)
-        
-        logger.info(f"使用原有方案（仅正确能级）")
-        logger.info(f"正确能级位置: {asfs_position}")
-        logger.info(f"本轮计算CSFs数量: {len(selected_csfs_descriptors)}")
-        logger.info(f"超过阈值的CSFs数量: {np.sum(csf_mix_coeff_descriptors)}")
-        logger.info(f"正样本比例: {np.sum(csf_mix_coeff_descriptors)/len(csf_mix_coeff_descriptors):.4f}")
-        
-        caled_csfs_descriptors = np.column_stack([selected_csfs_descriptors, csf_mix_coeff_descriptors])
-    
-    ## 方案2：增强方案 - 包含错误能级的组态作为负样本
-    else:
-        # 重要：cal_mix_coeffs的shape是(n_levels, cal_csfs_num)
-        # 其中cal_csfs_num是本轮计算的CSFs数量
-        
-        # 获取正确能级位置的混合系数平方和
-        correct_mix_coeff_squared_sum = np.sum(cal_mix_coeffs[asfs_position]**2, axis=0)
-        
-        # 获取错误能级位置的索引
-        wrong_level_indices = list(set(range(cal_mix_coeffs.shape[0])) - set(asfs_position))
-        
-        # 获取错误能级位置的混合系数平方和
-        if len(wrong_level_indices) > 0:
-            wrong_mix_coeff_squared_sum = np.sum(cal_mix_coeffs[wrong_level_indices]**2, axis=0)
+
+    # 读取历次迭代保存的CI系数数据
+    logger.info("开始读取历次迭代的CI系数数据")
+    historical_ci_data = load_historical_ci_squared_data(config, logger)
+
+    if historical_ci_data is not None and len(historical_ci_data) > 0:
+        logger.info(f"成功读取 {len(historical_ci_data)} 轮历史CI系数数据")
+        # 合并历史数据生成标签
+        final_indices, final_ci_squared = merge_historical_ci_data(historical_ci_data, logger)
+
+        # 检查合并结果是否有效
+        if final_indices is None or final_ci_squared is None:
+            logger.warning("历史数据合并失败，回退到使用当前轮次数据")
+            # 回退到使用当前轮次数据
+            final_indices, final_ci_squared = None, None
         else:
-            wrong_mix_coeff_squared_sum = np.zeros(cal_mix_coeffs.shape[1])
-        
-        # 生成增强标签
-        cutoff_value = np.float64(config.cutoff_value)
-        
-        # 正样本：在正确能级位置有较高混合系数
-        positive_mask = correct_mix_coeff_squared_sum >= cutoff_value
-        
-        # 负样本包括：
-        # 1. 在正确能级位置混合系数较低的CSFs
-        # 2. 在错误能级位置有较高混合系数但在正确能级位置较低的CSFs（这些是"坏"组态）
-        negative_mask_low_correct = correct_mix_coeff_squared_sum < cutoff_value
-        negative_mask_high_wrong = (wrong_mix_coeff_squared_sum >= cutoff_value * 100) & (correct_mix_coeff_squared_sum < cutoff_value)
-        
-        # 最终标签：正样本为True，负样本为False
-        csf_mix_coeff_descriptors = positive_mask
-        
-        # 统计信息
-        n_positive = np.sum(positive_mask)
-        n_negative_low_correct = np.sum(negative_mask_low_correct & ~negative_mask_high_wrong)
-        n_negative_high_wrong = np.sum(negative_mask_high_wrong)
-        n_total = len(selected_csfs_descriptors)
-        
-        logger.info(f"使用增强方案（包含错误能级负样本）")
-        logger.info(f"正确能级位置: {asfs_position}")
-        logger.info(f"错误能级位置: {wrong_level_indices}")
-        logger.info(f"本轮计算CSFs数量: {n_total}")
-        logger.info(f"正样本数量: {n_positive} (在正确能级位置混合系数 ≥ {cutoff_value})")
-        logger.info(f"负样本数量: {n_total - n_positive}")
-        logger.info(f"  - 正确能级位置低混合系数: {n_negative_low_correct}")
-        logger.info(f"  - 错误能级位置高混合系数: {n_negative_high_wrong}")
-        logger.info(f"正样本比例: {n_positive/n_total:.4f}")
-        logger.info(f"错误能级高混合系数比例: {n_negative_high_wrong/n_total:.4f}")
-        
-        # 如果有错误能级的高混合系数组态，说明这些是"坏"组态
-        if n_negative_high_wrong > 0:
-            logger.info(f"发现 {n_negative_high_wrong} 个在错误能级有高混合系数的组态，这些将作为负样本帮助模型学习识别错误组态")
-        
-        caled_csfs_descriptors = np.column_stack([selected_csfs_descriptors, csf_mix_coeff_descriptors])
-    
+            # 从合并后的数据中选择当前轮次CSF对应的CI系数
+            current_csf_mask = np.isin(final_indices, selected_indices)
+            current_ci_squared = final_ci_squared[:, current_csf_mask]
+            current_indices = final_indices[current_csf_mask]
+
+            # 重新排序以匹配selected_indices的顺序
+            sort_order = np.argsort(np.searchsorted(current_indices, selected_indices))
+            current_ci_squared = current_ci_squared[:, sort_order]
+
+            # 基于合并后的CI系数生成标签
+            cutoff_value = np.float64(config.cutoff_value)
+            label_any_mix_above_cutoff = np.any(current_ci_squared >= cutoff_value, axis=0)
+
+            logger.info(f"基于历史合并数据生成标签")
+            logger.info(f"合并后CSF总数: {len(final_indices)}")
+            logger.info(f"当前轮次CSF数: {len(selected_indices)}")
+
+    # 初始化变量
+    cutoff_value = np.float64(config.cutoff_value)
+
+    # 读取历次迭代保存的CI系数数据
+    logger.info("开始读取历次迭代的CI系数数据")
+    historical_ci_data = load_historical_ci_squared_data(config, logger)
+
+    if historical_ci_data is not None and len(historical_ci_data) > 0:
+        logger.info(f"成功读取 {len(historical_ci_data)} 轮历史CI系数数据")
+        # 合并历史数据生成完整的CI系数并集
+        final_indices, final_ci_squared = merge_historical_ci_data(historical_ci_data, logger)
+
+        if final_indices is not None and final_ci_squared is not None:
+            logger.info(f"基于历史数据并集生成训练数据")
+            logger.info(f"历史数据并集CSF总数: {len(final_indices)}")
+            logger.info(f"当前轮次CSF数: {len(selected_indices)}")
+
+            # 使用历史数据并集生成完整的训练数据
+            full_descriptors = raw_csfs_descriptors[final_indices]
+            full_labels = np.any(final_ci_squared >= cutoff_value, axis=0)
+
+            logger.info(f"生成完整训练数据: {full_descriptors.shape[0]} 个CSF")
+            logger.info(f"正样本数量: {np.sum(full_labels)} (占比: {np.sum(full_labels)/len(full_labels):.4f})")
+
+            # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
+            caled_csfs_descriptors = np.column_stack([full_descriptors, full_labels])
+
+            # 保存描述符文件
+            cal_path = config.root_path / f'{config.conf}_{config.cal_loop_num}'
+            save_descriptors(caled_csfs_descriptors, f'{cal_path}/{config.conf}_{config.cal_loop_num}_full', 'npy')
+            logger.info(f"保存完整历史数据并集描述符文件: {cal_path}/{config.conf}_{config.cal_loop_num}_full.npy")
+
+            return caled_csfs_descriptors
+        else:
+            logger.warning("历史数据合并失败，回退到使用当前轮次数据")
+
+    # 如果没有历史数据或合并失败，使用当前轮次数据
+    logger.info("使用当前轮次数据生成标签")
+    # 基于当前轮次CI系数生成标签
+    current_ci_path = config.root_path / 'results' / f'{config.conf}_{config.cal_loop_num}_ci_squared.pkl'
+    if not current_ci_path.exists():
+        raise FileNotFoundError(f"当前轮次CI系数文件不存在: {current_ci_path}")
+
+    current_ci_dict = csfs_index_load(current_ci_path)
+    if not current_ci_dict or 0 not in current_ci_dict:
+        raise ValueError(f"无法从文件加载当前轮次CI系数: {current_ci_path}")
+
+    # current_ci_dict[0][0] 是索引，current_ci_dict[0][1] 是CI系数平方
+    current_ci_squared = current_ci_dict[0][1]  # shape: (n_correct_levels, n_current_csfs)
+
+    # 使用当前轮次数据生成训练数据（原有逻辑）
+    current_descriptors = raw_csfs_descriptors[selected_indices]
+    current_labels = np.any(current_ci_squared >= cutoff_value, axis=0)
+
+    logger.info(f"使用当前轮次数据生成训练数据: {current_descriptors.shape[0]} 个CSF")
+    logger.info(f"正样本数量: {np.sum(current_labels)} (占比: {np.sum(current_labels)/len(current_labels):.4f})")
+
+    # 返回当前轮次的训练数据
+    caled_csfs_descriptors = np.column_stack([current_descriptors, current_labels])
+
+    # 统一统计信息（适用于当前轮次数据）
+    num_cal_positive = np.sum(current_labels)
+    num_cal_negative = np.sum(~current_labels)  # 总负样本数量
+    num_cal_total = len(current_descriptors)
+
+    logger.info(f"CSFs标签生成完成")
+    logger.info(f"正确能级位置: 基于保存的CI系数数据")
+    logger.info(f"本轮计算CSFs数量: {num_cal_total}")
+    logger.info(f"正样本数量: {num_cal_positive} (在正确能级位置混合系数 ≥ {cutoff_value})")
+    logger.info(f"负样本总数量: {num_cal_negative}")
+    logger.info(f"正样本比例: {num_cal_positive/num_cal_total:.4f}")
+
+    caled_csfs_descriptors = np.column_stack([current_descriptors, current_labels])
+
     # 保存描述符文件
     cal_path = config.root_path / f'{config.conf}_{config.cal_loop_num}'
     save_descriptors(caled_csfs_descriptors, f'{cal_path}/{config.conf}_{config.cal_loop_num}', 'npy')

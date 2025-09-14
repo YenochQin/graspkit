@@ -16,7 +16,7 @@ from .ml_initializer import (
     check_configuration_coupling,
     check_energy_convergence,
     evaluate_calculation_convergence,
-    generate_chosen_csfs_descriptors,
+    generate_train_csfs_descriptors,
     get_unselected_descriptors,
     get_stay_descriptors
 )
@@ -50,7 +50,7 @@ __all__ = [
     'check_configuration_coupling',
     'check_energy_convergence',
     'evaluate_calculation_convergence',
-    'generate_chosen_csfs_descriptors',
+    'generate_train_csfs_descriptors',
     'get_unselected_descriptors',
     'get_stay_descriptors',
     
