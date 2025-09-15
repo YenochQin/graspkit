@@ -17,7 +17,7 @@ from .produced_data_writor import (
     save_csfs_binary,
     continue_calculate,
     update_config,
-    csfs_index_storange,
+    pkl_storange,
     precompute_large_hash,
     save_descriptors,
     save_descriptors_with_multi_block
@@ -55,7 +55,7 @@ __all__ = [
     'save_csfs_binary',
     'continue_calculate',
     'update_config',
-    'csfs_index_storange',
+    'pkl_storange',
     'precompute_large_hash',
     'save_descriptors',
     'save_descriptors_with_multi_block',
