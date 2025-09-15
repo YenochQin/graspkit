@@ -606,7 +606,7 @@ def generate_train_csfs_descriptors(
     cutoff_value = np.float64(config.cutoff_value)
 
     selected_csfs_descriptors = raw_csfs_descriptors[accumulated_indices]
-    important_csfs_mask = np.any(accumulated_ci_squared >= cutoff_value, axis=0)
+    important_csfs_mask = accumulated_ci_squared >= cutoff_value
 
     logger.info(f"生成完整训练数据: {selected_csfs_descriptors.shape[0]} 个CSF")
     logger.info(f"正样本数量: {np.sum(important_csfs_mask)} (占比: {np.sum(important_csfs_mask)/len(important_csfs_mask):.4f})")
