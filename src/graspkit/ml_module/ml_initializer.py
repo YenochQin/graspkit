@@ -462,19 +462,66 @@ def evaluate_calculation_convergence(config, logger, current_calculation_csfs=No
         logger.error(f"收敛检查过程中出错: {e}")
         return True  # 出错时继续计算
 
-# def merge_historical_ci_data(previous_indices_ci_dict, current_indices_ci_dict,  logger):
-#     """
-#     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
-
-#     Args:
-#         historical_data: 历史CI数据列表
-#         logger: 日志记录器
-
-#     Returns:
-#         Tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
-#     """
-
-#     for (previous_indices, previous_ci), (current_indices, current_ci) in zip(previous_indices_ci_dict[0].item(), current_indices_ci_dict[0].item()):
+def merge_historical_ci_data(previous_indices_ci_dict, current_indices_ci_dict, logger) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
+    
+    合并规则：
+    1. 取indices的并集
+    2. 两个字典indices中的交集对应的ci_squared取较大值
+    
+    Args:
+        previous_indices_ci_dict: 历史CI数据字典，格式为 {0: {"indices": [...], "ci_squared": [...]}}
+        current_indices_ci_dict: 当前CI数据字典，格式为 {0: {"indices": [...], "ci_squared": [...]}}
+        logger: 日志记录器
+    
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
+    """
+    
+    # 获取历史数据和当前数据
+    previous_indices = np.array(previous_indices_ci_dict[0]["indices"])
+    previous_ci_squared = np.array(previous_indices_ci_dict[0]["ci_squared"])
+    
+    current_indices = np.array(current_indices_ci_dict[0]["indices"])
+    current_ci_squared = np.array(current_indices_ci_dict[0]["ci_squared"])
+    
+    # 创建索引到CI系数的映射
+    previous_dict = dict(zip(previous_indices, previous_ci_squared))
+    current_dict = dict(zip(current_indices, current_ci_squared))
+    
+    # 获取索引的并集
+    all_indices = set(previous_indices) | set(current_indices)
+    
+    # 合并CI系数：对于交集索引，取较大值
+    merged_indices = []
+    merged_ci_squared = []
+    
+    for idx in sorted(all_indices):
+        merged_indices.append(idx)
+        
+        # 如果索引在两个字典中都存在，取较大的CI系数
+        if idx in previous_dict and idx in current_dict:
+            max_ci = max(previous_dict[idx], current_dict[idx])
+            merged_ci_squared.append(max_ci)
+        # 如果只在历史数据中存在
+        elif idx in previous_dict:
+            merged_ci_squared.append(previous_dict[idx])
+        # 如果只在当前数据中存在
+        else:  # idx in current_dict
+            merged_ci_squared.append(current_dict[idx])
+    
+    merged_indices = np.array(merged_indices)
+    merged_ci_squared = np.array(merged_ci_squared)
+    
+    logger.info(f"历史数据合并统计:")
+    logger.info(f"  历史数据CSFs数量: {len(previous_indices)}")
+    logger.info(f"  当前数据CSFs数量: {len(current_indices)}")
+    logger.info(f"  合并后CSFs数量: {len(merged_indices)}")
+    logger.info(f"  新增CSFs数量: {len(all_indices - set(previous_indices))}")
+    logger.info(f"  重复CSFs数量: {len(set(previous_indices) & set(current_indices))}")
+    
+    return merged_indices, merged_ci_squared
         
 
 def generate_train_csfs_descriptors(
@@ -536,7 +583,11 @@ def generate_train_csfs_descriptors(
         except AssertionError as e:
             print(f"❌ 验证失败: {e}")
             
-        accumulated_indices, accumulated_ci_squared = merge_historical_ci_data(previous_indices_ci_dict, current_indices_ci_dict, logger)
+        accumulated_indices, accumulated_ci_squared = merge_historical_ci_data(
+                                                            previous_indices_ci_dict, 
+                                                            current_indices_ci_dict, 
+                                                            logger)
+        
         logger.info(f"训练数据")
         logger.info(f"CSF总数: {len(accumulated_indices)}")
         logger.info(f"当前轮次CSF数: {len(current_selected_indices)}")
@@ -549,17 +600,19 @@ def generate_train_csfs_descriptors(
         logger.info(f"当前轮次CSF数: {len(current_selected_indices)}")
     else:
         logger.error(f"{config.cal_loop_num=} error")
+        raise ValueError(f"Invalid cal_loop_num: {config.cal_loop_num}")
+    
     # 初始化变量
     cutoff_value = np.float64(config.cutoff_value)
 
-    full_descriptors = raw_csfs_descriptors[accumulated_indices]
-    full_labels = np.any(accumulated_ci_squared >= cutoff_value, axis=0)
+    selected_csfs_descriptors = raw_csfs_descriptors[accumulated_indices]
+    important_csfs_mask = np.any(accumulated_ci_squared >= cutoff_value, axis=0)
 
-    logger.info(f"生成完整训练数据: {full_descriptors.shape[0]} 个CSF")
-    logger.info(f"正样本数量: {np.sum(full_labels)} (占比: {np.sum(full_labels)/len(full_labels):.4f})")
+    logger.info(f"生成完整训练数据: {selected_csfs_descriptors.shape[0]} 个CSF")
+    logger.info(f"正样本数量: {np.sum(important_csfs_mask)} (占比: {np.sum(important_csfs_mask)/len(important_csfs_mask):.4f})")
 
     # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
-    caled_csfs_descriptors = np.column_stack([full_descriptors, full_labels])
+    caled_csfs_descriptors = np.column_stack([selected_csfs_descriptors, important_csfs_mask])
 
     # 保存描述符文件
     cal_path = config.root_path / f'{config.conf}_{config.cal_loop_num}'
@@ -567,9 +620,9 @@ def generate_train_csfs_descriptors(
     logger.info(f"保存完整历史数据并集描述符文件: {cal_path}/{config.conf}_{config.cal_loop_num}_full.npy")
 
     logger.info(f"CSFs描述符标签生成完成")
-    logger.info(f"正样本数量: {num_cal_positive} (在正确能级位置混合系数 ≥ {cutoff_value})")
-    logger.info(f"负样本总数量: {num_cal_negative}")
-    logger.info(f"正样本比例: {num_cal_positive/num_cal_total:.4f}")
+    logger.info(f"正样本数量: {np.sum(important_csfs_mask)} (在正确能级位置混合系数 ≥ {cutoff_value})")
+    logger.info(f"负样本总数量: {len(important_csfs_mask) - np.sum(important_csfs_mask)}")
+    logger.info(f"正样本比例: {np.sum(important_csfs_mask) / len(important_csfs_mask):.4f}")
 
     return caled_csfs_descriptors
 
