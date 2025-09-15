@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Tuple, List, Optional
 
-from ..data_IO import GraspFileLoad, load_csfs_binary, load_descriptors, pkl_loader, save_descriptors, load_descriptors_with_multi_block
+from ..data_IO import GraspFileLoad, pkl_storange, pkl_loader, save_descriptors, load_descriptors_with_multi_block
 from ..data_IO.h5_descriptor_loader import load_hdf5_descriptors
 from ..grasp_data_extractor.ASF_data_collection import LevelsEnergyData
 from ..CSFs_processor import batch_asfs_mix_square_above_threshold
@@ -613,6 +613,17 @@ def generate_train_csfs_descriptors(
 
     # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
     caled_csfs_descriptors = np.column_stack([selected_csfs_descriptors, important_csfs_mask])
+    
+    accumulated_ci_data = {
+            0: {
+                "indices": accumulated_indices,  # CSF索引（对应总池）
+                "ci_squared": accumulated_ci_squared  # 对应的CI系数平方（正确能级 × 当前计算CSF）
+            }
+        }
+
+    accumulated_ci_path = config.root_path / 'results' / f'{config.conf}_previous_ci_squared.pkl'
+    pkl_storange(accumulated_ci_data, accumulated_ci_path)
+    logger.info(f"保存累积CI系数数据: {accumulated_ci_path} (包含{len(accumulated_indices)}个CSFs)")
 
     # 保存描述符文件
     cal_path = config.root_path / f'{config.conf}_{config.cal_loop_num}'
