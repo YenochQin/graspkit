@@ -26,7 +26,7 @@ from .produced_data_writor import (
 from .processing_data_loader import (
     load_csf_metadata,
     load_csfs_binary,
-    csfs_index_load,
+    pkl_loader,
     load_large_hash,
     load_config,
     load_descriptors,
@@ -63,7 +63,7 @@ __all__ = [
     # processing_data_load
     'load_csf_metadata',
     'load_csfs_binary',
-    'csfs_index_load',
+    'pkl_loader',
     'load_large_hash',
     'load_config',
     'load_descriptors',

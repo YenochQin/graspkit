@@ -60,7 +60,7 @@ def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
 
 #######################################################################
 
-def csfs_index_load(load_csfs_index_file_path) -> Dict[int, Union[List[int], np.ndarray]]:
+def pkl_loader(load_csfs_index_file_path) -> Dict:
     """
     加载CSF索引文件（pickle格式）。
     
@@ -68,8 +68,8 @@ def csfs_index_load(load_csfs_index_file_path) -> Dict[int, Union[List[int], np.
         load_csfs_index_file_path: 索引文件路径
         
     Returns:
-        Dict[int, Union[List[int], np.ndarray]]: 块索引到CSF索引列表/数组的映射
-        
+        Dict: 块索引到CSF索引列表/数组的映射
+        读取的pkl文件中可能会有ci系数
     Raises:
         TypeError: 如果加载的数据不是正确格式
         FileNotFoundError: 如果文件不存在
@@ -91,19 +91,6 @@ def csfs_index_load(load_csfs_index_file_path) -> Dict[int, Union[List[int], np.
     # 类型检查和转换
     if not isinstance(blocks_csfs_index, dict):
         raise TypeError(f"Expected dict, got {type(blocks_csfs_index)}")
-    
-    # 验证字典内容格式
-    for key, value in blocks_csfs_index.items():
-        if not isinstance(key, int):
-            raise TypeError(f"Expected int key, got {type(key)}: {key}")
-        if not isinstance(value, (list, np.ndarray)):
-            raise TypeError(f"Expected list or np.ndarray value, got {type(value)} for key {key}")
-        if isinstance(value, list):
-            if not all(isinstance(item, int) for item in value):
-                raise TypeError(f"Expected list of int, got non-int items in list for key {key}")
-        elif isinstance(value, np.ndarray):
-            if value.dtype.kind not in ['i', 'u']:  # integer or unsigned integer
-                raise TypeError(f"Expected np.ndarray of integers, got {value.dtype} for key {key}")
     
     return blocks_csfs_index
 
