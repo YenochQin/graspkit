@@ -569,8 +569,8 @@ class GraspFileLoad:
         else:
             raise TypeError(f"Expected list of strings, got {type(result)}")
     
-    def get_plot_data(self) -> pd.DataFrame:
-        """Get plot data as DataFrame with proper type safety"""
+    def get_radial_wavefunction(self) -> pd.DataFrame:
+        """Get radial_wavefunction data as DataFrame with proper type safety"""
         result = self.data_file_process()
         if isinstance(result, pd.DataFrame):
             return result
