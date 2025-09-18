@@ -61,7 +61,8 @@ from .utils import (
     progress_range,
     progress_context,
     log_stage_start,
-    log_stage_end
+    log_stage_end,
+    calculate_deformation
 )
 
 from .CSFs_processor import (
@@ -182,6 +183,7 @@ __all__ = [
     'read_fortran_record',
     'chunk_string',
     'level_data_compare',
+    "calculate_deformation",
 
     ## CSFs_processor
     'batch_asfs_mix_square_above_threshold',

@@ -44,6 +44,10 @@ from .progress_manager import (
     log_stage_end
 )
 
+from .quadrupole_deformation import (
+    calculate_deformation,
+)
+
 __all__ = [
     # 数据类
     'MixCoefficientData',
@@ -77,6 +81,8 @@ __all__ = [
     'progress_range',
     'progress_context',
     'log_stage_start',
-    'log_stage_end'
+    'log_stage_end',
     
+    # 四极形变
+    'calculate_deformation',
 ]
