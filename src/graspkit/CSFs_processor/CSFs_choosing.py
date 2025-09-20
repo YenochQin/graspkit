@@ -8,6 +8,7 @@
 import re
 import random
 from pathlib import Path
+from typing import Literal
 from typing import Dict, Tuple, List, TYPE_CHECKING
 from collections import Counter, defaultdict
 import math
@@ -464,7 +465,11 @@ def generate_unique_random_numbers(max_num: int, count: int) -> list:
     
     return numbers
 
-def radom_choose_csfs(block_csfs_list: List, ratio_CSFs_select_num: float, selected_csfs_indices: List = []):
+def radom_choose_csfs(
+            block_csfs_list: List,
+            method: Literal["ratio", "quality"],
+            ratio_or_quality: float,
+            selected_csfs_indices: List = []):
     """
     优化版的大规模CSF随机选择函数
     
@@ -475,10 +480,14 @@ def radom_choose_csfs(block_csfs_list: List, ratio_CSFs_select_num: float, selec
     """
     block_csfs_num = len(block_csfs_list)
     selected_csfs_num = len(selected_csfs_indices)
-    
-    # 计算需要选择的总数
-    total_needed = math.ceil(block_csfs_num * ratio_CSFs_select_num)
-    
+    if method == "ratio":
+        # 计算需要选择的总数
+        total_needed = math.ceil(block_csfs_num * ratio_or_quality)
+    elif method == "quality":
+        # 计算需要选择的总数
+        total_needed = math.ceil(ratio_or_quality)
+    else:
+        raise ValueError("method must be 'ratio' or 'quality'")
     # 计算还需要补充的数量
     choose_csfs_num = max(0, total_needed - selected_csfs_num)
     
