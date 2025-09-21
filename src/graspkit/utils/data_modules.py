@@ -7,8 +7,10 @@
 '''
 
 from dataclasses import dataclass
-import numpy as np
 from typing import Union, List
+
+import numpy as np
+from numpy.typing import NDArray
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ class CSFs:
     CSFs_block_j_value: List[str]
     parity: str
     CSFs_block_data: List
-    CSFs_block_length: Union[List[int], np.ndarray]  # 兼容列表或ndarray
+    CSFs_block_length: Union[List[int], NDArray[np.integer]]  # 兼容列表或ndarray
     block_num: int
 
     @classmethod

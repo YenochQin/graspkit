@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Tuple, List, Optional
 
-from ..data_IO import GraspFileLoad, pkl_storange, pkl_loader, save_descriptors, load_descriptors_with_multi_block
+from ..data_IO import GraspFileLoad, pkl_storage, pkl_loader, save_descriptors, load_descriptors_with_multi_block
 from ..data_IO.h5_descriptor_loader import load_hdf5_descriptors
 from ..grasp_data_extractor.ASF_data_collection import LevelsEnergyData
 from ..CSFs_processor import batch_asfs_mix_square_above_threshold
@@ -622,7 +622,7 @@ def generate_train_csfs_descriptors(
         }
 
     accumulated_ci_path = config.root_path / 'results' / f'{config.conf}_previous_ci_squared.pkl'
-    pkl_storange(accumulated_ci_data, accumulated_ci_path)
+    pkl_storage(accumulated_ci_data, accumulated_ci_path)
     logger.info(f"保存累积CI系数数据: {accumulated_ci_path} (包含{len(accumulated_indices)}个CSFs)")
 
     # 保存描述符文件

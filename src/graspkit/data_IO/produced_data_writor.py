@@ -141,7 +141,7 @@ def update_config(config_path, updates):
 
 #######################################################################
 
-def pkl_storange(blocks_csfs_index: Dict, save_file_path):
+def pkl_storage(blocks_csfs_index: Dict, save_file_path):
     """
     将CSFs索引存储到指定的文件中。
     Args:
