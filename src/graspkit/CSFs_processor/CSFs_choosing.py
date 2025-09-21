@@ -93,10 +93,59 @@ def single_asf_mix_square_above_threshold(asf_mix_data_array: np.ndarray, thresh
     # 返回索引元组列表
     return [(idx,) for idx in sorted_indices]
 
+# def batch_asfs_mix_square_above_threshold(
+#                     asfs_mix_data: MixCoefficientData, 
+#                     asfs_position: List = [],
+#                     threshold: float = 0.1) -> Dict[int, np.ndarray]:
+#     """
+#     批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
+    
+#     Args:
+#         asfs_mix_data: 包含以下属性的对象:
+#             - block_num: 块的总数
+#             - mix_coefficient_List: 按块组织的系数列表(每个块包含多个层级的一维数组)
+#         threshold: 阈值(平方值比较)，默认0.1
+        
+#     Returns:
+#         字典，键是block编号，值是该块中所有超过阈值的系数索引(已去重的排序数组)
+#         如果没有满足条件的索引，对应的值为空数组
+#     """
+#     result = {}
+#     if asfs_position == []:
+#         asfs_position = asfs_mix_data.block_levels_index_List[0].tolist()
+#     for block in range(asfs_mix_data.block_num):
+#         # 检查块是否存在或数据是否有效
+#         if (block >= len(asfs_mix_data.mix_coefficient_List) or 
+#             asfs_mix_data.mix_coefficient_List[block] is None):
+#             result[block] = np.array([], dtype=np.int64)
+#             continue
+            
+#         # 使用集合来存储索引以实现去重
+#         unique_indices = set()
+        
+#         # for level_data in asfs_mix_data.mix_coefficient_List[block]:
+#         for level in asfs_position:
+#             level_data = asfs_mix_data.mix_coefficient_List[block][level]
+#             if level_data is None:
+#                 continue
+#             # 获取该层级的重要系数索引并添加到集合中
+#             level_indices = single_asf_mix_square_above_threshold(level_data, threshold)
+#             unique_indices.update(idx[0] for idx in level_indices)  # 解包单元素元组
+        
+#         # 转换为排序后的numpy数组
+#         if unique_indices:
+#             result[block] = np.array(sorted(unique_indices), dtype=np.int64)
+#         else:
+#             result[block] = np.array([], dtype=np.int64)
+        
+#     return result
+
+# 测试使用新的流程
 def batch_asfs_mix_square_above_threshold(
                     asfs_mix_data: MixCoefficientData, 
                     asfs_position: List = [],
-                    threshold: float = 0.1) -> Dict[int, np.ndarray]:
+                    threshold: float = 0.1
+                    ) -> Dict[int, np.ndarray]:
     """
     批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
     
@@ -107,40 +156,30 @@ def batch_asfs_mix_square_above_threshold(
         threshold: 阈值(平方值比较)，默认0.1
         
     Returns:
-        字典，键是block编号，值是该块中所有超过阈值的系数索引(已去重的排序数组)
+        字典，键是block编号，值是该块中所有超过阈值的系数索引(已去重)
         如果没有满足条件的索引，对应的值为空数组
     """
     result = {}
+    
+    # 处理asfs_position（虽然在这个函数中似乎没有用到）
     if asfs_position == []:
-        asfs_position = asfs_mix_data.block_levels_index_List[0].tolist()
-    for block in range(asfs_mix_data.block_num):
-        # 检查块是否存在或数据是否有效
-        if (block >= len(asfs_mix_data.mix_coefficient_List) or 
-            asfs_mix_data.mix_coefficient_List[block] is None):
-            result[block] = np.array([], dtype=np.int64)
-            continue
-            
-        # 使用集合来存储索引以实现去重
-        unique_indices = set()
+        asfs_position = asfs_mix_data.block_levels_index_List[0]
+    
+    # 遍历每个块
+    for block in asfs_mix_data.block_index_List:
+        # 获取当前块的数据（假设mix_coefficient_List[block]是2D数组：层级×系数）
+        block_data = asfs_mix_data.mix_coefficient_List[block]
         
-        # for level_data in asfs_mix_data.mix_coefficient_List[block]:
-        for level in asfs_position:
-            level_data = asfs_mix_data.mix_coefficient_List[block][level]
-            if level_data is None:
-                continue
-            # 获取该层级的重要系数索引并添加到集合中
-            level_indices = single_asf_mix_square_above_threshold(level_data, threshold)
-            unique_indices.update(idx[0] for idx in level_indices)  # 解包单元素元组
+        # 计算平方并比较阈值
+        squared_above_threshold = block_data[asfs_position]**2 > threshold
         
-        # 转换为排序后的numpy数组
-        if unique_indices:
-            result[block] = np.array(sorted(unique_indices), dtype=np.int64)
-        else:
-            result[block] = np.array([], dtype=np.int64)
+        # 按列求逻辑或：只要任意层级超过阈值，就保留该系数索引
+        above_threshold_mask = np.any(squared_above_threshold, axis=0)
         
+        # 获取超过阈值的系数索引
+        result[block] = np.where(above_threshold_mask)[0]
+    
     return result
-
-
 
 #### batch_blocks_mix_square_above_threshold 重复了，以后不再使用
 def batch_blocks_mix_square_above_threshold(asfs_mix_data: MixCoefficientData, threshold=0.1):
