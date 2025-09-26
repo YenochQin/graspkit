@@ -112,14 +112,17 @@ class TransitionDataCollection:
         self.transition_data_pd.sort_values('transition_type', inplace=True)
         
         self.transition_data_pd['transition_type'] = self.transition_data_pd['transition_type'].astype(str)
-        temp_E_transition_data_pd = self.transition_data_pd[self.transition_data_pd['transition_type'].str.contains('E')]
         
-        for index, row in temp_E_transition_data_pd.iterrows():
-            # print(row)
-            rate_C = row['transition_rate_C']
-            rate_B = row['transition_rate_B']
-            transition_dT = transition_dT_cal(rate_C, rate_B)
-            self.transition_data_pd.at[index, 'transition_dT'] = transition_dT
+        # 使用apply方法来计算transition_dT，避免类型问题
+        def calculate_transition_dT(row):
+            if 'E' in row['transition_type']:
+                rate_C = float(row['transition_rate_C'])
+                rate_B = float(row['transition_rate_B'])
+                return transition_dT_cal(rate_C, rate_B)
+            else:
+                return 0.0
+        
+        self.transition_data_pd['transition_dT'] = self.transition_data_pd.apply(calculate_transition_dT, axis=1)
 
         return self.transition_data_pd
 
@@ -211,16 +214,16 @@ class LSJTransitionDataBlock:
     Transition Data block in LSJ form like below:
 
     electronic *-pole transitions:
-    2J&LevelEnergy  Configuration(Upper)
     2J&LevelEnergy  Configuration(Lower)
+    2J&LevelEnergy  Configuration(Upper)
     energy_level_difference CM-1        wavelength ANGS(VAC)        wavelength ANGS(AIR)
     transition_type  line_strength_B =  0.00000D+00   oscillator_strength_B =  0.00000D+00   transition_rate_B =  0.00000D+00
               line_strength_C   oscillator_strength_C   transition_rate_C
 
 
     magnetic *-pole transitions:
-    2J&LevelEnergy  Configuration(Upper)
     2J&LevelEnergy  Configuration(Lower)
+    2J&LevelEnergy  Configuration(Upper)
     energy_level_difference CM-1        wavelength ANGS(VAC)        wavelength ANGS(AIR)
     transition_type  line_strength =  0.00000D+00   oscillator_strength =  0.00000D+00   transition_rate =  0.00000D+00
     '''
@@ -288,9 +291,9 @@ class LSJTransitionDataBlock:
         return self.block_trasnsition_properties_dict
     
     def transition_data_block2dict(self):
-        upper_level_info = self.data_block[0]
 
-        lower_level_info = self.data_block[1]
+        lower_level_info = self.data_block[0]
+        upper_level_info = self.data_block[1]
         energy_level_difference_info = self.data_block[2]
         properties_info = self.data_block[3:]
 
@@ -437,8 +440,8 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
     elif file_type.upper() == 'TRANSITION_LSJ':
         
         level_index_dict = {(row['J'], row[f'Energy_Total_{data_parameter}{a_s}'], row[f'Configuration_{data_parameter}{a_s}raw']): row[f'No{data_parameter}{a_s}'] for index, row in level_df.iterrows()}
-        transition_df['Upper_index'] = transition_df.apply(lambda row: level_index_dict.get((row['Upper_J'], row['Upper_configuration'], row['Upper_energy'])), axis=1)
-        transition_df['Lower_index'] = transition_df.apply(lambda row: level_index_dict.get((row['Lower_J'], row['Lower_configuration'], row['Lower_energy'])), axis=1)
+        transition_df['Upper_index'] = transition_df.apply(lambda row: level_index_dict.get((row['Upper_J'], row['Upper_energy'], row['Upper_configuration'])), axis=1)
+        transition_df['Lower_index'] = transition_df.apply(lambda row: level_index_dict.get((row['Lower_J'], row['Lower_energy'], row['Lower_configuration'])), axis=1)
 
     else:
         raise ValueError("file_type doesn't match, it should be 'TRANSITION' or 'TRANSITION_LSJ'")
@@ -471,7 +474,19 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
             continue
     transition_df['branching_fraction'] = np.float64(0)
     for trannum in range(len(transition_df)):
-        transition_df.loc[trannum, 'branching_fraction'] = transition_df.loc[trannum, 'transition_rate_C']/transition_df.loc[trannum, 'sum_A_B']
+        # 根据跃迁类型选择对应的跃迁几率
+        if 'E' in transition_df.loc[trannum, 'transition_type']:
+            transition_rate = transition_df.loc[trannum, 'transition_rate_C']
+        elif 'M' in transition_df.loc[trannum, 'transition_type']:
+            transition_rate = transition_df.loc[trannum, 'transition_rate_M']
+        else:
+            continue
+
+        # 计算branching fraction：单个跃迁几率除以同一上能级的总跃迁几率
+        if transition_df.loc[trannum, 'sum_A_C'] != 0:
+            transition_df.loc[trannum, 'branching_fraction'] = transition_rate / transition_df.loc[trannum, 'sum_A_C']
+
+        # 如果branching fraction小于阈值，删除该跃迁
         if transition_df.loc[trannum, 'branching_fraction'] <= Branching_Fraction:
             transition_df.drop(trannum, axis=0, inplace=True)
     
