@@ -181,10 +181,22 @@ def transition_data_level_location(transition_data_df : pd.DataFrame, level_df :
 
 ######################################################################
 
-def transition_dT_cal(transition_rate_B, transition_rate_C):
-    
+def transition_dT_cal(transition_rate_B: float, transition_rate_C: float) -> float:
+    """
+    计算跃迁几率的相对差异
+
+    Args:
+        transition_rate_B: B方法计算的跃迁几率
+        transition_rate_C: C方法计算的跃迁几率
+
+    Returns:
+        跃迁几率的相对差异值
+    """
+    if max(transition_rate_B, transition_rate_C) == 0:
+        return 0.0
+
     transition_dT = abs(transition_rate_B - transition_rate_C) / max(transition_rate_B, transition_rate_C)
-    
+
     return transition_dT
 
 ######################################################################
