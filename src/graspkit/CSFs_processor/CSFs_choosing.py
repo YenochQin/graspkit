@@ -161,17 +161,36 @@ def batch_asfs_mix_square_above_threshold(
     """
     result = {}
     
-    # 处理asfs_position（虽然在这个函数中似乎没有用到）
-    if asfs_position == []:
-        asfs_position = asfs_mix_data.block_levels_index_List[0]
+        # 1. 如果调用者没给，就用数据自带的
+    if not asfs_position:                       # 空列表 / 空元组
+        asfs_position = asfs_mix_data.block_levels_index_List
+
+    all_asfs_position = asfs_mix_data.block_levels_index_List  # List[np.ndarray]
+
+    # 2. 第一层长度必须一致
+    if len(asfs_position) != len(all_asfs_position):
+        raise ValueError(
+            f'asfs_position 第一层长度({len(asfs_position)}) '
+            f'与 block_levels_index_List({len(all_asfs_position)}) 不一致。'
+        )
+
+    # 3. 逐层做“子集”检查
+    for lvl, (usr, gold) in enumerate(zip(asfs_position, all_asfs_position)):
+        # 统一转成 np.ndarray，再判子集
+        usr = np.asarray(usr, dtype=gold.dtype)
+        if not np.isin(usr, gold).all():
+            raise ValueError(
+                f'asfs_position 第 {lvl} 层元素 {usr} '
+                f'不是 block_levels_index_List 对应层 {gold} 的子集。'
+            )
     
     # 遍历每个块
     for block in asfs_mix_data.block_index_List:
         # 获取当前块的数据（假设mix_coefficient_List[block]是2D数组：层级×系数）
-        block_data = asfs_mix_data.mix_coefficient_List[block]
+        block_data = asfs_mix_data.mix_coefficient_List[block][asfs_position[block]]
         
         # 计算平方并比较阈值
-        squared_above_threshold = block_data[asfs_position]**2 > threshold
+        squared_above_threshold = block_data[asfs_position[block]]**2 > threshold
         
         # 按列求逻辑或：只要任意层级超过阈值，就保留该系数索引
         above_threshold_mask = np.any(squared_above_threshold, axis=0)
