@@ -317,17 +317,17 @@ def single_asf_csfs_final_coupling_J_mix_coefficient_sum(block_csfs_coupling_J_c
 def single_block_batch_asfs_CSFs_final_coupling_J_collection(
                                     block_CSFs: List, 
                                     block_asfs_mix_coefficient_List: Union[List, np.ndarray], 
-                                    asfs_position: List = [], 
+                                    block_asfs_position: Union[List, np.ndarray] = [], 
                                     coupling_level: int = -1) -> Dict:
     # 获取初始耦合信息
     base_coupling_dict = single_block_csfs_final_coupling_J_collection(block_CSFs, coupling_level)
-    if asfs_position == []:
-        asfs_position = [i for i in range(len(block_asfs_mix_coefficient_List))]
+    if block_asfs_position == []:
+        block_asfs_position = [i for i in range(len(block_asfs_mix_coefficient_List))]
     for index, element in enumerate(base_coupling_dict):
         base_coupling_dict[element]['sum_ci'] = []
         for asf_index, asf_mix_coefficient in enumerate(block_asfs_mix_coefficient_List):
             sum_ci = 0
-            if asf_index in asfs_position:
+            if asf_index in block_asfs_position:
                 for csf_index in base_coupling_dict[element]['indices']:
                     sum_ci += asf_mix_coefficient[csf_index]**2
 
@@ -342,7 +342,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
                                     asfs_position: List[np.ndarray] = [],
                                     coupling_level: int = -1) -> Dict:
     # 1. 如果调用者没给，就用数据自带的
-    if not asfs_position:                       # 空列表 / 空元组
+    if asfs_position == []:                       # 空列表
         asfs_position = asfs_mix_data.block_levels_index_List
 
     all_asfs_position = asfs_mix_data.block_levels_index_List  # List[np.ndarray]
@@ -373,7 +373,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         block_asfs_coupling_J_collection = single_block_batch_asfs_CSFs_final_coupling_J_collection(
                                                     block_CSFs = block_csfs, 
                                                     block_asfs_mix_coefficient_List = block_asfs_mix, 
-                                                    asfs_position = asfs_position,
+                                                    block_asfs_position = asfs_position[block],
                                                     coupling_level = coupling_level)
         
         blocks_asfs_coupling_J_sum_ci[block] = block_asfs_coupling_J_collection
