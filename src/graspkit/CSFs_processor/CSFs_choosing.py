@@ -16,9 +16,6 @@ import numpy as np
 import pickle
 from tqdm import tqdm
 
-# if TYPE_CHECKING:
-#     from ..data_IO.processing_data_load import load_large_hash
-#     from ..utils.data_modules import MixCoefficientData
 from ..data_IO.processing_data_loader import load_large_hash
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
@@ -341,10 +338,34 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
 
 def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
                                     blocks_CSFs_list: List, 
-                                    blocks_asfs_mix_coefficient_List: List, 
+                                    asfs_mix_data: MixCoefficientData, 
+                                    asfs_position: List[np.ndarray] = [],
                                     coupling_level: int = -1) -> Dict:
+    # 1. 如果调用者没给，就用数据自带的
+    if not asfs_position:                       # 空列表 / 空元组
+        asfs_position = asfs_mix_data.block_levels_index_List
+
+    all_asfs_position = asfs_mix_data.block_levels_index_List  # List[np.ndarray]
+
+    # 2. 第一层长度必须一致
+    if len(asfs_position) != len(all_asfs_position):
+        raise ValueError(
+            f'asfs_position 第一层长度({len(asfs_position)}) '
+            f'与 block_levels_index_List({len(all_asfs_position)}) 不一致。'
+        )
+
+    # 3. 逐层做“子集”检查
+    for lvl, (usr, gold) in enumerate(zip(asfs_position, all_asfs_position)):
+        # 统一转成 np.ndarray，再判子集
+        usr = np.asarray(usr, dtype=gold.dtype)
+        if not np.isin(usr, gold).all():
+            raise ValueError(
+                f'asfs_position 第 {lvl} 层元素 {usr} '
+                f'不是 block_levels_index_List 对应层 {gold} 的子集。'
+            )
     blocks_asfs_coupling_J_sum_ci = {}
-    for block, (block_csfs, block_asfs_mix) in enumerate(zip(blocks_CSFs_list, blocks_asfs_mix_coefficient_List)):
+    # block_data = asfs_mix_data.mix_coefficient_List[block][asfs_position[block]]
+    for block, (block_csfs, block_asfs_mix) in enumerate(zip(blocks_CSFs_list, asfs_mix_data.mix_coefficient_List)):
         print(f"第{block+1}个block包含{len(block_asfs_mix)}个asf")
         if any(len(asf_mix) != len(block_csfs)  for asf_mix in block_asfs_mix):
             raise ValueError("block_CSFs和block_asfs_mix_coefficient长度不匹配")
@@ -352,6 +373,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         block_asfs_coupling_J_collection = single_block_batch_asfs_CSFs_final_coupling_J_collection(
                                                     block_CSFs = block_csfs, 
                                                     block_asfs_mix_coefficient_List = block_asfs_mix, 
+                                                    asfs_position = asfs_position,
                                                     coupling_level = coupling_level)
         
         blocks_asfs_coupling_J_sum_ci[block] = block_asfs_coupling_J_collection
