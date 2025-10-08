@@ -12,33 +12,39 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
+from ..utils.tool_function import LS_subshell_is_full_charged
 
 #######################################################################
 class ConfigurationFormat:
-    """ 
+    """
     Here is the explanation for the code above:
     1. The class "ConfigurationFormat" is used to format the electron configuration string.
         1.1 subshell_format(): format the subshell string;
-        1.2 subshell_skip(): skip the subshells before the given start subshell;
+        1.2 subshell_skip(): deprecated method - now returns original list;
         1.3 conf_format(): format the electron configuration;
         1.4 ls_coupling_format(): format the ls coupling string.
-    2. The function "subshell_format()" is used to format the subshell string. 
+    2. The function "subshell_format()" is used to format the subshell string.
         2.1 subshell: the subshell string;
         2.2 format_subshell: the formatted subshell string;
         2.3 format_subshell_ls: the formatted subshell in the L-S coupling state;
         2.4 ele_num: the number of electrons in the subshell.
-    3. The function "subshell_skip()" is used to skip the subshells before the given start subshell.
+    3. The function "subshell_skip()" is deprecated and returns the original list.
     4. The function "conf_format()" is used to format the electron configuration.
         4.1 skipped_formatted_conf: the formatted electron configuration string;
-        4.2 conf_skipped_list: the skipped electron configuration list;
+        4.2 conf_skipped_list: the electron configuration list;
     5. The function "ls_coupling_format()" is used to format the ls coupling string.
     """
     
-    def __init__(self, temp_configuration:str, cut_off_subshell:str=""):
+    def __init__(
+                self,
+                temp_configuration: str,
+                show_full_charged_subshell: bool = False
+                ):
         self.temp_configuration = re.sub(r'\n', '', temp_configuration)
-        self.cut_off_subshell = cut_off_subshell
+        self.show_full_charged_subshell = show_full_charged_subshell
         self.temp_conf_list = self.temp_configuration.split(".")
         
     def subshell_format(self):
@@ -59,25 +65,36 @@ class ConfigurationFormat:
         return self.format_subshell, self.format_subshell_ls, self.ele_num
     
     def subshell_skip(self):
-        for self.temp_subshell in self.temp_conf_list:
-            if self.cut_off_subshell in self.temp_subshell:
-                self.start_subshell_index = self.temp_conf_list.index(self.temp_subshell) + 1
-                break
-            else:
-                self.start_subshell_index = 0
-        self.temp_conf_list = self.temp_conf_list[self.start_subshell_index:]
+        # This method is deprecated - return the original list without filtering
         return self.temp_conf_list
     
     def conf_format(self):
         self.skipped_formatted_conf = ""
-        self.conf_skipped_list = ConfigurationFormat.subshell_skip(self)
+        self.conf_skipped_list = self.temp_conf_list
         self.conf_skipped_unformat = ".".join(self.conf_skipped_list)
+
+        # Filter out fully charged subshells if show_full_charged_subshell is True
+        filtered_subshells = []
         for subshell in self.conf_skipped_list:
+            # Check if this is a fully charged subshell
+            if self.show_full_charged_subshell and "(" in subshell and ")" in subshell:
+                # Extract electron number and subshell type
+                ele_num = int(re.findall(r"[(](.*?)[)]", subshell)[0])
+                subshell_type = subshell[1]  # s, p, d, or f
+
+                # Skip if fully charged
+                if LS_subshell_is_full_charged(subshell_type, ele_num):
+                    continue
+
+            filtered_subshells.append(subshell)
+
+        # Process filtered subshells
+        for subshell in filtered_subshells:
             self.subshell = subshell
             self.subshell_info = ConfigurationFormat.subshell_format(self)
-            if subshell != self.conf_skipped_list[-1]:
+            if subshell != filtered_subshells[-1]:
                 self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\," + self.subshell_info[1] + "\\;"
-            elif subshell == self.conf_skipped_list[-1] and self.subshell_info[2] != "1":
+            elif subshell == filtered_subshells[-1] and self.subshell_info[2] != "1":
                 self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\," + self.subshell_info[1] + "\\;"
             else:
                 self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\;"
@@ -98,7 +115,7 @@ class LevelsEnergyData:
     This class is used to read the energy data from the grasp output file and format the data.
     '''
     @classmethod
-    def from_filepath(cls, filepath, store_csv_path: str=''):
+    def from_filepath(cls, filepath, store_csv_path: str='', show_full_charged_subshell: bool=False):
         """从文件路径直接创建实例的类方法"""
         file_dir = str(Path(filepath).parent)
         file_name = Path(filepath).name
@@ -109,22 +126,23 @@ class LevelsEnergyData:
             "level_parameter": "",
             "this_as": 0,
             "file_type": "ENERGY",
-            "store_csv_path": store_csv_path
+            "store_csv_path": store_csv_path,
+            "show_full_charged_subshell": show_full_charged_subshell
         }
         return cls(config)
 
     def __init__(self, data_file_info):
         self.data_file_info = data_file_info
-        self.cut_off_subshell =  data_file_info.get("cut_off_subshell", "")
         # self.f_type = "energy"
         self.data_file_info["f_type"] = "energy"
         self.level_parameter = data_file_info.get("level_parameter")
         self.atom = data_file_info.get("atom")
         self.this_as = data_file_info.get("this_as")
+        self.show_full_charged_subshell = data_file_info.get("show_full_charged_subshell", False)
         self.level_read_df = pd.DataFrame(columns=['No', 'Pos', 'J', 'Parity', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}', 'Splitting', f'Configuration_{self.level_parameter}{self.this_as}raw'])
-        
+
         self.file_dir = data_file_info.get("file_dir")
-        
+
         self.file_name = f"{self.atom}{self.level_parameter}{self.this_as}"
         self.raw_data2csv = EnergyFile2csv(self.data_file_info)
 
@@ -149,12 +167,12 @@ class LevelsEnergyData:
     def energy_data_formate(self):
         self.energy_file2dataframe()
         if not self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].isnull().all():
-            self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.cut_off_subshell).conf_format()[0])
-            self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.cut_off_subshell).ls_coupling_format()) + "_{" + self.level_read_df['J'] +"}"
+            self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).conf_format()[0])
+            self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).ls_coupling_format()) + "_{" + self.level_read_df['J'] +"}"
             self.level_read_df[f'ASF_LSJ_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] + self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}']
         # self.level_read_df[[f'E_as{self.this_as}', 'Splitting']].fillna(0, inplace=True)
         self.level_read_df[['No', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}']] = self.level_read_df[['No', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}']].apply(pd.to_numeric)
-        
+
         return self.level_read_df
 
 #######################################################################
@@ -197,10 +215,12 @@ def ci_energy_data_collection(energy_data: pd.DataFrame | None, data_file_info: 
 # Add level's composition of ASF
 
 class LevelsASFComposition:
-    def __init__(self, energy_data_df: pd.DataFrame, data_file_info: dict, min_comp: float=0.03):
+    def __init__(self, energy_data_df: pd.DataFrame, data_file_info: dict, min_comp: float=0.03, output_subshells: List = []):
         self.energy_data_df = energy_data_df
         self.data_file_info = data_file_info
         self.min_comp = min_comp
+        self.output_subshells = output_subshells
+        self.show_full_charged_subshell = data_file_info.get("show_full_charged_subshell", False)
         self.data_file_info["f_type"] = "lsj_lbl"
         self.data_file_load = GraspFileLoad(self.data_file_info)
         result = self.data_file_load.data_file_process()
@@ -210,13 +230,12 @@ class LevelsASFComposition:
             raise ValueError("Expected tuple of (lsj_lbl_data, level_loc_lbl) from data_file_process")
 
     def level_composition_unit_format(self):
-        self.cut_off_subshell = self.data_file_info["cut_off_subshell"]
         self.temp_lsj_unit_info_list = self.temp_lsj_unit_information
         # print(self.temp_lsj_unit_info_list)
         self.temp_lsj_unit_coefficient = np.float64(self.temp_lsj_unit_info_list[0])
         self.temp_lsj_unit_w = np.float64(self.temp_lsj_unit_info_list[1]).round(3)
         self.temp_lsj_unit_conf = self.temp_lsj_unit_info_list[2]
-        self.temp_lsj_unit_format = ConfigurationFormat(self.temp_lsj_unit_conf, self.cut_off_subshell)
+        self.temp_lsj_unit_format = ConfigurationFormat(self.temp_lsj_unit_conf, self.show_full_charged_subshell)
         self.temp_lsj_unit_format_conf = self.temp_lsj_unit_format.conf_format()[0]
         self.temp_lsj_unit_format_conf_ls = self.temp_lsj_unit_format.ls_coupling_format()
 

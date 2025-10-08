@@ -261,3 +261,16 @@ def level_data_compare(levels_file_1: List, levels_file_2: List):
     return True
 
 ######################################################################
+
+def LS_subshell_is_full_charged(subshell_name: str, subshell_charged_num: int) -> bool:
+    
+    full_charged = {
+        "s": 2,
+        "p": 6,
+        "d": 10,
+        "f": 14,
+        "g": 18,
+        "h": 22,
+        "i": 26
+    }
+    return full_charged.get(subshell_name, 0) == subshell_charged_num

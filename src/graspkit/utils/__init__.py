@@ -25,7 +25,8 @@ from .tool_function import (
     transition_dT_cal,
     read_fortran_record,
     chunk_string,
-    level_data_compare
+    level_data_compare,
+    LS_subshell_is_full_charged
 )
 
 from .environment_config import (
@@ -68,6 +69,7 @@ __all__ = [
     'read_fortran_record',
     'chunk_string',
     'level_data_compare',
+    'LS_subshell_is_full_charged',
     
     # 环境配置
     'get_environment_config',
