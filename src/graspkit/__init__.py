@@ -62,7 +62,8 @@ from .utils import (
     progress_context,
     log_stage_start,
     log_stage_end,
-    calculate_deformation
+    calculate_deformation,
+    LS_subshell_is_full_charged
 )
 
 from .CSFs_processor import (
@@ -184,6 +185,7 @@ __all__ = [
     'chunk_string',
     'level_data_compare',
     "calculate_deformation",
+    'LS_subshell_is_full_charged',
 
     ## CSFs_processor
     'batch_asfs_mix_square_above_threshold',
