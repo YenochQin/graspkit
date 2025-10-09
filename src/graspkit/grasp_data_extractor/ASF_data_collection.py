@@ -23,15 +23,13 @@ class ConfigurationFormat:
     Here is the explanation for the code above:
     1. The class "ConfigurationFormat" is used to format the electron configuration string.
         1.1 subshell_format(): format the subshell string;
-        1.2 subshell_skip(): deprecated method - now returns original list;
-        1.3 conf_format(): format the electron configuration;
-        1.4 ls_coupling_format(): format the ls coupling string.
+        1.2 conf_format(): format the electron configuration;
+        1.3 ls_coupling_format(): format the ls coupling string.
     2. The function "subshell_format()" is used to format the subshell string.
         2.1 subshell: the subshell string;
         2.2 format_subshell: the formatted subshell string;
         2.3 format_subshell_ls: the formatted subshell in the L-S coupling state;
         2.4 ele_num: the number of electrons in the subshell.
-    3. The function "subshell_skip()" is deprecated and returns the original list.
     4. The function "conf_format()" is used to format the electron configuration.
         4.1 skipped_formatted_conf: the formatted electron configuration string;
         4.2 conf_skipped_list: the electron configuration list;
@@ -48,34 +46,30 @@ class ConfigurationFormat:
         self.temp_conf_list = self.temp_configuration.split(".")
         
     def subshell_format(self):
-        self.format_subshell = ""
-        self.format_subshell_ls = ""
-        self.ele_num = "0"
+        format_subshell = ""
+        format_subshell_ls = ""
+        ele_num = "0"
         if "(" and ")" in self.subshell:
-            self.ele_num = re.findall(r"[(](.*?)[)]", self.subshell)
-            self.format_subshell = f"{self.subshell[0:2]}^{{{self.ele_num[0]}}}"
+            ele_num = re.findall(r"[(](.*?)[)]", self.subshell)
+            format_subshell = f"{self.subshell[0:2]}^{{{ele_num[0]}}}"
             if re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell):
-                self.temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell)
-                self.format_subshell_ls = f"(^{self.temp_subshell_ls[0][0]}_{self.temp_subshell_ls[0][-1]}\\text{{{self.temp_subshell_ls[0][1]}}})"
+                temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell)
+                format_subshell_ls = f"(^{temp_subshell_ls[0][0]}_{temp_subshell_ls[0][-1]}\\text{{{temp_subshell_ls[0][1]}}})"
         elif "_" in self.subshell:
-            self.ele_num = "1"
-            self.format_subshell = f"{self.subshell[0:2]}{self.format_subshell_ls}"
-            self.temp_subshell_ls = re.findall(r"[_]([0-9][A-Z]?)", self.subshell)
-            self.format_subshell_ls = f"(^{self.temp_subshell_ls[0][0]}\\text{{{self.temp_subshell_ls[0][1]}}})"
-        return self.format_subshell, self.format_subshell_ls, self.ele_num
-    
-    def subshell_skip(self):
-        # This method is deprecated - return the original list without filtering
-        return self.temp_conf_list
+            ele_num = "1"
+            format_subshell = f"{self.subshell[0:2]}{format_subshell_ls}"
+            temp_subshell_ls = re.findall(r"[_]([0-9][A-Z]?)", self.subshell)
+            format_subshell_ls = f"(^{temp_subshell_ls[0][0]}\\text{{{temp_subshell_ls[0][1]}}})"
+        return format_subshell, format_subshell_ls, ele_num
     
     def conf_format(self):
-        self.skipped_formatted_conf = ""
-        self.conf_skipped_list = self.temp_conf_list
-        self.conf_skipped_unformat = ".".join(self.conf_skipped_list)
+        skipped_formatted_conf = ""
+        conf_skipped_list = self.temp_conf_list
+        conf_skipped_unformat = ".".join(conf_skipped_list)
 
         # Filter out fully charged subshells if show_full_charged_subshell is True
         filtered_subshells = []
-        for subshell in self.conf_skipped_list:
+        for subshell in conf_skipped_list:
             # Check if this is a fully charged subshell
             if self.show_full_charged_subshell and "(" in subshell and ")" in subshell:
                 # Extract electron number and subshell type
@@ -91,22 +85,22 @@ class ConfigurationFormat:
         # Process filtered subshells
         for subshell in filtered_subshells:
             self.subshell = subshell
-            self.subshell_info = ConfigurationFormat.subshell_format(self)
+            subshell_info = ConfigurationFormat.subshell_format(self)
             if subshell != filtered_subshells[-1]:
-                self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\," + self.subshell_info[1] + "\\;"
-            elif subshell == filtered_subshells[-1] and self.subshell_info[2] != "1":
-                self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\," + self.subshell_info[1] + "\\;"
+                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\," + subshell_info[1] + "\\;"
+            elif subshell == filtered_subshells[-1] and subshell_info[2] != "1":
+                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\," + subshell_info[1] + "\\;"
             else:
-                self.skipped_formatted_conf = self.skipped_formatted_conf + self.subshell_info[0] + "\\;"
-        return self.skipped_formatted_conf, self.conf_skipped_unformat
+                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\;"
+        return skipped_formatted_conf, conf_skipped_unformat
     
     def ls_coupling_format(self):
-        self.conf_ls_format = ""
-        self.temp_conf_ls = self.temp_conf_list[-1]
-        self.temp_conf_ls_index = self.temp_conf_ls.rfind('_')
-        self.temp_conf_ls = self.temp_conf_ls[self.temp_conf_ls_index+1:]
-        self.conf_ls_format = f"\\;^{self.temp_conf_ls[0:-1]}\\text{{{self.temp_conf_ls[-1]}}}"
-        return self.conf_ls_format
+        conf_ls_format = ""
+        temp_conf_ls = self.temp_conf_list[-1]
+        temp_conf_ls_index = temp_conf_ls.rfind('_')
+        temp_conf_ls = temp_conf_ls[temp_conf_ls_index+1:]
+        conf_ls_format = f"\\;^{temp_conf_ls[0:-1]}\\text{{{temp_conf_ls[-1]}}}"
+        return conf_ls_format
 
 #######################################################################
 
@@ -215,11 +209,16 @@ def ci_energy_data_collection(energy_data: pd.DataFrame | None, data_file_info: 
 # Add level's composition of ASF
 
 class LevelsASFComposition:
-    def __init__(self, energy_data_df: pd.DataFrame, data_file_info: dict, min_comp: float=0.03, output_subshells: List = []):
+    def __init__(
+                self, 
+                energy_data_df: pd.DataFrame, 
+                data_file_info: dict, 
+                min_comp: float=0.03, 
+                show_full_charged_subshell: bool = False):
         self.energy_data_df = energy_data_df
         self.data_file_info = data_file_info
         self.min_comp = min_comp
-        self.output_subshells = output_subshells
+        self.output_subshells = show_full_charged_subshell
         self.show_full_charged_subshell = data_file_info.get("show_full_charged_subshell", False)
         self.data_file_info["f_type"] = "lsj_lbl"
         self.data_file_load = GraspFileLoad(self.data_file_info)
@@ -230,19 +229,19 @@ class LevelsASFComposition:
             raise ValueError("Expected tuple of (lsj_lbl_data, level_loc_lbl) from data_file_process")
 
     def level_composition_unit_format(self):
-        self.temp_lsj_unit_info_list = self.temp_lsj_unit_information
-        # print(self.temp_lsj_unit_info_list)
-        self.temp_lsj_unit_coefficient = np.float64(self.temp_lsj_unit_info_list[0])
-        self.temp_lsj_unit_w = np.float64(self.temp_lsj_unit_info_list[1]).round(3)
-        self.temp_lsj_unit_conf = self.temp_lsj_unit_info_list[2]
-        self.temp_lsj_unit_format = ConfigurationFormat(self.temp_lsj_unit_conf, self.show_full_charged_subshell)
-        self.temp_lsj_unit_format_conf = self.temp_lsj_unit_format.conf_format()[0]
-        self.temp_lsj_unit_format_conf_ls = self.temp_lsj_unit_format.ls_coupling_format()
+        temp_lsj_unit_info_list = self.temp_lsj_unit_information
+        # print(temp_lsj_unit_info_list)
+        temp_lsj_unit_coefficient = np.float64(temp_lsj_unit_info_list[0])
+        temp_lsj_unit_w = np.float64(temp_lsj_unit_info_list[1]).round(3)
+        temp_lsj_unit_conf = temp_lsj_unit_info_list[2]
+        temp_lsj_unit_format = ConfigurationFormat(temp_lsj_unit_conf, self.show_full_charged_subshell)
+        temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
+        temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.ls_coupling_format()
 
-        self.temp_comp_unit_format = '$' + str(self.temp_lsj_unit_w) + '\\;' + self.temp_lsj_unit_format_conf + '\\,' + self.temp_lsj_unit_format_conf_ls + '$ + '
-        self.temp_comp_unit_format = f'${str(self.temp_lsj_unit_w)}\\;{self.temp_lsj_unit_format_conf}\\,{self.temp_lsj_unit_format_conf_ls}$ +'
-        
-        return self.temp_comp_unit_format, self.temp_lsj_unit_coefficient, self.temp_lsj_unit_w
+        temp_comp_unit_format = '$' + str(temp_lsj_unit_w) + '\\;' + temp_lsj_unit_format_conf + '\\,' + temp_lsj_unit_format_conf_ls + '$ + '
+        temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +'
+
+        return temp_comp_unit_format, temp_lsj_unit_coefficient, temp_lsj_unit_w
         
     # def level_composition_formate(self, self.temp_lsj_information):
     def level_composition_formate(self):
