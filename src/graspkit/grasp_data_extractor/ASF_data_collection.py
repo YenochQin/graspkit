@@ -213,11 +213,11 @@ class LevelsASFComposition:
                 self, 
                 energy_data_df: pd.DataFrame, 
                 data_file_info: dict, 
-                min_comp: float=0.03, 
+                min_comp: float = 0.03, 
+                show_comp_num: int = 0,
                 show_full_charged_subshell: bool = False):
         self.energy_data_df = energy_data_df
         self.data_file_info = data_file_info
-        self.min_comp = min_comp
         self.output_subshells = show_full_charged_subshell
         self.show_full_charged_subshell = data_file_info.get("show_full_charged_subshell", False)
         self.data_file_info["f_type"] = "lsj_lbl"
@@ -227,6 +227,9 @@ class LevelsASFComposition:
             self.lsj_lbl_data, self.level_loc_lbl = result
         else:
             raise ValueError("Expected tuple of (lsj_lbl_data, level_loc_lbl) from data_file_process")
+
+        self.min_comp = min_comp
+        self.show_comp_num = show_comp_num
 
     def level_composition_unit_format(self):
         temp_lsj_unit_info_list = self.temp_lsj_unit_information
@@ -238,7 +241,6 @@ class LevelsASFComposition:
         temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
         temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.ls_coupling_format()
 
-        temp_comp_unit_format = '$' + str(temp_lsj_unit_w) + '\\;' + temp_lsj_unit_format_conf + '\\,' + temp_lsj_unit_format_conf_ls + '$ + '
         temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +'
 
         return temp_comp_unit_format, temp_lsj_unit_coefficient, temp_lsj_unit_w
