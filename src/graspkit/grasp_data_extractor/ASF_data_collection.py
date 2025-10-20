@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import Dict, Tuple, List, Optional, Union, overload, Literal, TypeVar, cast
 
 from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
 from ..utils.tool_function import LS_subshell_is_full_charged
@@ -52,9 +52,18 @@ class ConfigurationFormat:
         if "(" and ")" in self.subshell:
             ele_num = re.findall(r"[(](.*?)[)]", self.subshell)
             format_subshell = f"{self.subshell[0:2]}^{{{ele_num[0]}}}"
-            if re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell):
-                temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell)
-                format_subshell_ls = f"(^{temp_subshell_ls[0][0]}_{temp_subshell_ls[0][-1]}\\text{{{temp_subshell_ls[0][1]}}})"
+            if re.findall(r"[)]([0-9][A-Z][0-9]?)", self.subshell):
+                if "_" in self.subshell:
+                    temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell)
+                else:
+                    temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)", self.subshell)
+
+                if len(temp_subshell_ls[0]) == 3: #re.findall的返回值是一个列表
+                    format_subshell_ls = f"(^{temp_subshell_ls[0][0]}_{temp_subshell_ls[0][-1]}\\text{{{temp_subshell_ls[0][1]}}})"
+                elif len(temp_subshell_ls[0]) == 2:
+                    format_subshell_ls = f"(^{temp_subshell_ls[0][0]}\\text{{{temp_subshell_ls[0][1]}}})"
+                else:
+                    raise ValueError(f"{format_subshell_ls=}格式不正确")
         elif "_" in self.subshell:
             ele_num = "1"
             format_subshell = f"{self.subshell[0:2]}{format_subshell_ls}"
@@ -67,11 +76,11 @@ class ConfigurationFormat:
         conf_skipped_list = self.temp_conf_list
         conf_skipped_unformat = ".".join(conf_skipped_list)
 
-        # Filter out fully charged subshells if show_full_charged_subshell is True
+        # Filter out fully charged subshells if show_full_charged_subshell is False
         filtered_subshells = []
         for subshell in conf_skipped_list:
             # Check if this is a fully charged subshell
-            if self.show_full_charged_subshell and "(" in subshell and ")" in subshell:
+            if not self.show_full_charged_subshell and "(" in subshell and ")" in subshell:
                 # Extract electron number and subshell type
                 ele_num = int(re.findall(r"[(](.*?)[)]", subshell)[0])
                 subshell_type = subshell[1]  # s, p, d, or f
@@ -99,7 +108,7 @@ class ConfigurationFormat:
         temp_conf_ls = self.temp_conf_list[-1]
         temp_conf_ls_index = temp_conf_ls.rfind('_')
         temp_conf_ls = temp_conf_ls[temp_conf_ls_index+1:]
-        conf_ls_format = f"\\;^{temp_conf_ls[0:-1]}\\text{{{temp_conf_ls[-1]}}}"
+        conf_ls_format = f"^{temp_conf_ls[0:-1]}\\text{{{temp_conf_ls[-1]}}}"
         return conf_ls_format
 
 #######################################################################
@@ -161,9 +170,13 @@ class LevelsEnergyData:
     def energy_data_formate(self):
         self.energy_file2dataframe()
         if not self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].isnull().all():
+
             self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).conf_format()[0])
+
             self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).ls_coupling_format()) + "_{" + self.level_read_df['J'] +"}"
-            self.level_read_df[f'ASF_LSJ_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] + self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}']
+
+            self.level_read_df[f'ASF_LSJ_as{self.this_as}'] = "$" + self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] + self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] + "$"
+
         # self.level_read_df[[f'E_as{self.this_as}', 'Splitting']].fillna(0, inplace=True)
         self.level_read_df[['No', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}']] = self.level_read_df[['No', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}']].apply(pd.to_numeric)
 
@@ -171,11 +184,15 @@ class LevelsEnergyData:
 
 #######################################################################
 
-def mcdhf_energy_data_collection(data_file_info, a_s_list):
+def mcdhf_energy_data_collection(
+                                data_file_info, 
+                                a_s_list,
+                                show_full_charged_subshell: bool=False):
     """
     This function is used to merge the energy data from different a_s.
     """
     data_file_info["this_as"] = a_s_list[0]
+    data_file_info["show_full_charged_subshell"] = show_full_charged_subshell
     energy_data = LevelsEnergyData(data_file_info).energy_data_formate()
     for a_s in a_s_list[1:]:
 
@@ -190,10 +207,14 @@ def mcdhf_energy_data_collection(data_file_info, a_s_list):
     return energy_data
 
 
-def ci_energy_data_collection(energy_data: pd.DataFrame | None, data_file_info: dict):
+def ci_energy_data_collection(
+                                energy_data: pd.DataFrame | None, 
+                                data_file_info: dict,
+                                show_full_charged_subshell: bool=False):
     """
     This function is used to collect single energy levels data or merge energy levels data from ci calculation.
     """
+    data_file_info["show_full_charged_subshell"] = show_full_charged_subshell
     if energy_data is None:
         energy_data = LevelsEnergyData(data_file_info).energy_data_formate()
     else:
@@ -203,6 +224,23 @@ def ci_energy_data_collection(energy_data: pd.DataFrame | None, data_file_info: 
         energy_data = energy_data.fillna(0.0)
         energy_data = energy_data.sort_values(by=f'No{data_file_info["level_parameter"]}{data_file_info["this_as"]}', ascending=True)
     return energy_data
+
+def level_energy_collector(
+                            data_file_path: Union[str, Path],
+                            store_csv_path: str='', 
+                            show_full_charged_subshell: bool=False):
+    """
+    This function is used to collect single energy levels data or merge energy levels data from ci calculation.
+    """
+
+    temp_level_load = LevelsEnergyData.from_filepath(
+                                            data_file_path, 
+                                            store_csv_path, 
+                                            show_full_charged_subshell
+                                            )
+    level_data = temp_level_load.energy_data_formate()
+
+    return level_data
 
 #######################################################################
 
@@ -220,7 +258,7 @@ class LevelsASFComposition:
         self.data_file_info = data_file_info
         self.output_subshells = show_full_charged_subshell
         self.show_full_charged_subshell = data_file_info.get("show_full_charged_subshell", False)
-        self.data_file_info["f_type"] = "lsj_lbl"
+        self.data_file_info["file_type"] = "LSJ"
         self.data_file_load = GraspFileLoad(self.data_file_info)
         result = self.data_file_load.data_file_process()
         if isinstance(result, tuple) and len(result) == 2:
@@ -233,39 +271,61 @@ class LevelsASFComposition:
 
     def level_composition_unit_format(self):
         temp_lsj_unit_info_list = self.temp_lsj_unit_information
-        # print(temp_lsj_unit_info_list)
         temp_lsj_unit_coefficient = np.float64(temp_lsj_unit_info_list[0])
         temp_lsj_unit_w = np.float64(temp_lsj_unit_info_list[1]).round(3)
         temp_lsj_unit_conf = temp_lsj_unit_info_list[2]
         temp_lsj_unit_format = ConfigurationFormat(temp_lsj_unit_conf, self.show_full_charged_subshell)
         temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
         temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.ls_coupling_format()
+        
+        if temp_lsj_unit_format_conf !="" and temp_lsj_unit_format_conf_ls != "":
+            temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +'
+        elif temp_lsj_unit_format_conf !="" and temp_lsj_unit_format_conf_ls == "":
+            temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}$ +'
+        else:
+            raise ValueError(f"{temp_lsj_unit_format_conf=}为空字符")
 
-        temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +'
+        
 
         return temp_comp_unit_format, temp_lsj_unit_coefficient, temp_lsj_unit_w
         
-    # def level_composition_formate(self, self.temp_lsj_information):
-    def level_composition_formate(self):
+    # def level_composition_format(self, self.temp_lsj_information):
+    def level_composition_format(self):
         self.temp_level_asf_comp = ''
+        component_count = 0
+
         for self.temp_lsj_unit in self.temp_lsj_information:
             self.temp_lsj_unit_information = self.temp_lsj_unit.split()
             if len(self.temp_lsj_unit_information) == 3:
+                # Get weight for filtering
+                temp_lsj_unit_w = np.float64(self.temp_lsj_unit_information[1]).round(3)
+
+                # Apply filter logic: if show_comp_num is 0, filter by weight; otherwise, filter by count
+                if self.show_comp_num == 0:
+                    # Filter by weight: only include components with weight > min_comp
+                    if temp_lsj_unit_w <= self.min_comp:
+                        continue
+                else:
+                    # Filter by count: only include first show_comp_num components
+                    if component_count >= self.show_comp_num:
+                        continue
+                    component_count += 1
+
                 self.temp_comp_unit_format = LevelsASFComposition.level_composition_unit_format(self)[0]
                 self.temp_level_asf_comp = self.temp_level_asf_comp + self.temp_comp_unit_format
+
             else:
                 continue
-            self.temp_level_asf_comp = re.sub(r"\$ \+ \$", " + ", self.temp_level_asf_comp)
-            self.temp_level_asf_comp = self.temp_level_asf_comp.strip(' +')
+        self.temp_level_asf_comp = self.temp_level_asf_comp.strip(' +')
+        self.temp_level_asf_comp = re.sub(r"\$ \+\$", " + ", self.temp_level_asf_comp)
 
         return self.temp_level_asf_comp
-        
-    
+
     def asf_comp_locate(self):
-        
+
         self.temp_level_asf_comp_loc = self.temp_level_asf.split()
         self.temp_level_asf_dataframe_loc = self.energy_data_df.loc[(self.energy_data_df['Pos'] == self.temp_level_asf_comp_loc[0]) & (self.energy_data_df['J'] == self.temp_level_asf_comp_loc[1]) & (self.energy_data_df['Parity']== self.temp_level_asf_comp_loc[2])].index[0]
-        
+
         return self.temp_level_asf_dataframe_loc
     
     def level_comp_of_asf(self):
@@ -278,7 +338,7 @@ class LevelsASFComposition:
             self.temp_level_asf = self.lsj_lbl_data[self.temp_level_loc]
             self.temp_level_df_loc = LevelsASFComposition.asf_comp_locate(self)
             self.temp_lsj_information = self.temp_level_lsj_info
-            self.temp_level_asf_comp = LevelsASFComposition.level_composition_formate(self)
+            self.temp_level_asf_comp = LevelsASFComposition.level_composition_format(self)
             self.energy_data_df.loc[self.temp_level_df_loc, f'Comp_of_asf_{self.data_file_info["level_parameter"]}{self.data_file_info["this_as"]}'] = self.temp_level_asf_comp
         
         return self.energy_data_df
@@ -319,17 +379,13 @@ class RadialElectrondensityFunction:
         block_index = []
         for i in range(len(self.radial_electron_density_data)):
             if re.match(r'(\d)+\s+([0-9,/])+\s+([+,-])', self.radial_electron_density_data[i]):
-                print(self.radial_electron_density_data[i])
                 block_index.append(i)
         block_index.append(len(self.radial_electron_density_data))
                 
         for i in range(len(block_index)-1):
-            print(self.radial_electron_density_data[block_index[i]])
             block_group = self.radial_electron_density_data[block_index[i]]
             temp_block = self.radial_electron_density_data[block_index[i]+1:block_index[i+1]]
             temp_block = [i.replace('D', 'e').split() for i in temp_block]
-            
-            print(temp_block)
             temp_block_pd = pd.DataFrame(temp_block, columns=['r', 'D(r)', 'rho(r)'])
             temp_block_pd["Group"] = block_group
             self.radial_electron_density_data_df = pd.concat([self.radial_electron_density_data_df, temp_block_pd], ignore_index=True)

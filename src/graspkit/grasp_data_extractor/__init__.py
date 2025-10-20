@@ -11,6 +11,7 @@ from .ASF_data_collection import (
     LevelsEnergyData,
     mcdhf_energy_data_collection,
     ci_energy_data_collection,
+    level_energy_collector,
     LevelsASFComposition,
     asf_radial_wavefunction_collection,
     RadialElectrondensityFunction
@@ -28,6 +29,7 @@ __all__ = [
     'LevelsEnergyData',
     'mcdhf_energy_data_collection',
     'ci_energy_data_collection',
+    'level_energy_collector',
     'LevelsASFComposition',
     'asf_radial_wavefunction_collection',
     'RadialElectrondensityFunction',
