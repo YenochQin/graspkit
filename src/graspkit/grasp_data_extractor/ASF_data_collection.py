@@ -12,105 +12,228 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Union, overload, Literal, TypeVar, cast
+from typing import Dict, Tuple, List, Optional, Union, overload, Literal, TypeVar, cast, Callable
 
 from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
-from ..utils.tool_function import LS_subshell_is_full_charged
+from ..utils.tool_function import LS_shell_full_charged
 
 #######################################################################
-class ConfigurationFormat:
+@dataclass(frozen=True)
+class IntraCoupled_LS:
+    """原子组内耦合LS量子数
+    multiplicity: 自旋多重度 2S+1
+    L: 轨道角动量对应的字母 S(0), P(1), D(2), F(3),...
+    Parity: 宇称量子数，可选
     """
-    Here is the explanation for the code above:
-    1. The class "ConfigurationFormat" is used to format the electron configuration string.
-        1.1 subshell_format(): format the subshell string;
-        1.2 conf_format(): format the electron configuration;
-        1.3 ls_coupling_format(): format the ls coupling string.
-    2. The function "subshell_format()" is used to format the subshell string.
-        2.1 subshell: the subshell string;
-        2.2 format_subshell: the formatted subshell string;
-        2.3 format_subshell_ls: the formatted subshell in the L-S coupling state;
-        2.4 ele_num: the number of electrons in the subshell.
-    4. The function "conf_format()" is used to format the electron configuration.
-        4.1 skipped_formatted_conf: the formatted electron configuration string;
-        4.2 conf_skipped_list: the electron configuration list;
-    5. The function "ls_coupling_format()" is used to format the ls coupling string.
+    multiplicity: int  # 2S+1 自旋多重度
+    L: str             # 轨道角动量字母：S,P,D,F,...
+    Parity: Optional[int] = None  # 宇称，可选
+
+@dataclass(frozen=True)
+class InterCoupled_LS:
+    """原子组间耦合LS量子数
+    multiplicity: 自旋多重度 2S+1
+    L: 轨道角动量对应的字母
     """
+    multiplicity: int  # 2S+1 自旋多重度
+    L: str             # 轨道角动量字母：S,P,D,F,...
+
+@dataclass(frozen=True)
+class ShellInfo:
+    """原子轨道信息结构体
+    包含主量子数、轨道类型、电子数以及LS耦合信息
+    """
+    n: int                                    # 主量子数
+    shell: str                                # 轨道类型：s/p/d/f
+    electrons: Optional[int]                  # 轨道中的电子数，来自(e)格式，可能缺省
+    intra_ls: Optional[IntraCoupled_LS]       # 组内LS耦合信息，可能缺省
+    inter_ls: Optional[InterCoupled_LS]       # 组间LS耦合信息，可能缺省
+
+class ShellFormatter:
+    """原子轨道格式化器类
+    用于解析和格式化原子轨道配置字符串
+    支持格式：4f(7)3S0_7P
+    其中：
+    - 4: 主量子数n
+    - f: 轨道类型
+    - (7): 轨道中的电子数（可选）
+    - 3S0: 组内LS耦合（multiplicity=32, L=S, Parity=0）
+    - _7P: 组间LS耦合（multiplicity=7, L=P）
+    """
+    SUBSHELL_RE = re.compile(
+                        r"^(?P<n>\d*)"
+                        r"(?P<shell>[spdfghi])"
+                        r"(?:\((?P<ele>\d+)\))?"
+                        r"(?(ele)(?:(?P<intra_coupling>(?P<intra_S>\d+)(?P<intra_L>[SPDFGHIKLMNO])(?P<intra_Parity>\d+)?))?)"
+                        r"(?P<inter_coupling>_(?P<inter_S>\d+)(?P<inter_L>[SPDFGHIKLMNO]))?"
+                        r"$"
+                    )
+
+    @classmethod
+    def parse_subshell(cls, temp_configuration: str) -> ShellInfo:
+        """解析原子轨道配置字符串
+
+        Args:
+            temp_configuration: 原子轨道配置字符串，如"4f(7)3S0_7P"
+
+        Returns:
+            ShellInfo: 包含解析后的原子轨道信息的结构体
+
+        Raises:
+            ValueError: 当输入字符串格式不正确时抛出异常
+        """
+        # 使用正则表达式完全匹配输入字符串
+        shell_match = cls.SUBSHELL_RE.fullmatch(temp_configuration)
+
+        # 如果匹配失败，抛出异常
+        if not shell_match:
+            raise ValueError(f"Invalid subshell: {temp_configuration}")
+
+        # 提取基本轨道信息
+        n = int(shell_match["n"])                    # 主量子数
+        shell = shell_match["shell"]                 # 轨道类型
+        ele = int(shell_match["ele"]) if shell_match["ele"] else None  # 电子数，如果存在则转换为整数
+
+        # 解析组内LS耦合信息（如果存在）
+        if shell_match["intra_coupling"]:
+            intra_ls = IntraCoupled_LS(
+                multiplicity=int(shell_match["intra_S"]),           # 自旋多重度
+                L=shell_match["intra_L"],                          # 轨道角动量字母
+                Parity=int(shell_match["intra_Parity"]) if shell_match["intra_Parity"] else None  # 宇称，如果存在则转换
+            )
+        else:
+            intra_ls = None
+
+        # 解析组间LS耦合信息（如果存在）
+        if shell_match["inter_coupling"]:
+            inter_ls = InterCoupled_LS(
+                multiplicity=int(shell_match["inter_S"]),           # 自旋多重度
+                L=shell_match["inter_L"],                          # 轨道角动量字母
+            )
+        else:
+            inter_ls = None
+
+        # 返回包含所有解析信息的ShellInfo结构体
+        return ShellInfo(
+                        n=n,
+                        shell=shell,
+                        electrons=ele,
+                        intra_ls=intra_ls,
+                        inter_ls=inter_ls
+                        )
+
+    @staticmethod
+    def format_shell(shell_info: ShellInfo) -> str:
+        """格式化原子轨道核心部分
+
+        Args:
+            shell_info: 原子轨道信息结构体
+
+        Returns:
+            str: 格式化后的原子轨道字符串，如"4f^7"或"4f"
+        """
+        # 如果存在电子数，使用上标格式，否则只返回基本轨道信息
+        if shell_info.electrons is not None:
+            return f"{shell_info.n}{shell_info.shell}^{{{shell_info.electrons}}}"
+        return f"{shell_info.n}{shell_info.shell}"
+
+    @staticmethod
+    def format_intra_ls(intra_ls: Optional[IntraCoupled_LS]) -> str:
+        """格式化组内LS耦合信息为LaTeX格式
+
+        Args:
+            intra_ls: 组内LS耦合信息，可能为None
+
+        Returns:
+            str: LaTeX格式的LS耦合字符串，如"(^32_0\\text{S})"
+        """
+        # 如果不存在LS耦合信息，返回空字符串
+        if not intra_ls:
+            return ""
+        # 如果存在宇称信息，包含在格式中
+        if intra_ls.Parity is not None:
+            return f"(^{intra_ls.multiplicity}_{intra_ls.Parity}\\text{{{intra_ls.L}}})"
+        # 否则只格式化多重度角动量
+        return f"(^{intra_ls.multiplicity}\\text{{{intra_ls.L}}})"
+
+    @staticmethod
+    def format_inter_ls(inter_ls: InterCoupled_LS) -> str:
+        """格式化组间LS耦合信息为LaTeX格式
+
+        Args:
+            inter_ls: 组间LS耦合信息
+
+        Returns:
+            str: LaTeX格式的LS耦合字符串，如"^7\\text{P}"
+        """
+        return f"^{{{inter_ls.multiplicity}}}\\text{{{inter_ls.L}}}"
     
+class ConfigurationFormatter:
+    """
+    GRASP能级格式化器类
+
+    使用ShellFormatter来解析和格式化原子配置字符串
+    支持处理多个子轨道的组合配置，如"4f(7)3S0_7P.5d(3)2F_5G"
+
+    Attributes:
+        temp_configuration: 清理后的配置字符串（去除换行符）
+        show_full_charged_subshell: 是否显示满电子子轨道的布尔值
+        temp_conf_list: 按.分割的子轨道配置列表
+    """
+
     def __init__(
                 self,
                 temp_configuration: str,
                 show_full_charged_subshell: bool = False
                 ):
+        """
+        初始化ConfigurationFormatter
+
+        Args:
+            temp_configuration: 原子配置字符串，可包含换行符
+            show_full_charged_subshell: 是否显示满电子子轨道，默认False
+        """
         self.temp_configuration = re.sub(r'\n', '', temp_configuration)
-        self.show_full_charged_subshell = show_full_charged_subshell
         self.temp_conf_list = self.temp_configuration.split(".")
-        
-    def subshell_format(self):
-        format_subshell = ""
-        format_subshell_ls = ""
-        ele_num = "0"
-        if "(" and ")" in self.subshell:
-            ele_num = re.findall(r"[(](.*?)[)]", self.subshell)
-            format_subshell = f"{self.subshell[0:2]}^{{{ele_num[0]}}}"
-            if re.findall(r"[)]([0-9][A-Z][0-9]?)", self.subshell):
-                if "_" in self.subshell:
-                    temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)[_]", self.subshell)
-                else:
-                    temp_subshell_ls = re.findall(r"[)]([0-9][A-Z][0-9]?)", self.subshell)
 
-                if len(temp_subshell_ls[0]) == 3: #re.findall的返回值是一个列表
-                    format_subshell_ls = f"(^{temp_subshell_ls[0][0]}_{temp_subshell_ls[0][-1]}\\text{{{temp_subshell_ls[0][1]}}})"
-                elif len(temp_subshell_ls[0]) == 2:
-                    format_subshell_ls = f"(^{temp_subshell_ls[0][0]}\\text{{{temp_subshell_ls[0][1]}}})"
-                else:
-                    raise ValueError(f"{format_subshell_ls=}格式不正确")
-        elif "_" in self.subshell:
-            ele_num = "1"
-            format_subshell = f"{self.subshell[0:2]}{format_subshell_ls}"
-            temp_subshell_ls = re.findall(r"[_]([0-9][A-Z]?)", self.subshell)
-            format_subshell_ls = f"(^{temp_subshell_ls[0][0]}\\text{{{temp_subshell_ls[0][1]}}})"
-        return format_subshell, format_subshell_ls, ele_num
-    
-    def conf_format(self):
-        skipped_formatted_conf = ""
-        conf_skipped_list = self.temp_conf_list
-        conf_skipped_unformat = ".".join(conf_skipped_list)
+        self.show_full_charged_subshell = show_full_charged_subshell
 
-        # Filter out fully charged subshells if show_full_charged_subshell is False
-        filtered_subshells = []
-        for subshell in conf_skipped_list:
-            # Check if this is a fully charged subshell
-            if not self.show_full_charged_subshell and "(" in subshell and ")" in subshell:
-                # Extract electron number and subshell type
-                ele_num = int(re.findall(r"[(](.*?)[)]", subshell)[0])
-                subshell_type = subshell[1]  # s, p, d, or f
+    def conf_format(self) -> Tuple[str, str]:
+        """格式化整个原子配置
 
-                # Skip if fully charged
-                if LS_subshell_is_full_charged(subshell_type, ele_num):
-                    continue
+        处理所有子轨道，过滤满电子子轨道（如果需要），并格式化为LaTeX字符串
 
-            filtered_subshells.append(subshell)
+        Returns:
+            Tuple[str, str]: (格式化的配置字符串, 原始配置字符串)
+                           例如: ("4f^{7}\\,(^3_0\\text{S})\\;5d^{3}\\,(^4_5\\text{F})\\;",
+                                 "4f(7)3S0_7P.5d(3)4F5_5G")
+        """
+        formatted_conf = ""
+        format_LS_compling = ""
 
-        # Process filtered subshells
-        for subshell in filtered_subshells:
-            self.subshell = subshell
-            subshell_info = ConfigurationFormat.subshell_format(self)
-            if subshell != filtered_subshells[-1]:
-                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\," + subshell_info[1] + "\\;"
-            elif subshell == filtered_subshells[-1] and subshell_info[2] != "1":
-                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\," + subshell_info[1] + "\\;"
-            else:
-                skipped_formatted_conf = skipped_formatted_conf + subshell_info[0] + "\\;"
-        return skipped_formatted_conf, conf_skipped_unformat
-    
-    def ls_coupling_format(self):
-        conf_ls_format = ""
-        temp_conf_ls = self.temp_conf_list[-1]
-        temp_conf_ls_index = temp_conf_ls.rfind('_')
-        temp_conf_ls = temp_conf_ls[temp_conf_ls_index+1:]
-        conf_ls_format = f"^{temp_conf_ls[0:-1]}\\text{{{temp_conf_ls[-1]}}}"
-        return conf_ls_format
+        list_length = len(self.temp_conf_list)
+        for index, shell in enumerate(self.temp_conf_list):
+            # 检查是否是满电子子轨道
+            formated_shell = ShellFormatter.parse_subshell(shell)
+            is_last = (index == list_length - 1)
 
+            temp_shell = formated_shell.shell
+            temp_electrons = formated_shell.electrons
+
+            if LS_shell_full_charged(temp_shell, temp_electrons):
+                continue
+
+            formatted_conf = (formatted_conf 
+                              + ShellFormatter.format_shell(formated_shell)
+                              + "\\,"
+                              + ShellFormatter.format_intra_ls(formated_shell.intra_ls)
+                              + "\\;"
+                              )
+
+            if is_last and formated_shell.inter_ls is not None:
+                format_LS_compling = ShellFormatter.format_inter_ls(formated_shell.inter_ls)
+        formatted_conf = formatted_conf.replace(r'\,\;', r'\;')
+        return formatted_conf, format_LS_compling
 #######################################################################
 
 class LevelsEnergyData:
@@ -171,9 +294,9 @@ class LevelsEnergyData:
         self.energy_file2dataframe()
         if not self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].isnull().all():
 
-            self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).conf_format()[0])
+            self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormatter(x, self.show_full_charged_subshell).conf_format()[0])
 
-            self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormat(x, self.show_full_charged_subshell).ls_coupling_format()) + "_{" + self.level_read_df['J'] +"}"
+            self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] = self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}raw'].apply(lambda x: ConfigurationFormatter(x, self.show_full_charged_subshell).conf_format()[1]) + "_{" + self.level_read_df['J'] +"}"
 
             self.level_read_df[f'ASF_LSJ_as{self.this_as}'] = "$" + self.level_read_df[f'Configuration_{self.level_parameter}{self.this_as}'] + self.level_read_df[f'Configuration_LSJ_{self.level_parameter}_as{self.this_as}'] + "$"
 
@@ -274,9 +397,9 @@ class LevelsASFComposition:
         temp_lsj_unit_coefficient = np.float64(temp_lsj_unit_info_list[0])
         temp_lsj_unit_w = np.float64(temp_lsj_unit_info_list[1]).round(3)
         temp_lsj_unit_conf = temp_lsj_unit_info_list[2]
-        temp_lsj_unit_format = ConfigurationFormat(temp_lsj_unit_conf, self.show_full_charged_subshell)
+        temp_lsj_unit_format = ConfigurationFormatter(temp_lsj_unit_conf, self.show_full_charged_subshell)
         temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
-        temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.ls_coupling_format()
+        temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.conf_format()[1]
         
         if temp_lsj_unit_format_conf !="" and temp_lsj_unit_format_conf_ls != "":
             temp_comp_unit_format = f'${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +'
