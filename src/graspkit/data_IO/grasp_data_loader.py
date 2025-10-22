@@ -234,11 +234,9 @@ class GraspFileLoad:
                 ivec = read_fortran_record(binary_file, dtype=np.int32, count=nevblk)
 
                 ivec_array = np.array(ivec) - 1  # use python index method not fortran index method
-                
-                
+
                 self.ivec_list.append(ivec_array)
 
-                
                 # READ (3) eav, (eval(i+ncountState), i = 1, nevblk)
                 eva_evals = read_fortran_record(binary_file, dtype=np.float64, count=nevblk+1)
 
@@ -259,7 +257,7 @@ class GraspFileLoad:
                 self.mix_coefficient_list.append(evecs)
 
         return self.num_block, self.index_block_list, self.ncfblk_list, self.block_energy_count_list, self.j_value_location_list, self.parity_list, self.ivec_list, self.block_energy_list, self.block_level_energy_list, self.mix_coefficient_list
-    
+
     def csfs_file_read(self):
 
         self.subshell_info_raw = []
@@ -318,7 +316,6 @@ class GraspFileLoad:
         
         return self.subshell_info_raw, self.CSFs_block_j_value, self.parity, self.CSFs_block_data, self.CSFs_block_length
 
-
     def grasp_data_file_location(self):
         if self.data_file_dir.rglob(f"{self.file_keyword[self.file_type]}"):
             print(f"{self.file_keyword[self.file_type]} data file is found")
@@ -330,11 +327,9 @@ class GraspFileLoad:
         return self.grasp_data_file_path_list
 
     def data_file_process(self) -> Union[List[str], Tuple[List, List], pd.DataFrame, CSFs, MixCoefficientData, int, None]:
-
         '''
         The data_file_process method in the GraspFileLoad class is designed to identify the data type of the input file and process it accordingly. 
         '''
-
         # set the data type as the attribute of the class
         if "ENERGY" in self.file_type.upper() or "LEVEL" in self.file_type.upper():
             # if self.file_name:
@@ -540,13 +535,13 @@ class GraspFileLoad:
             self.block_num = len(self.CSFs_block_length)
             
             self.csfs_file_data = CSFs(
-                subshell_info_raw = self.subshell_info_raw,
-                CSFs_block_j_value = self.CSFs_block_j_value,
-                parity = self.parity,
-                CSFs_block_data = self.CSFs_block_data,
-                CSFs_block_length = self.CSFs_block_length,
-                block_num = self.block_num
-            )
+                                        subshell_info_raw = self.subshell_info_raw,
+                                        CSFs_block_j_value = self.CSFs_block_j_value,
+                                        parity = self.parity,
+                                        CSFs_block_data = self.CSFs_block_data,
+                                        CSFs_block_length = self.CSFs_block_length,
+                                        block_num = self.block_num
+                                    )
 
             return self.csfs_file_data
 
