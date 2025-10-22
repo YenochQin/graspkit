@@ -22,7 +22,7 @@ from ..utils.tool_function import LS_shell_full_charged
 class IntraCoupled_LS:
     """原子组内耦合LS量子数
     multiplicity: 自旋多重度 2S+1
-    L: 轨道角动量对应的字母 S(0), P(1), D(2), F(3),...
+    L: 轨道角动量对应的字母 S, P, D, F,...
     Parity: 宇称量子数，可选
     """
     multiplicity: int  # 2S+1 自旋多重度
