@@ -25,6 +25,39 @@ A Python package for data collection and processing of results from GRASP (Gener
 ## Development Commands
 
 ### Environment Setup
+
+#### 方法一：使用Pixi (推荐)
+Pixi 是现代化的包管理器，支持跨平台环境管理和依赖解析。
+
+```bash
+# 安装 Pixi (如果尚未安装)
+curl -fsSL https://pixi.sh/install.sh | bash
+
+# 克隆项目并进入目录
+git clone https://github.com/YenochQin/graspkit-tools.git
+cd graspkit-tools
+
+# 安装默认环境 (CPU)
+pixi install
+
+# 安装 GPU 环境
+pixi install --feature gpu
+
+# 激活环境
+pixi shell
+
+# 或者运行特定命令
+pixi run python your_script.py
+```
+
+**Pixi 环境特性**：
+- 自动管理Python版本 (>=3.12)
+- 支持CPU和GPU两种环境配置
+- 跨平台支持 (Linux, Windows, macOS)
+- 自动解决依赖冲突
+- 隔离的开发环境
+
+#### 方法二：使用传统pip安装
 ```bash
 # Choose appropriate environment
 pip install -r requirements-cpu.txt    # CPU environment
@@ -70,12 +103,14 @@ python read_hdf5_descriptors.py
 
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
+- **pixi.toml** - Pixi environment configuration with CPU/GPU features
 - **Version management** - Dynamic versioning from `src/graspkit/version.py`
 - **Linting** - Ruff with NumPy 2.0 compatibility rules
 
 #### Dependencies
-- **requirements-cpu.txt** - CPU-optimized dependencies with PyTorch CPU version
-- **requirements-gpu.txt** - GPU-enabled dependencies with CUDA support
+- **Pixi environments** - Managed environments with automatic dependency resolution
+- **requirements-cpu.txt** - CPU-optimized dependencies with PyTorch CPU version (legacy)
+- **requirements-gpu.txt** - GPU-enabled dependencies with CUDA support (legacy)
 
 ## Important Implementation Notes
 

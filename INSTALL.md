@@ -1,114 +1,85 @@
 # 安装指南
 
-本项目提供了针对不同运行环境的依赖文件配置。
+本项目提供了多种安装方式，推荐使用 Pixi 进行现代化的环境管理。
 
-## 环境选择
+## 🚀 方法一：使用 Pixi (推荐)
 
-### 🖥️ CPU环境安装
+Pixi 是现代化的包管理器，支持跨平台环境管理和依赖解析，是安装此项目的最佳方式。
+
+### 安装步骤
+
+1. **安装 Pixi**
+   ```bash
+   # Linux/macOS
+   curl -fsSL https://pixi.sh/install.sh | bash
+
+   # Windows (PowerShell)
+   iwr -useb https://pixi.sh/install.ps1 | iex
+   ```
+
+2. **克隆项目**
+   ```bash
+   git clone https://github.com/YenochQin/graspkit-tools.git
+   cd graspkit-tools
+   ```
+
+3. **安装环境**
+   ```bash
+   # 安装默认 CPU 环境
+   pixi install
+
+   # 或者安装 GPU 环境 (需要 NVIDIA GPU 和 CUDA)
+   pixi install --feature gpu
+   ```
+
+4. **激活环境并使用**
+   ```bash
+   # 激活环境 (进入交互式 shell)
+   pixi shell
+
+   # 或者直接运行命令
+   pixi run python your_script.py
+   pixi run python -c "import graspkit; print('✅ 安装成功!')"
+   ```
+
+### 环境管理
+
+```bash
+# 查看可用环境
+pixi info
+
+# 切换到 GPU 环境
+pixi shell --feature gpu
+
+# 添加开发依赖
+pixi add --feature dev pytest black flake8
+
+# 更新依赖
+pixi update
+```
+
+### Pixi 优势
+
+- **自动版本管理**：无需手动管理 Python 版本
+- **跨平台兼容**：支持 Linux、Windows、macOS
+- **环境隔离**：不同项目使用不同依赖版本
+- **快速安装**：并行下载和安装依赖
+- **GPU 支持**：自动处理 CUDA 依赖
+
+---
+
+## 📦 方法二：传统 pip 安装
+
+如果您更喜欢使用传统的 pip 安装方式，我们仍然提供了相应的配置文件。
+
+### 环境选择
+
+#### 🖥️ CPU环境安装
 适用于：
 - 没有GPU的机器
 - 不需要GPU加速的场景
 - 快速测试和开发
 - 资源受限的环境
-
-```bash
-pip install -r requirements-cpu.txt
-```
-
-**优势**：
-- 安装包更小，下载更快
-- 启动速度更快
-- 兼容性更好
-
-### 🚀 GPU环境安装  
-适用于：
-- 有NVIDIA GPU的机器
-- 需要深度学习加速的场景
-- 大规模模型训练
-- 高性能计算需求
-
-```bash
-pip install -r requirements-gpu.txt
-```
-
-**前提条件**：
-- 安装了NVIDIA GPU驱动
-- 安装了合适版本的CUDA (推荐11.8+)
-- 确认GPU可用：`nvidia-smi`
-
-## 特定CUDA版本安装
-
-如果需要特定的CUDA版本，可以修改 `requirements-gpu.txt` 中的PyTorch安装源：
-
-### CUDA 11.8
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-### CUDA 12.1
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-## 验证安装
-
-### 🔍 快速验证脚本
-
-我们提供了一个自动化验证脚本，可以检查所有依赖是否正确安装：
-
-```bash
-python check_installation.py
-```
-
-此脚本会：
-- 检查所有必需和可选依赖的安装状态
-- 显示各个包的版本信息
-- 检测PyTorch环境 (CPU/GPU)
-- 提供具体的安装建议
-
-### 📝 手动验证
-
-如果您想手动验证，可以运行以下代码：
-
-```python
-import torch
-import numpy as np
-import pandas as pd
-import sklearn
-
-# 检查PyTorch版本
-print(f"PyTorch版本: {torch.__version__}")
-
-# 检查GPU可用性
-if torch.cuda.is_available():
-    print(f"GPU可用: {torch.cuda.get_device_name(0)}")
-    print(f"CUDA版本: {torch.version.cuda}")
-else:
-    print("使用CPU模式")
-
-# 检查其他主要库
-print(f"NumPy版本: {np.__version__}")
-print(f"Pandas版本: {pd.__version__}")
-print(f"Scikit-learn版本: {sklearn.__version__}")
-```
-
-## 开发模式安装
-
-如果要进行项目开发，推荐使用可编辑安装：
-
-```bash
-# CPU环境
-pip install -r requirements-cpu.txt
-pip install -e .
-
-# GPU环境  
-pip install -r requirements-gpu.txt
-pip install -e .
-```
-
-## 虚拟环境推荐
-
-建议使用虚拟环境隔离依赖：
 
 ```bash
 # 创建虚拟环境
@@ -121,29 +92,200 @@ grasp_env\Scripts\activate
 source grasp_env/bin/activate
 
 # 安装依赖
-pip install -r requirements-cpu.txt  # 或 requirements-gpu.txt
+pip install -r requirements-cpu.txt
+
+# 开发模式安装
+pip install -e .
 ```
 
-## 故障排除
+#### 🚀 GPU环境安装
+适用于：
+- 有NVIDIA GPU的机器
+- 需要深度学习加速的场景
+- 大规模模型训练
+- 高性能计算需求
+
+```bash
+# 创建虚拟环境
+python -m venv grasp_env
+
+# 激活环境
+grasp_env\Scripts\activate  # Windows
+source grasp_env/bin/activate  # Linux/Mac
+
+# 安装依赖
+pip install -r requirements-gpu.txt
+
+# 开发模式安装
+pip install -e .
+```
+
+**前提条件**：
+- 安装了NVIDIA GPU驱动
+- 安装了合适版本的CUDA (推荐11.8+)
+- 确认GPU可用：`nvidia-smi`
+
+---
+
+## 🔍 验证安装
+
+### 快速验证
+
+```bash
+# 使用 Pixi
+pixi run python -c "
+import torch
+import numpy as np
+import pandas as pd
+import sklearn
+import graspkit
+print(f'✅ graspkit 版本: {graspkit.__version__}')
+print(f'✅ PyTorch版本: {torch.__version__}')
+print(f'✅ NumPy版本: {np.__version__}')
+print(f'✅ GPU可用: {torch.cuda.is_available()}')
+"
+
+# 使用传统环境
+python -c "
+import torch
+import numpy as np
+import pandas as pd
+import sklearn
+import graspkit
+print(f'✅ graspkit 版本: {graspkit.__version__}')
+print(f'✅ PyTorch版本: {torch.__version__}')
+print(f'✅ NumPy版本: {np.__version__}')
+print(f'✅ GPU可用: {torch.cuda.is_available()}')
+"
+```
+
+### 功能测试
+
+```python
+# 测试核心功能
+from graspkit.data_IO import GraspFileLoad
+from graspkit.ml_module import NeuralNetwork
+from graspkit.utils import calculate_energy
+
+print("✅ 核心模块导入成功")
+
+# 测试数据处理功能
+try:
+    # 这里可以添加具体的功能测试
+    print("✅ 功能测试通过")
+except Exception as e:
+    print(f"❌ 功能测试失败: {e}")
+```
+
+---
+
+## 🛠️ 开发环境设置
+
+### 使用 Pixi 开发
+
+```bash
+# 添加开发依赖
+pixi add --feature dev pytest black ruff mypy
+
+# 运行测试
+pixi run pytest
+
+# 代码格式化
+pixi run black .
+
+# 代码检查
+pixi run ruff check .
+```
+
+### 传统开发环境
+
+```bash
+# 安装开发依赖
+pip install pytest black ruff mypy
+
+# 运行测试
+pytest
+
+# 代码格式化
+black .
+
+# 代码检查
+ruff check .
+```
+
+---
+
+## 📋 系统要求
+
+### 最低要求
+- **操作系统**: Linux, Windows 10+, macOS 10.15+
+- **Python**: 3.12+ (Pixi 自动管理)
+- **内存**: 4GB RAM (推荐 8GB+)
+- **存储**: 2GB 可用空间
+
+### GPU 环境要求
+- **GPU**: NVIDIA GPU (支持 CUDA)
+- **CUDA**: 11.8+ (推荐 12.0+)
+- **GPU 内存**: 4GB+ (推荐 8GB+)
+
+---
+
+## 🔧 故障排除
 
 ### 常见问题
 
-1. **PyTorch GPU版本无法使用GPU**
-   - 检查CUDA驱动是否正确安装
-   - 确认PyTorch版本与CUDA版本兼容
+1. **Pixi 安装失败**
+   ```bash
+   # 检查网络连接
+   curl -I https://pixi.sh/install.sh
 
-2. **安装过程中出现依赖冲突**
-   - 尝试在全新的虚拟环境中安装
-   - 升级pip：`pip install --upgrade pip`
+   # 使用代理 (如果需要)
+   https_proxy=your_proxy curl -fsSL https://pixi.sh/install.sh | bash
+   ```
 
-3. **某些包安装失败**
-   - 确保有足够的磁盘空间
-   - 尝试使用镜像源：`pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements-xxx.txt`
+2. **GPU 环境无法使用 CUDA**
+   ```bash
+   # 检查 CUDA 安装
+   nvidia-smi
+
+   # 检查 PyTorch CUDA 支持
+   pixi run python -c "import torch; print(torch.cuda.is_available())"
+   ```
+
+3. **依赖冲突**
+   ```bash
+   # 清理并重新安装
+   pixi clean
+   pixi install
+
+   # 或者使用传统方式
+   pip install --upgrade pip
+   pip install -r requirements-cpu.txt --force-reinstall
+   ```
+
+4. **导入错误**
+   ```bash
+   # 检查安装路径
+   pixi run python -c "import graspkit; print(graspkit.__file__)"
+
+   # 确保开发模式安装
+   pixi run pip install -e .
+   ```
 
 ### 获取帮助
 
 如果遇到安装问题，请提供以下信息：
 - 操作系统版本
-- Python版本
+- Python 版本
+- 使用的安装方法 (Pixi/pip)
 - 错误信息完整输出
-- 使用的requirements文件 
+- `pixi info` 或 `pip list` 的输出
+
+---
+
+## 📚 相关文档
+
+- [项目主页](https://github.com/YenochQin/graspkit-tools)
+- [Pixi 官方文档](https://pixi.sh)
+- [API 文档](docs/)
+- [使用示例](examples/)
