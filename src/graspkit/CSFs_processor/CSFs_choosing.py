@@ -274,7 +274,7 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
                                     coupling_level: int = -1) -> Dict:
     # 获取初始耦合信息
     base_coupling_dict = single_block_csfs_final_coupling_J_collection(block_CSFs, coupling_level)
-    if np.size(block_asfs_position) == 0:
+    if len(block_asfs_position) == 0:
         block_asfs_position = [i for i in range(len(block_asfs_mix_coefficient_List))]
     for index, element in enumerate(base_coupling_dict):
         base_coupling_dict[element]['sum_ci'] = []
@@ -295,7 +295,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
                                     asfs_position: List[np.ndarray] = [],
                                     coupling_level: int = -1) -> Dict:
     # 1. 如果调用者没给，就用数据自带的
-    if np.size(asfs_position) == 0:                       # 空列表
+    if len(asfs_position) == 0:                       # 空列表
         asfs_position = asfs_mix_data.block_levels_index_List
 
     all_asfs_position = asfs_mix_data.block_levels_index_List  # List[np.ndarray]

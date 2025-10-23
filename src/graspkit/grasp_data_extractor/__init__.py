@@ -7,7 +7,7 @@
 '''
 
 from .ASF_data_collection import (
-    ConfigurationFormat,
+    ConfigurationFormatter,
     LevelsEnergyData,
     mcdhf_energy_data_collection,
     ci_energy_data_collection,
@@ -25,7 +25,7 @@ from .transition_data_collection import (
 )
 
 __all__ = [
-    'ConfigurationFormat',
+    'ConfigurationFormatter',
     'LevelsEnergyData',
     'mcdhf_energy_data_collection',
     'ci_energy_data_collection',
