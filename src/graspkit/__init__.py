@@ -96,7 +96,7 @@ from .CSFs_processor import (
 )
 
 from .grasp_data_extractor import (
-    ConfigurationFormat,
+    ConfigurationFormatter,
     LevelsEnergyData,
     mcdhf_energy_data_collection,
     ci_energy_data_collection,
@@ -220,7 +220,7 @@ __all__ = [
 
     
     # grasp_data_extractor
-    'ConfigurationFormat',
+    'ConfigurationFormatter',
     'LevelsEnergyData',
     'mcdhf_energy_data_collection',
     'ci_energy_data_collection',
