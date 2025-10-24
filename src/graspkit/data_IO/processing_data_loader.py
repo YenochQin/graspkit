@@ -1,12 +1,9 @@
-#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-'''
+"""
 @Id :processing_data_load.py
 @date :2025/06/16 16:30:36
 @author :YenochQin (秦毅)
-'''
-
-
+"""
 
 from pathlib import Path
 from typing import Dict, Tuple, List, Optional, Union
@@ -26,47 +23,47 @@ from ..CSFs_processor.CSFs_choosing import *
 from ..CSFs_processor.CSFs_compress_extract import *
 
 
-
-def load_csf_metadata(
-                        filepath: Union[str, Path]
-                        ) -> dict:
+def load_csf_metadata(filepath: Union[str, Path]) -> dict:
     # 转换为Path对象
     filepath = Path(filepath)
-    
-    with open(filepath, 'rb') as f:
+
+    with open(filepath, "rb") as f:
         return pickle.load(f)
-    
+
 
 #######################################################################
+
 
 def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
     filepath = Path(filepath)
-    
+
     # 检查文件路径是否已经有正确的后缀
-    if not str(filepath).endswith('.pkl.gz'):
-        filepath = filepath.with_suffix('.pkl.gz')
-    
-    with gzip.open(filepath, 'rb') as f:
+    if not str(filepath).endswith(".pkl.gz"):
+        filepath = filepath.with_suffix(".pkl.gz")
+
+    with gzip.open(filepath, "rb") as f:
         data = pickle.load(f)
-    
+
     return CSFs(
-        subshell_info_raw=data['metadata']['subshell_info_raw'],
-        CSFs_block_j_value=data['metadata']['CSFs_block_j_value'],
-        parity=data['metadata']['parity'],
-        CSFs_block_data=data['block_data'],  # 原始嵌套结构
-        CSFs_block_length=data['metadata']['CSFs_block_length'],
-        block_num=data['metadata']['block_num']
+        subshell_info_raw=data["metadata"]["subshell_info_raw"],
+        CSFs_block_j_value=data["metadata"]["CSFs_block_j_value"],
+        parity=data["metadata"]["parity"],
+        CSFs_block_data=data["block_data"],  # 原始嵌套结构
+        CSFs_block_length=data["metadata"]["CSFs_block_length"],
+        block_num=data["metadata"]["block_num"],
     )
 
+
 #######################################################################
+
 
 def pkl_loader(load_csfs_index_file_path) -> Dict:
     """
     加载CSF索引文件（pickle格式）。
-    
+
     Args:
         load_csfs_index_file_path: 索引文件路径
-        
+
     Returns:
         Dict: 块索引到CSF索引列表/数组的映射
         读取的pkl文件中可能会有ci系数
@@ -74,156 +71,170 @@ def pkl_loader(load_csfs_index_file_path) -> Dict:
         TypeError: 如果加载的数据不是正确格式
         FileNotFoundError: 如果文件不存在
     """
-    
+
     file_path = Path(load_csfs_index_file_path)
-    
+
     # 自动添加.pkl扩展名（如果没有）
     if not file_path.suffix:
-        file_path = file_path.with_suffix('.pkl')
-    
+        file_path = file_path.with_suffix(".pkl")
+
     if not file_path.exists():
         raise FileNotFoundError(f"CSF索引文件不存在: {file_path}")
-    
+
     # 直接加载pickle文件
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         blocks_csfs_index = pickle.load(f)
-    
+
     # 类型检查和转换
     if not isinstance(blocks_csfs_index, dict):
         raise TypeError(f"Expected dict, got {type(blocks_csfs_index)}")
-    
+
     return blocks_csfs_index
+
 
 #######################################################################
 
-def load_large_hash(
-                        file_path: Union[str, Path]
-                        ) -> Dict[int, Dict[str, int]]:
+
+def load_large_hash(file_path: Union[str, Path]) -> Dict[int, Dict[str, int]]:
     """从文件加载预计算的哈希映射"""
     # 转换为Path对象
     file_path = Path(file_path)
-    
+
     with open(file_path, "rb") as f:
         return pickle.load(f)
-    
+
+
 #######################################################################
 
-def load_config(
-                    config_path: Union[str, Path]
-                    ):
+
+def load_config(config_path: Union[str, Path]):
     """加载TOML配置文件并进行类型转换和数据处理"""
     # 转换为Path对象
     config_path = Path(config_path)
-    
+
     # 使用 rtoml 读取TOML文件
     config = rtoml.load(config_path)
-    
+
     # 类型转换和数据处理
     config = _process_config_data(config)
-    
+
     return SimpleNamespace(**config)
+
 
 def _process_config_data(config):
     """处理配置数据，进行类型转换和验证"""
     # 浮点数转换
-    config['cutoff_value'] = float(config['cutoff_value'])
-    config['chosen_ratio'] = float(config['chosen_ratio'])
-    config['ml_config']['expansion_ratio'] = float(config['ml_config']['expansion_ratio'])
-    
+    config["cutoff_value"] = float(config["cutoff_value"])
+    config["chosen_ratio"] = float(config["chosen_ratio"])
+    config["ml_config"]["expansion_ratio"] = float(
+        config["ml_config"]["expansion_ratio"]
+    )
+
     # 整数转换
-    config['cal_loop_num'] = int(config['cal_loop_num'])
-    config['difference'] = int(config['difference'])
-    
+    config["cal_loop_num"] = int(config["cal_loop_num"])
+    config["difference"] = int(config["difference"])
+
     # 路径转换
-    config['root_path'] = Path(config['root_path'])
-    config['scf_cal_path'] = config['root_path'] / f"{config['conf']}_{config['cal_loop_num']}"
-    
+    config["root_path"] = Path(config["root_path"])
+    config["scf_cal_path"] = (
+        config["root_path"] / f"{config['conf']}_{config['cal_loop_num']}"
+    )
+
     # 模型参数处理
-    if 'model_params' in config:
-        model_params = config['model_params']
-        
+    if "model_params" in config:
+        model_params = config["model_params"]
+
         # 转换模型参数中的整数
-        if 'n_estimators' in model_params:
-            model_params['n_estimators'] = int(model_params['n_estimators'])
-        if 'random_state' in model_params:
-            model_params['random_state'] = int(model_params['random_state'])
-            
+        if "n_estimators" in model_params:
+            model_params["n_estimators"] = int(model_params["n_estimators"])
+        if "random_state" in model_params:
+            model_params["random_state"] = int(model_params["random_state"])
+
         # 处理class_weight字典，确保键为整数
-        if 'class_weight' in model_params and isinstance(model_params['class_weight'], dict):
+        if "class_weight" in model_params and isinstance(
+            model_params["class_weight"], dict
+        ):
             class_weight = {}
-            for k, v in model_params['class_weight'].items():
+            for k, v in model_params["class_weight"].items():
                 class_weight[int(k)] = float(v)
-            model_params['class_weight'] = class_weight
-    
+            model_params["class_weight"] = class_weight
+
     # 数据验证
     _validate_config_data(config)
-    
+
     return config
+
 
 def _validate_config_data(config):
     """验证配置数据的有效性"""
     # 验证必需字段
-    required_fields = ['atom', 'conf', 'cal_loop_num', 'cutoff_value', 'chosen_ratio']
+    required_fields = ["atom", "conf", "cal_loop_num", "cutoff_value", "chosen_ratio"]
     missing_fields = [field for field in required_fields if field not in config]
     if missing_fields:
         raise ValueError(f"配置文件缺少必需字段: {missing_fields}")
-    
+
     # 验证数值范围
-    if 'cutoff_value' in config:
-        if config['cutoff_value'] <= 0:
+    if "cutoff_value" in config:
+        if config["cutoff_value"] <= 0:
             raise ValueError("cutoff_value 必须大于 0")
-    
-    if 'chosen_ratio' in config:
-        if not (0 < config['chosen_ratio'] <= 1):
+
+    if "chosen_ratio" in config:
+        if not (0 < config["chosen_ratio"] <= 1):
             raise ValueError("chosen_ratio 必须在 (0, 1] 范围内")
-    
-    if 'expansion_ratio' in config['ml_config']:
-        if config['ml_config']['expansion_ratio'] < 1:
+
+    if "expansion_ratio" in config["ml_config"]:
+        if config["ml_config"]["expansion_ratio"] < 1:
             raise ValueError("expansion_ratio 必须大于等于 1")
-    
+
     # 验证光谱项列表
-    if 'spectral_term' in config:
-        if not isinstance(config['spectral_term'], list) or len(config['spectral_term']) == 0:
+    if "spectral_term" in config:
+        if (
+            not isinstance(config["spectral_term"], list)
+            or len(config["spectral_term"]) == 0
+        ):
             raise ValueError("spectral_term 必须是非空列表")
-    
-    print(f"配置验证通过: cutoff_value={config.get('cutoff_value')}, chosen_ratio={config.get('chosen_ratio')}")
+
+    print(
+        f"配置验证通过: cutoff_value={config.get('cutoff_value')}, chosen_ratio={config.get('chosen_ratio')}"
+    )
 
 
 #######################################################################
 
+
 def load_descriptors(
-                        load_path: Union[str, Path], 
-                        file_format: Optional[str] = None,
-                        use_cpp: bool = False
-                        ) -> Optional[np.ndarray]:
+    load_path: Union[str, Path],
+    file_format: Optional[str] = None,
+    use_cpp: bool = False,
+) -> Optional[np.ndarray]:
     """
     加载描述符数组
-    
+
     Args:
         load_path (Union[str, Path]): 加载路径（可含或不含扩展名）
         file_format (Optional[str]): 文件格式，如果为None则自动推断
         use_cpp (bool): 是否使用C++生成的HDF5文件
-    
+
     Returns:
         Optional[np.ndarray]: 描述符数组，加载失败返回None
-    
+
     Example:
         >>> descriptors = load_descriptors('output/csf_descriptors.npy')
         >>> descriptors = load_descriptors(Path('output/csf_descriptors.npy'))
         >>> descriptors = load_descriptors('output/csf_descriptors', use_cpp=True)
     """
-    
+
     # 转换为Path对象
     load_path = Path(load_path)
-    
+
     # 如果使用C++ HDF5文件
     if use_cpp:
-        hdf5_path = load_path.with_suffix('.h5')
+        hdf5_path = load_path.with_suffix(".h5")
         if hdf5_path.exists():
             try:
-                with h5py.File(hdf5_path, 'r') as f:
-                    if 'descriptors' in f:
-                        descriptors = f['descriptors'][:]
+                with h5py.File(hdf5_path, "r") as f:
+                    if "descriptors" in f:
+                        descriptors = f["descriptors"][:]
                         print(f"Descriptors loaded from HDF5: {hdf5_path}")
                         return descriptors
                     else:
@@ -232,32 +243,32 @@ def load_descriptors(
                 print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
         else:
             print(f"Error: HDF5 file not found: {hdf5_path}")
-    
+
     # 原有的文件格式支持
     if file_format is None:
-        if load_path.suffix == '.npy':
-            file_format = 'npy'
-            load_path = load_path.with_suffix('')  # 移除扩展名
-        elif load_path.suffix == '.csv':
-            file_format = 'csv'
-            load_path = load_path.with_suffix('')
-        elif load_path.suffix == '.pkl':
-            file_format = 'pkl'
-            load_path = load_path.with_suffix('')
+        if load_path.suffix == ".npy":
+            file_format = "npy"
+            load_path = load_path.with_suffix("")  # 移除扩展名
+        elif load_path.suffix == ".csv":
+            file_format = "csv"
+            load_path = load_path.with_suffix("")
+        elif load_path.suffix == ".pkl":
+            file_format = "pkl"
+            load_path = load_path.with_suffix("")
         else:
             # 尝试自动检测（使用新的文件名格式）
             if (load_path.parent / f"{load_path.name}_descriptors.npy").exists():
-                file_format = 'npy'
+                file_format = "npy"
             elif (load_path.parent / f"{load_path.name}_descriptors.csv").exists():
-                file_format = 'csv'
+                file_format = "csv"
             elif (load_path.parent / f"{load_path.name}_descriptors.pkl").exists():
-                file_format = 'pkl'
+                file_format = "pkl"
             else:
                 print(f"Error: Cannot find file with path: {load_path}")
                 return None
-    
+
     try:
-        if file_format.lower() == 'npy':
+        if file_format.lower() == "npy":
             file_path = load_path.parent / f"{load_path.name}_descriptors.npy"
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
@@ -265,8 +276,8 @@ def load_descriptors(
             descriptors = np.load(file_path)
             print(f"Descriptors loaded from: {file_path}")
             return descriptors
-            
-        elif file_format.lower() == 'csv':
+
+        elif file_format.lower() == "csv":
             file_path = load_path.parent / f"{load_path.name}_descriptors.csv"
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
@@ -275,65 +286,66 @@ def load_descriptors(
             descriptors = df.values
             print(f"Descriptors loaded from: {file_path}")
             return descriptors
-            
-        elif file_format.lower() == 'pkl':
+
+        elif file_format.lower() == "pkl":
             file_path = load_path.parent / f"{load_path.name}_descriptors.pkl"
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
                 return None
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 descriptors = pickle.load(f)
             print(f"Descriptors loaded from: {file_path}")
             return descriptors
-            
+
         else:
             print(f"Error: Unsupported file format: {file_format}")
             return None
-            
+
     except Exception as e:
         print(f"Error loading descriptors: {str(e)}")
         return None
 
+
 def load_descriptors_with_multi_block(
-                                        load_path: Union[str, Path], 
-                                        file_format: Optional[str] = None,
-                                        use_cpp: bool = False
-                                        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    load_path: Union[str, Path],
+    file_format: Optional[str] = None,
+    use_cpp: bool = False,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     加载带标签的描述符数组
-    
+
     Args:
         load_path (Union[str, Path]): 加载路径（不含扩展名）
         file_format (Optional[str]): 文件格式，如果为None则自动推断
         use_cpp (bool): 是否使用C++生成的HDF5文件
-    
+
     Returns:
         Optional[Tuple[np.ndarray, np.ndarray]]: (描述符数组, 标签数组)，加载失败返回None
-    
+
     Example:
         >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features')
         >>> descriptors, labels = load_descriptors_with_block_indices(Path('ml_data/features'))
         >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features', use_cpp=True)
     """
-    
+
     # 转换为Path对象
     load_path = Path(load_path)
-    
+
     # 如果使用C++ HDF5文件
     if use_cpp:
-        hdf5_path = load_path.with_suffix('.h5')
+        hdf5_path = load_path.with_suffix(".h5")
         if hdf5_path.exists():
             try:
-                with h5py.File(hdf5_path, 'r') as f:
+                with h5py.File(hdf5_path, "r") as f:
                     descriptors = None
                     labels = None
-                    
-                    if 'descriptors' in f:
-                        descriptors = f['descriptors'][:]
-                    
-                    if 'labels' in f:
-                        labels = f['labels'][:]
-                    
+
+                    if "descriptors" in f:
+                        descriptors = f["descriptors"][:]
+
+                    if "labels" in f:
+                        labels = f["labels"][:]
+
                     if descriptors is not None:
                         print(f"Descriptors loaded from HDF5: {hdf5_path}")
                         if labels is not None:
@@ -342,78 +354,90 @@ def load_descriptors_with_multi_block(
                     else:
                         print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
                         return None
-                        
+
             except Exception as e:
                 print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
                 return None
         else:
             print(f"Error: HDF5 file not found: {hdf5_path}")
-    
+
     # 原有的文件格式支持
     if file_format is None:
-        if (load_path.parent / f"{load_path.name}_descriptors_block_indices.csv").exists():
-            file_format = 'csv'
-        elif (load_path.parent / f"{load_path.name}_descriptors.npy").exists() and (load_path.parent / f"{load_path.name}_descriptors_block_indices.npy").exists():
-            file_format = 'npy'
-        elif (load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl").exists():
-            file_format = 'pkl'
+        if (
+            load_path.parent / f"{load_path.name}_descriptors_block_indices.csv"
+        ).exists():
+            file_format = "csv"
+        elif (load_path.parent / f"{load_path.name}_descriptors.npy").exists() and (
+            load_path.parent / f"{load_path.name}_descriptors_block_indices.npy"
+        ).exists():
+            file_format = "npy"
+        elif (
+            load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl"
+        ).exists():
+            file_format = "pkl"
         else:
             print(f"Error: Cannot find files with path: {load_path}")
             return None
-    
+
     try:
-        if file_format.lower() == 'csv':
-            file_path = load_path.parent / f"{load_path.name}_descriptors_block_indices.csv"
+        if file_format.lower() == "csv":
+            file_path = (
+                load_path.parent / f"{load_path.name}_descriptors_block_indices.csv"
+            )
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
                 return None
-                
+
             df = pd.read_csv(file_path)
             # 最后一列是标签，其余是描述符
             descriptors = df.iloc[:, :-1].to_numpy()
             labels = df.iloc[:, -1].to_numpy()
             print(f"Descriptors and labels loaded from: {file_path}")
             return descriptors, labels
-            
-        elif file_format.lower() == 'npy':
+
+        elif file_format.lower() == "npy":
             data_path = load_path.parent / f"{load_path.name}_descriptors.npy"
-            labels_path = load_path.parent / f"{load_path.name}_descriptors_block_indices.npy"
-            
+            labels_path = (
+                load_path.parent / f"{load_path.name}_descriptors_block_indices.npy"
+            )
+
             if not data_path.exists():
                 print(f"Error: Data file not found: {data_path}")
                 return None
             if not labels_path.exists():
                 print(f"Error: Labels file not found: {labels_path}")
                 return None
-                
+
             descriptors = np.load(data_path)
             labels = np.load(labels_path)
             print(f"Descriptors loaded from: {data_path}")
             print(f"Labels loaded from: {labels_path}")
             return descriptors, labels
-            
-        elif file_format.lower() == 'pkl':
-            file_path = load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl"
+
+        elif file_format.lower() == "pkl":
+            file_path = (
+                load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl"
+            )
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
                 return None
-                
-            with open(file_path, 'rb') as f:
+
+            with open(file_path, "rb") as f:
                 data_dict = pickle.load(f)
-                
-            if 'descriptors' not in data_dict or 'labels' not in data_dict:
+
+            if "descriptors" not in data_dict or "labels" not in data_dict:
                 print(f"Error: Invalid data format in {file_path}")
                 return None
-                
-            descriptors = data_dict['descriptors']
-            labels = data_dict['labels']
+
+            descriptors = data_dict["descriptors"]
+            labels = data_dict["labels"]
             print(f"Descriptors and labels loaded from: {file_path}")
             return descriptors, labels
-            
+
         else:
             print(f"Error: Unsupported file format: {file_format}")
             return None
-            
+
     except Exception as e:
         print(f"Error loading descriptors with labels: {str(e)}")
         return None
