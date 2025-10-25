@@ -17,8 +17,7 @@ dependencies = [
   "matplotlib>=3.8.4",
   "tqdm>=4.66.4",
 
-  # 机器学习库 (CPU版本，使用Pixi可自动切换到GPU版本)
-  "torch>=2.0.0",
+  # 机器学习库
   "scikit-learn>=1.3.0",
   "imbalanced-learn>=0.11.0",
 
@@ -36,52 +35,65 @@ dependencies = [
 
   # 配置文件处理
   "rtoml>=0.9.0",
+
+  # HDF5 支持
+  "h5py>=3.8.0",
+
 ]
 
-[tool.pixi.project]
-name = "graspkit"
-description = "Grasp toolkit package"
-authors = ["YenochQin <yenochqin@hotmail.com>"]
-channels = ["conda-forge"]
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
 
-[tool.pixi.pypi-options]
-extra-index-urls = ["https://download.pytorch.org/whl/cpu"]
-
-[tool.pixi.dependencies]
-python = ">=3.12"
-numpy = ">=2.0.0"
-pandas = ">=2.2.2"
-matplotlib = ">=3.8.4"
-tqdm = ">=4.66.4"
-scikit-learn = ">=1.3.0"
-imbalanced-learn = ">=0.11.0"
-seaborn = ">=0.11.0"
-joblib = ">=1.1.0"
-tabulate = ">=0.8.9"
-bitarray = ">=2.0.0"
-rtoml = ">=0.9.0"
-h5py = ">=3.8.0"
-
-[tool.pixi.feature.cpu.pypi-dependencies]
-torch = { version = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" }
-torchvision = { version = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" }
-
-[tool.pixi.feature.gpu.pypi-dependencies]
-torch = { version = ">=2.0.0", index = "https://download.pytorch.org/whl/cu118" }
-torchvision = { version = ">=0.15.0", index = "https://download.pytorch.org/whl/cu118" }
-
-[tool.pixi.feature.dev.dependencies]
-pytest = ">=7.0.0"
-black = ">=23.0.0"
-ruff = ">=0.1.0"
-mypy = ">=1.0.0"
-
-[tool.pixi.environments]
-default = { features = ["cpu"] }
-gpu = { features = ["gpu"] }
-dev = { features = ["cpu", "dev"] }
-dev-gpu = { features = ["gpu", "dev"] }
+# Optional dependencies for different environments
+[project.optional-dependencies]
+cpu = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
+]
+gpu = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
+]
+dev = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "black>=23.0.0",
+    # Jupyter notebook support
+    "jupyter>=1.0.0",
+    "jupyterlab>=4.0.0",
+    "ipython>=8.0.0",
+    "ipykernel>=6.0.0",
+    "notebook>=7.0.0",
+    # Build and packaging tools
+    "build>=0.10.0",
+    "twine>=4.0.0",
+    "wheel>=0.40.0",
+]
+all = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "black>=23.0.0",
+    # Jupyter notebook support
+    "jupyter>=1.0.0",
+    "jupyterlab>=4.0.0",
+    "ipython>=8.0.0",
+    "ipykernel>=6.0.0",
+    "notebook>=7.0.0",
+]
 
 [tool.hatch.version]
 path = "src/graspkit/version.py"
