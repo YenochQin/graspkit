@@ -26,36 +26,44 @@ A Python package for data collection and processing of results from GRASP (Gener
 
 ### Environment Setup
 
-#### 方法一：使用Pixi (推荐)
-Pixi 是现代化的包管理器，支持跨平台环境管理和依赖解析。
+#### 方法一：使用UV (推荐)
+UV 是超快速的Python包和项目管理器，提供极快的依赖解析和安装。
 
 ```bash
-# 安装 Pixi (如果尚未安装)
-curl -fsSL https://pixi.sh/install.sh | bash
+# 安装 UV (如果尚未安装)
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 克隆项目并进入目录
 git clone https://github.com/YenochQin/graspkit-tools.git
 cd graspkit-tools
 
-# 安装默认环境 (CPU)
-pixi install
-
-# 安装 GPU 环境
-pixi install --feature gpu
+# 创建虚拟环境
+uv venv
 
 # 激活环境
-pixi shell
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 
-# 或者运行特定命令
-pixi run python your_script.py
+# 安装依赖
+uv pip install -e .
+
+# 运行特定命令
+uv run python your_script.py
 ```
 
-**Pixi 环境特性**：
+**UV 环境特性**：
+- 超快的依赖解析和安装（比pip快10-100倍）
 - 自动管理Python版本 (>=3.12)
 - 支持CPU和GPU两种环境配置
 - 跨平台支持 (Linux, Windows, macOS)
-- 自动解决依赖冲突
+- 现代化的锁文件机制 (uv.lock)
 - 隔离的开发环境
+- 与pip完全兼容
 
 #### 方法二：使用传统pip安装
 ```bash
@@ -103,12 +111,12 @@ python read_hdf5_descriptors.py
 
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
-- **pixi.toml** - Pixi environment configuration with CPU/GPU features
+- **uv.lock** - UV lock file for reproducible dependency management
 - **Version management** - Dynamic versioning from `src/graspkit/version.py`
 - **Linting** - Ruff with NumPy 2.0 compatibility rules
 
 #### Dependencies
-- **Pixi environments** - Managed environments with automatic dependency resolution
+- **UV environment** - Managed environments with ultra-fast dependency resolution
 - **requirements-cpu.txt** - CPU-optimized dependencies with PyTorch CPU version (legacy)
 - **requirements-gpu.txt** - GPU-enabled dependencies with CUDA support (legacy)
 
