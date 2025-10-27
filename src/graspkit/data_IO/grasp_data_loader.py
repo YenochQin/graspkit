@@ -136,39 +136,38 @@ class GraspFileLoad:
             while True:
                 temp_int = binary_file.read(4)
                 if not temp_int:  # temp_int为空则表明已经到达文件末尾
-                    print("已经到达文件末尾")
+                    print("Radial wavefunction file loaded")
                     break
 
                 # read (3, end=20) nn, laky, energy, npts
                 nn_bin = binary_file.read(4)
                 nn = struct.unpack("i", nn_bin)
-                print(nn)
+                # print(nn)
                 self.nn_list.append(nn[0])
 
                 laky_bin = binary_file.read(4)
                 laky = struct.unpack("i", laky_bin)
-                print(laky)
+                # print(laky)
                 self.laky_list.append(laky[0])
 
                 energy_bin = binary_file.read(8)
                 energy = struct.unpack("d", energy_bin)
-                print(energy)
+                # print(energy)
                 self.energy_list.append(energy[0])
 
                 npts_bin = binary_file.read(4)
                 npts = struct.unpack("i", npts_bin)
-                print(npts)
+                # print(npts)
                 self.npts_list.append(npts[0])
 
                 temp_int = binary_file.read(4)
-                temp_int = binary_file.read(
-                    4
-                )  # read (3) a0, (pg(j,i), j=1, npts), (qg(j,i), j=1, npts)
+                temp_int = binary_file.read(4)
 
+                # read (3) a0, (pg(j,i), j=1, npts), (qg(j,i), j=1, npts)
                 a0_bin = binary_file.read(8)
                 a0 = struct.unpack("d", a0_bin)
                 self.a0_list.append(a0[0])
-                print(a0)
+                # print(a0)
 
                 pg_bin = binary_file.read(8 * npts[0])
                 pg = struct.unpack("d" * npts[0], pg_bin)
@@ -186,7 +185,7 @@ class GraspFileLoad:
                 rg_bin = binary_file.read(8 * npts[0])
                 rg = struct.unpack("d" * npts[0], rg_bin)
                 rg_array = np.array(rg)
-                print(rg[0])
+                # print(rg[0])
                 self.rg_list.append(rg_array)
 
                 temp_int = binary_file.read(4)
@@ -498,16 +497,21 @@ class GraspFileLoad:
 
                 rg_list_len = [len(self.rg_list[i]) for i in range(len(self.rg_list))]
                 self.max_rg_index = rg_list_len.index(max(rg_list_len))
-                self.radial_wavefunction_data[f"r(a.u)"] = self.rg_list[
-                    self.max_rg_index
-                ]
                 pg_aligned_list = align_2d_list_columns(self.pg_list)
                 qg_aligned_list = align_2d_list_columns(self.qg_list)
 
+                # Collect all columns in a dictionary to avoid DataFrame fragmentation
+                columns_data = {
+                    "r(a.u)": self.rg_list[self.max_rg_index]
+                }
+
                 for n in range(len(self.nn_list)):
                     str_nl = int_nl_2_str_nl(self.nn_list[n], self.laky_list[n])
-                    self.radial_wavefunction_data[f"P({str_nl})"] = pg_aligned_list[n]
-                    self.radial_wavefunction_data[f"Q({str_nl})"] = qg_aligned_list[n]
+                    columns_data[f"P({str_nl})"] = pg_aligned_list[n]
+                    columns_data[f"Q({str_nl})"] = qg_aligned_list[n]
+
+                # Create DataFrame in one operation
+                self.radial_wavefunction_data = pd.DataFrame(columns_data)
 
                 return self.radial_wavefunction_data
             except Exception as e:
