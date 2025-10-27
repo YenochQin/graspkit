@@ -8,6 +8,7 @@
 __author__ = "YenochQin (秦毅)"
 
 from .version import __version__
+from .utils import fig_settings
 
 from .data_IO import (
     GraspFileLoad,
