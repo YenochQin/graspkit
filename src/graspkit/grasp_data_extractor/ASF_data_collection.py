@@ -35,12 +35,12 @@ class IntraCoupled_LS:
     """原子组内耦合LS量子数
     multiplicity: 自旋多重度 2S+1
     L: 轨道角动量对应的字母 S, P, D, F,...
-    Parity: 宇称量子数，可选
+    intra_J: 中间耦合J值，可选
     """
 
     multiplicity: int  # 2S+1 自旋多重度
     L: str  # 轨道角动量字母：S,P,D,F,...
-    Parity: Optional[int] = None  # 宇称，可选
+    intra_J: Optional[int] = None  # 中间耦合J值，可选
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class ShellFormatter:
         r"^(?P<n>\d*)"
         r"(?P<shell>[spdfghi])"
         r"(?:\((?P<ele>\d+)\))?"
-        r"(?(ele)(?:(?P<intra_coupling>(?P<intra_S>\d+)(?P<intra_L>[SPDFGHIKLMNO])(?P<intra_Parity>\d+)?))?)"
+        r"(?(ele)(?:(?P<intra_coupling>(?P<intra_S>\d+)(?P<intra_L>[SPDFGHIKLMNO])(?P<intra_J>\d+)?))?)"
         r"(?P<inter_coupling>_(?P<inter_S>\d+)(?P<inter_L>[SPDFGHIKLMNO]))?"
         r"$"
     )
@@ -120,9 +120,9 @@ class ShellFormatter:
             intra_ls = IntraCoupled_LS(
                 multiplicity=int(shell_match["intra_S"]),  # 自旋多重度
                 L=shell_match["intra_L"],  # 轨道角动量字母
-                Parity=int(shell_match["intra_Parity"])
-                if shell_match["intra_Parity"]
-                else None,  # 宇称，如果存在则转换
+                intra_J=int(shell_match["intra_J"])
+                if shell_match["intra_J"]
+                else None,  # 中间耦合J值，如果存在则转换
             )
         else:
             intra_ls = None
@@ -142,7 +142,9 @@ class ShellFormatter:
         )
 
     @staticmethod
-    def format_shell(shell_info: ShellInfo) -> str:
+    def format_shell(
+                    shell_info: ShellInfo
+                    ) -> str:
         """格式化原子轨道核心部分
 
         Args:
@@ -157,7 +159,10 @@ class ShellFormatter:
         return f"{shell_info.n}{shell_info.shell}"
 
     @staticmethod
-    def format_intra_ls(intra_ls: Optional[IntraCoupled_LS]) -> str:
+    def format_intra_ls(
+                        intra_ls: Optional[IntraCoupled_LS],
+                        format_to_word_document: bool = False
+                    ) -> str:
         """格式化组内LS耦合信息为LaTeX格式
 
         Args:
@@ -169,14 +174,25 @@ class ShellFormatter:
         # 如果不存在LS耦合信息，返回空字符串
         if not intra_ls:
             return ""
-        # 如果存在宇称信息，包含在格式中
-        if intra_ls.Parity is not None:
-            return f"(^{intra_ls.multiplicity}_{intra_ls.Parity}\\text{{{intra_ls.L}}})"
+
+        # 添加对office word中的latex形式公式的支持，此形式应该可以直接从"线性"转为"专业"
+        if format_to_word_document:
+            if intra_ls.intra_J is not None:
+                return f"( ^{intra_ls.multiplicity}_{intra_ls.intra_J}{intra_ls.L} )"
+            # 否则只格式化多重度角动量
+            return f"( ^{intra_ls.multiplicity}{intra_ls.L} )"
+        
+        # 如果存在中间耦合J值，包含在格式中
+        if intra_ls.intra_J is not None:
+            return f"(^{intra_ls.multiplicity}_{intra_ls.intra_J}\\text{{{intra_ls.L}}})"
         # 否则只格式化多重度角动量
         return f"(^{intra_ls.multiplicity}\\text{{{intra_ls.L}}})"
 
     @staticmethod
-    def format_inter_ls(inter_ls: InterCoupled_LS) -> str:
+    def format_inter_ls(
+                        inter_ls: InterCoupled_LS,
+                        format_to_word_document: bool = False
+                        ) -> str:
         """格式化组间LS耦合信息为LaTeX格式
 
         Args:
@@ -185,6 +201,9 @@ class ShellFormatter:
         Returns:
             str: LaTeX格式的LS耦合字符串，如"^7\\text{P}"
         """
+        if format_to_word_document:
+            return f"^{{{inter_ls.multiplicity}}}{inter_ls.L}"
+
         return f"^{{{inter_ls.multiplicity}}}\\text{{{inter_ls.L}}}"
 
 
@@ -202,8 +221,11 @@ class ConfigurationFormatter:
     """
 
     def __init__(
-        self, temp_configuration: str, show_full_charged_subshell: bool = False
-    ):
+                self, 
+                temp_configuration: str, 
+                show_full_charged_subshell: bool = False,
+                format_to_word_document: bool = False
+                ):
         """
         初始化ConfigurationFormatter
 
@@ -215,6 +237,7 @@ class ConfigurationFormatter:
         self.temp_conf_list = self.temp_configuration.split(".")
 
         self.show_full_charged_subshell = show_full_charged_subshell
+        self.format_to_word_document = format_to_word_document
 
     def conf_format(self) -> Tuple[str, str]:
         """格式化整个原子配置
@@ -234,24 +257,27 @@ class ConfigurationFormatter:
             # 检查是否是满电子子轨道
             formated_shell = ShellFormatter.parse_subshell(shell)
             is_last = index == list_length - 1
-
             temp_shell = formated_shell.shell
-            temp_electrons = formated_shell.electrons
 
-            if LS_shell_full_charged(temp_shell, temp_electrons):
-                continue
+            if (formated_shell.electrons is not None) and (not is_last):
+                temp_electrons = formated_shell.electrons
+
+                if LS_shell_full_charged(temp_shell, temp_electrons) and not self.show_full_charged_subshell:
+                    continue
 
             formatted_conf = (
                 formatted_conf
                 + ShellFormatter.format_shell(formated_shell)
                 + "\\,"
-                + ShellFormatter.format_intra_ls(formated_shell.intra_ls)
+                + (ShellFormatter.format_intra_ls(formated_shell.intra_ls, self.format_to_word_document) or "")
                 + "\\;"
             )
 
             if is_last and formated_shell.inter_ls is not None:
+
                 format_LS_compling = ShellFormatter.format_inter_ls(
-                    formated_shell.inter_ls
+                    formated_shell.inter_ls,
+                    self.format_to_word_document
                 )
         formatted_conf = formatted_conf.replace(r"\,\;", r"\;")
         return formatted_conf, format_LS_compling
@@ -271,6 +297,7 @@ class LevelsEnergyData:
         filepath,
         store_csv_path: str = "",
         show_full_charged_subshell: bool = False,
+        format_to_word_document: bool = False
     ):
         """从文件路径直接创建实例的类方法"""
         file_dir = str(Path(filepath).parent)
@@ -284,6 +311,7 @@ class LevelsEnergyData:
             "file_type": "ENERGY",
             "store_csv_path": store_csv_path,
             "show_full_charged_subshell": show_full_charged_subshell,
+            "format_to_word_document": format_to_word_document,
         }
         return cls(config)
 
@@ -296,6 +324,9 @@ class LevelsEnergyData:
         self.this_as = data_file_info.get("this_as")
         self.show_full_charged_subshell = data_file_info.get(
             "show_full_charged_subshell", False
+        )
+        self.format_to_word_document = data_file_info.get(
+            "format_to_word_document", False
         )
         self.level_read_df = pd.DataFrame(
             columns=[
@@ -360,7 +391,7 @@ class LevelsEnergyData:
                 f"Configuration_{self.level_parameter}{self.this_as}raw"
             ].apply(
                 lambda x: ConfigurationFormatter(
-                    x, self.show_full_charged_subshell
+                    x, self.show_full_charged_subshell, self.format_to_word_document
                 ).conf_format()[0]
             )
 
@@ -371,7 +402,7 @@ class LevelsEnergyData:
                     f"Configuration_{self.level_parameter}{self.this_as}raw"
                 ].apply(
                     lambda x: ConfigurationFormatter(
-                        x, self.show_full_charged_subshell
+                        x, self.show_full_charged_subshell, self.format_to_word_document
                     ).conf_format()[1]
                 )
                 + "_{"
@@ -506,13 +537,19 @@ class LevelsASFComposition:
         min_comp: float = 0.03,
         show_comp_num: int = 0,
         show_full_charged_subshell: bool = False,
+        format_to_word_document: bool = False,
     ):
         self.energy_data_df = energy_data_df
         self.data_file_info = data_file_info
-        self.output_subshells = show_full_charged_subshell
-        self.show_full_charged_subshell = data_file_info.get(
-            "show_full_charged_subshell", False
-        )
+        # TODO 这里有bug
+        self.show_full_charged_subshell = show_full_charged_subshell
+        self.format_to_word_document = format_to_word_document
+        # self.show_full_charged_subshell = data_file_info.get(
+        #     "show_full_charged_subshell", False
+        # )
+        # self.format_to_word_document = data_file_info.get(
+        #     "format_to_word_document", False
+        # )
         self.data_file_info["file_type"] = "LSJ"
         self.data_file_load = GraspFileLoad(self.data_file_info)
         result = self.data_file_load.data_file_process()
@@ -532,7 +569,7 @@ class LevelsASFComposition:
         temp_lsj_unit_w = np.float64(temp_lsj_unit_info_list[1]).round(3)
         temp_lsj_unit_conf = temp_lsj_unit_info_list[2]
         temp_lsj_unit_format = ConfigurationFormatter(
-            temp_lsj_unit_conf, self.show_full_charged_subshell
+            temp_lsj_unit_conf, self.show_full_charged_subshell, self.format_to_word_document
         )
         temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
         temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.conf_format()[1]
