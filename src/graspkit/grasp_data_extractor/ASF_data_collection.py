@@ -170,6 +170,8 @@ class ShellFormatter:
 
         Returns:
             str: LaTeX格式的LS耦合字符串，如"(^32_0\\text{S})"
+            如果format_to_word_document为真则取消了\\text{},并在特定地方加入了空格，
+            可以直接在word公式latex形式从"线性"转为"专业"
         """
         # 如果不存在LS耦合信息，返回空字符串
         if not intra_ls:
