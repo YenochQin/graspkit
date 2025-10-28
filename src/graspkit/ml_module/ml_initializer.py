@@ -115,7 +115,7 @@ def initialize_iteration_results_csv(config, logger=None):
         "import_count",
         "stay_count",
         "MLsampling_ratio",
-        "chosen_count",
+        "sampled_count",
         "weight",
         "train_f1",
         "train_roc_auc",
@@ -221,7 +221,7 @@ def load_data_files(config, logger) -> tuple:
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_indices_file_path = (
-        config.scf_cal_path / f"{config.conf}_{config.cal_loop_num}_chosen_indices.pkl"
+        config.scf_cal_path / f"{config.conf}_{config.cal_loop_num}_sampled_indices.pkl"
     )
     caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
@@ -669,7 +669,7 @@ def generate_train_csfs_descriptors(
     except AssertionError as e:
         print(f"❌ 验证失败: {e}")
 
-    current_selected_indices = np.array(current_indices_ci_dict[0]["indices"])
+    current_sampled_indices = np.array(current_indices_ci_dict[0]["indices"])
 
     if config.cal_loop_num > 1:
         # 读取历次迭代保存的CI系数数据
@@ -702,14 +702,14 @@ def generate_train_csfs_descriptors(
 
         logger.info(f"训练数据")
         logger.info(f"CSF总数: {len(accumulated_indices)}")
-        logger.info(f"当前轮次CSF数: {len(current_selected_indices)}")
+        logger.info(f"当前轮次CSF数: {len(current_sampled_indices)}")
 
     elif config.cal_loop_num == 1:
         accumulated_indices = current_indices_ci_dict[0]["indices"]
         accumulated_ci_squared = current_indices_ci_dict[0]["ci_squared"]
         logger.info(f"训练数据")
         logger.info(f"CSF总数: {len(accumulated_indices)}")
-        logger.info(f"当前轮次CSF数: {len(current_selected_indices)}")
+        logger.info(f"当前轮次CSF数: {len(current_sampled_indices)}")
     else:
         logger.error(f"{config.cal_loop_num=} error")
         raise ValueError(f"Invalid cal_loop_num: {config.cal_loop_num}")
@@ -717,17 +717,17 @@ def generate_train_csfs_descriptors(
     # 初始化变量
     cutoff_value = np.float64(config.cutoff_value)
 
-    selected_csfs_descriptors = raw_csfs_descriptors[accumulated_indices]
+    sampled_csfs_descriptors = raw_csfs_descriptors[accumulated_indices]
     important_csfs_mask = accumulated_ci_squared >= cutoff_value
 
-    logger.info(f"生成完整训练数据: {selected_csfs_descriptors.shape[0]} 个CSF")
+    logger.info(f"生成完整训练数据: {sampled_csfs_descriptors.shape[0]} 个CSF")
     logger.info(
         f"正样本数量: {np.sum(important_csfs_mask)} (占比: {np.sum(important_csfs_mask) / len(important_csfs_mask):.4f})"
     )
 
     # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
     caled_csfs_descriptors = np.column_stack(
-        [selected_csfs_descriptors, important_csfs_mask]
+        [sampled_csfs_descriptors, important_csfs_mask]
     )
 
     accumulated_ci_data = {
@@ -771,63 +771,63 @@ def generate_train_csfs_descriptors(
 
 
 def get_unselected_descriptors(
-    raw_csfs_descriptors: np.ndarray, chosen_csfs_indices_dict: Dict[int, List[int]]
+    raw_csfs_descriptors: np.ndarray, sampled_csfs_indices_dict: Dict[int, List[int]]
 ) -> np.ndarray:
     """
-    找出不在chosen_csfs_indices_dict索引中的描述符
+    找出不在sampled_csfs_indices_dict索引中的描述符
 
     Args:
         raw_csfs_descriptors: 原始CSFs描述符数组
-        chosen_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
+        sampled_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
 
     Returns:
-        np.ndarray: 不在chosen_csfs_indices_dict中的描述符数组
+        np.ndarray: 不在sampled_csfs_indices_dict中的描述符数组
     """
     # 获取所有已选择的索引
-    chosen_indices = []
-    for block_indices in chosen_csfs_indices_dict.values():
-        chosen_indices.extend(block_indices)
-    chosen_indices = set(chosen_indices)
+    sampled_indices = []
+    for block_indices in sampled_csfs_indices_dict.values():
+        sampled_indices.extend(block_indices)
+    sampled_indices = set(sampled_indices)
 
     # 获取所有可能的索引
     all_indices = set(range(len(raw_csfs_descriptors)))
 
-    # 找出不在chosen_indices中的索引
-    uncurrent_selected_indices = list(all_indices - chosen_indices)
+    # 找出不在sampled_indices中的索引
+    uncurrent_sampled_indices = list(all_indices - sampled_indices)
 
     # 返回对应的描述符
-    return raw_csfs_descriptors[uncurrent_selected_indices]
+    return raw_csfs_descriptors[uncurrent_sampled_indices]
 
 
 def get_stay_descriptors(
-    raw_csfs_descriptors: np.ndarray, chosen_csfs_indices_dict: Dict[int, List[int]]
+    raw_csfs_descriptors: np.ndarray, sampled_csfs_indices_dict: Dict[int, List[int]]
 ) -> np.ndarray:
     """
-    找出不在chosen_csfs_indices_dict索引中的描述符
+    找出不在sampled_csfs_indices_dict索引中的描述符
 
     Args:
         raw_csfs_descriptors: 原始CSFs描述符数组
-        chosen_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
+        sampled_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
 
     Returns:
-        np.ndarray: 不在chosen_csfs_indices_dict中的描述符数组
+        np.ndarray: 不在sampled_csfs_indices_dict中的描述符数组
     """
     # 验证字典并安全获取所有已选择的索引
-    if not chosen_csfs_indices_dict:
-        raise ValueError("chosen_csfs_indices_dict为空，无法获取选中的CSFs索引")
+    if not sampled_csfs_indices_dict:
+        raise ValueError("sampled_csfs_indices_dict为空，无法获取选中的CSFs索引")
 
-    if 0 not in chosen_csfs_indices_dict:
+    if 0 not in sampled_csfs_indices_dict:
         raise KeyError(
-            f"chosen_csfs_indices_dict中缺少键0，可用键: {list(chosen_csfs_indices_dict.keys())}"
+            f"sampled_csfs_indices_dict中缺少键0，可用键: {list(sampled_csfs_indices_dict.keys())}"
         )
 
-    chosen_indices = set(chosen_csfs_indices_dict[0])
+    sampled_indices = set(sampled_csfs_indices_dict[0])
 
     # 获取所有可能的索引
     all_indices = set(range(len(raw_csfs_descriptors)))
 
-    # 找出不在chosen_indices中的索引
-    stay_indices = list(all_indices - chosen_indices)
+    # 找出不在sampled_indices中的索引
+    stay_indices = list(all_indices - sampled_indices)
 
     # 返回对应的描述符
     return raw_csfs_descriptors[stay_indices]
