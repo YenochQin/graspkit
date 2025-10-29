@@ -4,8 +4,8 @@ This document provides instructions for building the GraspKit package.
 
 ## Prerequisites
 
-1. **Python 3.12+** - Required for the package
-2. **Virtual Environment** - Set up using UV (recommended), Pixi, or pip
+1. **Python 3.12+** - Required for the package (UV will manage this automatically)
+2. **Virtual Environment** - Set up using UV (recommended) or traditional pip
 3. **Build Tools** - The build script will automatically install required build dependencies
 
 ## Environment Setup
@@ -34,20 +34,7 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-### Method 2: Pixi
-
-```bash
-# Install Pixi
-curl -fsSL https://pixi.sh/install.sh | bash
-
-# Install dependencies
-pixi install
-
-# Activate environment
-pixi shell
-```
-
-### Method 3: Traditional pip
+### Method 2: Traditional pip
 
 ```bash
 # Create virtual environment
@@ -68,9 +55,8 @@ pip install -e .
 ### Method 1: Using the Python Script (Recommended)
 
 ```bash
-# Activate your environment (if using UV, Pixi, or pip)
+# Activate your environment (if using UV or pip)
 # UV: .venv\Scripts\activate (Windows) or source .venv/bin/activate (Linux/macOS)
-# Pixi: pixi shell
 # pip: .venv\Scripts\activate (Windows) or source .venv/bin/activate (Linux/macOS)
 
 # Build the package (clean build)
@@ -147,11 +133,10 @@ pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
 - Ensure you have Python 3.12+ installed
 - Check that your virtual environment is activated
 - Run with `--clean` flag to remove old artifacts
-- The script automatically detects UV, Pixi, or pip environments
+- The script automatically detects UV or pip environments
 
 ### Environment Detection Issues
 - UV: Make sure `uv.lock` file exists and `.venv` folder is present
-- Pixi: Ensure `pixi.toml` exists and `pixi` command is available
 - pip: Verify `.venv` folder exists with `Scripts/python.exe` (Windows) or `bin/python` (Linux/macOS)
 
 ### Permission Issues
@@ -162,7 +147,6 @@ pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
 - The script will automatically install the `build` package if not present
 - If other dependencies are missing, install them manually:
   - UV: `uv pip install build`
-  - Pixi: `pixi add build`
   - pip: `pip install build`
 
 ## Environment Managers
@@ -172,12 +156,6 @@ pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
 - Modern lock file mechanism (`uv.lock`)
 - Cross-platform compatibility
 - Seamless pip compatibility
-
-### Pixi Features
-- Conda-compatible environment management
-- Multiple environment configurations (CPU/GPU)
-- Dependency isolation
-- Cross-platform support
 
 ### Traditional pip
 - Universal compatibility
@@ -190,6 +168,6 @@ pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
 - **Current Version**: 2.8.dev1
 - **Python Version**: >= 3.12
 - **Build Backend**: hatchling
-- **Supported Environments**: UV, Pixi, pip
+- **Supported Environments**: UV, pip
 
 For more information about the package configuration, see `pyproject.toml`.

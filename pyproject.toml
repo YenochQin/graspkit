@@ -6,7 +6,8 @@ build-backend = "hatchling.build"
 name = "grasp-kit"
 version = '2.8.dev1'
 # version = '2.6.1'
-description = "Grasp toolkit package"
+description = "A Python package for processing and analyzing GRASP program calculation results with ML-driven CSF selection"
+keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
 requires-python = ">= 3.12"
 
@@ -49,16 +50,29 @@ dev = [
 ]
 
 # Optional dependencies for different environments
+# Use with: uv sync --extra cpu or uv sync --extra gpu
 [project.optional-dependencies]
+# Basic installation without PyTorch (for users who want to manage PyTorch separately)
+base = [
+]
+
+# CPU-optimized installation
 cpu = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "torchaudio>=2.0.0",
+    # CPU version - PyTorch will automatically detect and use CPU
+    # Install with: uv sync --extra cpu
 ]
+
+# GPU-optimized installation (for NVIDIA GPUs with CUDA)
 gpu = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "torchaudio>=2.0.0",
+    # GPU version - PyTorch will automatically use CUDA if available
+    # Falls back to CPU if no CUDA-compatible GPU is detected
+    # Install with: uv sync --extra gpu
 ]
 dev = [
     "torch>=2.0.0",
@@ -78,6 +92,7 @@ dev = [
     "build>=0.10.0",
     "twine>=4.0.0",
     "wheel>=0.40.0",
+    # Install with: uv sync --extra dev
 ]
 all = [
     "torch>=2.0.0",
@@ -93,6 +108,7 @@ all = [
     "ipython>=8.0.0",
     "ipykernel>=6.0.0",
     "notebook>=7.0.0",
+    # Install with: uv sync --all-extras
 ]
 
 [tool.hatch.version]
@@ -113,6 +129,17 @@ classifiers = [
 
   # Specify the Python versions you support here.
   "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+
+  # Topic classification
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Intended Audience :: Science/Research",
+
+  # Environment
+  "Environment :: Console",
 ]
 
 [tool.hatch.build.targets.wheel]
