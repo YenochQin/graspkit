@@ -25,6 +25,11 @@ uv venv
 # macOS/Linux
 source .venv/bin/activate
 
+# 注意：镜像源已在 pyproject.toml 中配置为清华镜像源
+# 如果需要覆盖配置，可以设置环境变量：
+# export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+
+
 # 安装依赖 (CPU版本)
 uv sync
 
@@ -56,6 +61,12 @@ uv --version
 # 创建特定Python版本环境
 uv venv --python 3.12
 
+# 注意：镜像源已在 pyproject.toml 的 [tool.uv] 部分配置
+# UV 会自动使用配置的清华镜像源加速下载
+
+# 如果需要临时覆盖配置，可以设置环境变量：
+# export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
+
 # 同步依赖 (使用uv.lock文件)
 uv sync
 
@@ -71,6 +82,10 @@ uv add torch --extra cpu
 
 # 更新依赖
 uv sync --upgrade
+
+# 查看当前环境变量
+echo $UV_INDEX_URL
+echo $UV_EXTRA_INDEX_URL
 ```
 
 ### UV 优势
@@ -82,6 +97,32 @@ uv sync --upgrade
 - **现代化锁文件**：使用 uv.lock 确保可重现构建
 - **GPU 支持**：支持CPU和GPU两种环境配置
 - **完全兼容**：与pip完全兼容
+
+### 📄 pyproject.toml 配置
+
+项目已在 `pyproject.toml` 文件中配置了镜像源：
+
+```toml
+[tool.uv]
+# Configure package index for faster downloads in China
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+extra-index-url = ["https://pypi.org/simple"]
+```
+
+**配置优势**：
+- 🎯 **项目级配置**：随项目一起版本控制，团队共享
+- 🚀 **自动应用**：无需手动设置环境变量
+- 🔄 **灵活覆盖**：仍可通过环境变量临时覆盖
+- 📦 **官方支持**：UV 原生支持 pyproject.toml 配置
+
+**临时覆盖配置**：
+```bash
+# 使用其他镜像源
+UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
+
+# 使用官方源
+UV_INDEX_URL="https://pypi.org/simple" uv sync
+```
 
 ---
 
@@ -275,7 +316,35 @@ ruff check . --fix
    https_proxy=your_proxy curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-2. **GPU 环境无法使用 CUDA**
+2. **依赖下载速度慢**
+   ```bash
+   # 项目已配置清华镜像源，如果仍需要切换：
+   UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
+
+   # 或者使用华为云镜像
+   UV_INDEX_URL="https://repo.huaweicloud.com/repository/pypi/simple/" uv sync
+
+   # 测试镜像源速度
+   curl -I https://pypi.tuna.tsinghua.edu.cn/simple/
+   curl -I https://mirrors.aliyun.com/pypi/simple/
+   ```
+
+3. **镜像源连接失败**
+   ```bash
+   # 测试当前配置的镜像源
+   curl -I https://pypi.tuna.tsinghua.edu.cn/simple/
+
+   # 临时切换到其他镜像源
+   UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
+
+   # 使用官方源作为备选
+   UV_INDEX_URL="https://pypi.org/simple" uv sync
+
+   # 检查 pyproject.toml 配置
+   cat pyproject.toml | grep -A 5 "\[tool.uv\]"
+   ```
+
+4. **GPU 环境无法使用 CUDA**
    ```bash
    # 检查 CUDA 安装
    nvidia-smi
@@ -287,7 +356,7 @@ ruff check . --fix
    uv run python -c "import torch; print(torch.cuda.is_available())"
    ```
 
-3. **依赖冲突**
+5. **依赖冲突**
    ```bash
    # 使用UV清理并重新同步
    uv sync --refresh
@@ -300,7 +369,7 @@ ruff check . --fix
    pip install -e . --force-reinstall
    ```
 
-4. **导入错误**
+6. **导入错误**
    ```bash
    # 检查安装路径
    uv run python -c "import graspkit; print(graspkit.__file__)"
@@ -313,7 +382,7 @@ ruff check . --fix
    uv sync
    ```
 
-5. **虚拟环境激活失败**
+7. **虚拟环境激活失败**
    ```bash
    # Windows: 确保使用PowerShell或CMD
    .venv\Scripts\activate

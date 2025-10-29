@@ -42,6 +42,7 @@ uv venv
 source .venv/bin/activate
 
 # Install dependencies and package (CPU version)
+# Note: Tsinghua mirror is automatically configured in pyproject.toml for faster downloads
 uv sync
 
 # Or install with GPU support (if you have NVIDIA GPU with CUDA)
