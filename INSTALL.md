@@ -329,7 +329,23 @@ ruff check . --fix
    curl -I https://mirrors.aliyun.com/pypi/simple/
    ```
 
-3. **镜像源连接失败**
+3. **NVIDIA CUDA 包下载超时**
+   ```bash
+   # 方法1: 增加网络超时时间
+   UV_HTTP_TIMEOUT=120 uv sync --extra dev
+
+   # 方法2: 强制使用CPU版本的PyTorch (推荐)
+   uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+   uv sync --extra dev
+
+   # 方法3: 跳过有问题的包，手动安装
+   uv sync --extra dev --no-build-isolation
+
+   # 方法4: 使用官方PyTorch源
+   UV_INDEX_URL="https://download.pytorch.org/whl/cpu" uv sync --extra dev
+   ```
+
+4. **镜像源连接失败**
    ```bash
    # 测试当前配置的镜像源
    curl -I https://pypi.tuna.tsinghua.edu.cn/simple/
@@ -344,7 +360,7 @@ ruff check . --fix
    cat pyproject.toml | grep -A 5 "\[tool.uv\]"
    ```
 
-4. **GPU 环境无法使用 CUDA**
+5. **GPU 环境无法使用 CUDA**
    ```bash
    # 检查 CUDA 安装
    nvidia-smi
@@ -356,7 +372,7 @@ ruff check . --fix
    uv run python -c "import torch; print(torch.cuda.is_available())"
    ```
 
-5. **依赖冲突**
+6. **依赖冲突**
    ```bash
    # 使用UV清理并重新同步
    uv sync --refresh
@@ -369,7 +385,7 @@ ruff check . --fix
    pip install -e . --force-reinstall
    ```
 
-6. **导入错误**
+7. **导入错误**
    ```bash
    # 检查安装路径
    uv run python -c "import graspkit; print(graspkit.__file__)"
@@ -382,7 +398,7 @@ ruff check . --fix
    uv sync
    ```
 
-7. **虚拟环境激活失败**
+8. **虚拟环境激活失败**
    ```bash
    # Windows: 确保使用PowerShell或CMD
    .venv\Scripts\activate
