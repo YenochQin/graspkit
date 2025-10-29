@@ -149,10 +149,9 @@ packages = ["src/graspkit"]
 [tool.ruff.lint]
 select = ["NPY201"]
 
-[tool.uv]
-# Configure package index for faster downloads in China
-index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-extra-index-url = ["https://pypi.org/simple"]
+[[tool.uv.index]]
+url="https://pypi.tuna.tsinghua.edu.cn/simple"
+default=true
 
 [project.urls]
 Homepage = "https://github.com/YenochQin/graspkit-tools.git"
