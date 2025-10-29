@@ -1,8 +1,8 @@
 # 安装指南
 
-本项目提供了多种安装方式，推荐使用 Pixi 进行现代化的环境管理。
+本项目提供了多种安装方式，推荐使用 UV 进行现代化的环境管理。
 
-#### 方法一：使用UV (推荐)
+## 🚀 方法一：使用UV (推荐)
 UV 是超快速的Python包和项目管理器，提供极快的依赖解析和安装。
 
 ```bash
@@ -25,8 +25,14 @@ uv venv
 # macOS/Linux
 source .venv/bin/activate
 
-# 安装依赖
-uv pip install -e .
+# 安装依赖 (CPU版本)
+uv sync
+
+# 或者安装GPU版本 (如果有NVIDIA GPU和CUDA)
+uv sync --extra gpu
+
+# 开发版本
+uv sync --extra dev
 
 # 运行特定命令
 uv run python your_script.py
@@ -41,29 +47,41 @@ uv run python your_script.py
 - 隔离的开发环境
 - 与pip完全兼容
 
-### 环境管理
+### UV 环境管理
 
 ```bash
-# 查看可用环境
-pixi info
+# 查看UV版本
+uv --version
 
-# 切换到 GPU 环境
-pixi shell --feature gpu
+# 创建特定Python版本环境
+uv venv --python 3.12
 
-# 添加开发依赖
-pixi add --feature dev pytest black flake8
+# 同步依赖 (使用uv.lock文件)
+uv sync
+
+# 安装特定额外依赖
+uv sync --extra cpu    # CPU版本
+uv sync --extra gpu    # GPU版本
+uv sync --extra dev    # 开发版本
+uv sync --all-extras   # 所有额外依赖
+
+# 添加新的依赖到pyproject.toml
+uv add pytest
+uv add torch --extra cpu
 
 # 更新依赖
-pixi update
+uv sync --upgrade
 ```
 
-### Pixi 优势
+### UV 优势
 
-- **自动版本管理**：无需手动管理 Python 版本
+- **超快速度**：依赖解析和安装比pip快10-100倍
+- **自动版本管理**：无需手动管理 Python 版本 (>=3.12)
 - **跨平台兼容**：支持 Linux、Windows、macOS
 - **环境隔离**：不同项目使用不同依赖版本
-- **快速安装**：并行下载和安装依赖
-- **GPU 支持**：自动处理 CUDA 依赖
+- **现代化锁文件**：使用 uv.lock 确保可重现构建
+- **GPU 支持**：支持CPU和GPU两种环境配置
+- **完全兼容**：与pip完全兼容
 
 ---
 
@@ -131,8 +149,8 @@ pip install -e .
 ### 快速验证
 
 ```bash
-# 使用 Pixi
-pixi run python -c "
+# 使用 UV 环境
+python -c "
 import torch
 import numpy as np
 import pandas as pd
@@ -144,8 +162,8 @@ print(f'✅ NumPy版本: {np.__version__}')
 print(f'✅ GPU可用: {torch.cuda.is_available()}')
 "
 
-# 使用传统环境
-python -c "
+# 或者使用 uv run
+uv run python -c "
 import torch
 import numpy as np
 import pandas as pd
@@ -180,20 +198,32 @@ except Exception as e:
 
 ## 🛠️ 开发环境设置
 
-### 使用 Pixi 开发
+### 使用 UV 开发
 
 ```bash
-# 添加开发依赖
-pixi add --feature dev pytest black ruff mypy
+# 安装开发版本 (包含所有开发工具)
+uv sync --extra dev
+
+# 或者逐个添加开发依赖
+uv add pytest --dev
+uv add black --dev
+uv add ruff --dev
+uv add mypy --dev
 
 # 运行测试
-pixi run pytest
+uv run pytest
 
 # 代码格式化
-pixi run black .
+uv run black .
 
 # 代码检查
-pixi run ruff check .
+uv run ruff check .
+
+# 自动修复代码格式问题
+uv run ruff check . --fix
+
+# 类型检查
+uv run mypy src/
 ```
 
 ### 传统开发环境
@@ -210,6 +240,9 @@ black .
 
 # 代码检查
 ruff check .
+
+# 自动修复代码格式问题
+ruff check . --fix
 ```
 
 ---
@@ -233,13 +266,13 @@ ruff check .
 
 ### 常见问题
 
-1. **Pixi 安装失败**
+1. **UV 安装失败**
    ```bash
    # 检查网络连接
-   curl -I https://pixi.sh/install.sh
+   curl -I https://astral.sh/uv/install.sh
 
    # 使用代理 (如果需要)
-   https_proxy=your_proxy curl -fsSL https://pixi.sh/install.sh | bash
+   https_proxy=your_proxy curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
 2. **GPU 环境无法使用 CUDA**
@@ -248,27 +281,45 @@ ruff check .
    nvidia-smi
 
    # 检查 PyTorch CUDA 支持
-   pixi run python -c "import torch; print(torch.cuda.is_available())"
+   python -c "import torch; print(torch.cuda.is_available())"
+
+   # 或者使用 uv run
+   uv run python -c "import torch; print(torch.cuda.is_available())"
    ```
 
 3. **依赖冲突**
    ```bash
-   # 清理并重新安装
-   pixi clean
-   pixi install
+   # 使用UV清理并重新同步
+   uv sync --refresh
+
+   # 或者强制重新安装
+   uv sync --reinstall
 
    # 或者使用传统方式
    pip install --upgrade pip
-   pip install -r requirements-cpu.txt --force-reinstall
+   pip install -e . --force-reinstall
    ```
 
 4. **导入错误**
    ```bash
    # 检查安装路径
-   pixi run python -c "import graspkit; print(graspkit.__file__)"
+   uv run python -c "import graspkit; print(graspkit.__file__)"
 
-   # 确保开发模式安装
-   pixi run pip install -e .
+   # 确保包已正确同步
+   uv sync
+
+   # 检查虚拟环境
+   uv venv --seed
+   uv sync
+   ```
+
+5. **虚拟环境激活失败**
+   ```bash
+   # Windows: 确保使用PowerShell或CMD
+   .venv\Scripts\activate
+
+   # Linux/macOS: 确保使用bash或zsh
+   source .venv/bin/activate
    ```
 
 ### 获取帮助
@@ -276,15 +327,16 @@ ruff check .
 如果遇到安装问题，请提供以下信息：
 - 操作系统版本
 - Python 版本
-- 使用的安装方法 (Pixi/pip)
+- 使用的安装方法 (UV/pip)
 - 错误信息完整输出
-- `pixi info` 或 `pip list` 的输出
+- `uv --version` 或 `pip list` 的输出
 
 ---
 
 ## 📚 相关文档
 
 - [项目主页](https://github.com/YenochQin/graspkit-tools)
-- [Pixi 官方文档](https://pixi.sh)
+- [UV 官方文档](https://docs.astral.sh/uv/)
+- [构建说明](BUILD_INSTRUCTIONS.md)
 - [API 文档](docs/)
 - [使用示例](examples/)
