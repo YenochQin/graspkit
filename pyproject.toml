@@ -75,6 +75,7 @@ gpu = [
     # Install with: uv sync --extra gpu
 ]
 dev = [
+    # Use CPU-only PyTorch for development to avoid CUDA dependencies
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "torchaudio>=2.0.0",
@@ -92,7 +93,7 @@ dev = [
     "build>=0.10.0",
     "twine>=4.0.0",
     "wheel>=0.40.0",
-    # Install with: uv sync --extra dev
+    # Install with: uv sync --extra dev (CPU-only)
 ]
 all = [
     "torch>=2.0.0",
