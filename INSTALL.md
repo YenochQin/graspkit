@@ -2,45 +2,44 @@
 
 本项目提供了多种安装方式，推荐使用 Pixi 进行现代化的环境管理。
 
-## 🚀 方法一：使用 Pixi (推荐)
+#### 方法一：使用UV (推荐)
+UV 是超快速的Python包和项目管理器，提供极快的依赖解析和安装。
 
-Pixi 是现代化的包管理器，支持跨平台环境管理和依赖解析，是安装此项目的最佳方式。
+```bash
+# 安装 UV (如果尚未安装)
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-### 安装步骤
+# 克隆项目并进入目录
+git clone https://github.com/YenochQin/graspkit-tools.git
+cd graspkit-tools
 
-1. **安装 Pixi**
-   ```bash
-   # Linux/macOS
-   curl -fsSL https://pixi.sh/install.sh | bash
+# 创建虚拟环境
+uv venv
 
-   # Windows (PowerShell)
-   iwr -useb https://pixi.sh/install.ps1 | iex
-   ```
+# 激活环境
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 
-2. **克隆项目**
-   ```bash
-   git clone https://github.com/YenochQin/graspkit-tools.git
-   cd graspkit-tools
-   ```
+# 安装依赖
+uv pip install -e .
 
-3. **安装环境**
-   ```bash
-   # 安装默认 CPU 环境
-   pixi install
+# 运行特定命令
+uv run python your_script.py
+```
 
-   # 或者安装 GPU 环境 (需要 NVIDIA GPU 和 CUDA)
-   pixi install --feature gpu
-   ```
-
-4. **激活环境并使用**
-   ```bash
-   # 激活环境 (进入交互式 shell)
-   pixi shell
-
-   # 或者直接运行命令
-   pixi run python your_script.py
-   pixi run python -c "import graspkit; print('✅ 安装成功!')"
-   ```
+**UV 环境特性**：
+- 超快的依赖解析和安装（比pip快10-100倍）
+- 自动管理Python版本 (>=3.12)
+- 支持CPU和GPU两种环境配置
+- 跨平台支持 (Linux, Windows, macOS)
+- 现代化的锁文件机制 (uv.lock)
+- 隔离的开发环境
+- 与pip完全兼容
 
 ### 环境管理
 
