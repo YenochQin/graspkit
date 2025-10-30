@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "grasp-kit"
 version = '2.8.dev1'
 # version = '2.6.1'
-description = "A Python package for processing and analyzing GRASP program calculation results with ML-driven CSF selection"
+description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
 requires-python = ">= 3.12"
@@ -21,6 +21,9 @@ dependencies = [
   # 机器学习库
   "scikit-learn>=1.3.0",
   "imbalanced-learn>=0.11.0",
+
+  "torch>=2.7.0",
+  "torchvision>=0.22.0",
 
   # 数据可视化
   "seaborn>=0.11.0",
@@ -60,7 +63,7 @@ cpu = [
 ]
 
 # GPU-optimized installation (for NVIDIA GPUs with CUDA)
-cu128 = [
+gpu = [
     "torch>=2.7.0",
     "torchvision>=0.22.0",
 ]
@@ -101,22 +104,23 @@ all = [
 ]
 
 [tool.uv]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+extra-index-url = ["https://pypi.org/simple"]
 conflicts = [
   [
     { extra = "cpu" },
-    { extra = "cu128" },
+    { extra = "gpu" },
   ],
 ]
-default-index = "tsinghua"
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu128", extra = "gpu" },
 ]
 torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu128", extra = "gpu" },
 ]
 
 [[tool.uv.index]]
@@ -128,10 +132,6 @@ explicit = true
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
-
-[[tool.uv.indexes]]
-tsinghua = "https://pypi.tuna.tsinghua.edu.cn/simple"
-aliyun = "https://mirrors.aliyun.com/pypi/simple/"
 
 [tool.hatch.version]
 path = "src/graspkit/version.py"
