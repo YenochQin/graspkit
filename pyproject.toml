@@ -9,7 +9,7 @@ version = '2.8.dev1'
 description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
-requires-python = ">= 3.12,<3.14"
+requires-python = ">= 3.12.6,<3.14"
 
 dependencies = [
   # 核心数据处理库
@@ -146,17 +146,7 @@ classifiers = [
   "Development Status :: 4 - Beta",
 
   # Specify the Python versions you support here.
-  "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-
-  # Operating System Support
-  "Operating System :: OS Independent",
-  "Operating System :: Microsoft :: Windows :: Windows 10",
-  "Operating System :: Microsoft :: Windows :: Windows 11", 
-  "Operating System :: POSIX :: Linux",
-  "Operating System :: MacOS :: MacOS X",
 
   # Topic classification
   "Topic :: Scientific/Engineering :: Physics",
