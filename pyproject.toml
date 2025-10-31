@@ -49,16 +49,16 @@ dependencies = [
 # Use with: uv sync --extra cpu or uv sync --extra gpu
 [project.optional-dependencies]
 
-# CPU-optimized installation
+# CPU-optimized installation  
 cpu = [
-    "torch>=2.7.0",
-    "torchvision>=0.22.0",
+    "torch>=2.9.0",
+    "torchvision>=0.19.0",
 ]
 
 # GPU-optimized installation (for NVIDIA GPUs with CUDA)
 gpu = [
-    "torch>=2.7.0",
-    "torchvision>=0.22.0",
+    "torch>=2.9.0", 
+    "torchvision>=0.19.0",
 ]
 dev = [
     # 开发工具依赖（不包含PyTorch，需要额外指定 --extra cpu 或 --extra gpu）
@@ -79,8 +79,8 @@ dev = [
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
-    "torch>=2.7.0",
-    "torchvision>=0.22.0",
+    "torch>=2.9.0",
+    "torchvision>=0.19.0",
     "pytest>=7.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
