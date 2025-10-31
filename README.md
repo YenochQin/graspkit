@@ -41,15 +41,20 @@ uv venv
 # macOS/Linux
 source .venv/bin/activate
 
-# Install dependencies and package (CPU version)
+# Install dependencies - Must choose CPU or GPU version
 # Note: Tsinghua mirror is automatically configured in pyproject.toml for faster downloads
-uv sync
 
-# Or install with GPU support (if you have NVIDIA GPU with CUDA)
+# CPU version (recommended for compatibility)
+uv sync --extra cpu
+
+# GPU version (if you have NVIDIA GPU with CUDA)
 uv sync --extra gpu
 
-# For development
-uv sync --extra dev
+# Development environment with CPU version (recommended)
+uv sync --extra dev --extra cpu
+
+# Development environment with GPU version
+uv sync --extra dev --extra gpu
 ```
 
 **UV Environment Features**:
@@ -114,4 +119,3 @@ ruff check . --fix
 ```
 
 For more detailed development instructions, see [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md).
-

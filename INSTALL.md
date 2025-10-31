@@ -30,14 +30,18 @@ source .venv/bin/activate
 # export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
 
 
-# 安装依赖 (CPU版本)
-uv sync
+# 安装依赖 - 必须选择CPU或GPU版本
+# CPU版本 (推荐，兼容性好)
+uv sync --extra cpu
 
-# 或者安装GPU版本 (如果有NVIDIA GPU和CUDA)
+# GPU版本 (如果有NVIDIA GPU和CUDA)
 uv sync --extra gpu
 
-# 开发版本
-uv sync --extra dev
+# 开发环境 CPU版本
+uv sync --extra dev --extra cpu
+
+# 开发环境 GPU版本
+uv sync --extra dev --extra gpu
 
 # 运行特定命令
 uv run python your_script.py
@@ -67,14 +71,17 @@ uv venv --python 3.12
 # 如果需要临时覆盖配置，可以设置环境变量：
 # export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
 
-# 同步依赖 (使用uv.lock文件)
-uv sync
-
-# 安装特定额外依赖
+# 同步依赖 (使用uv.lock文件) - 注意：需要指定CPU或GPU
+# 基础安装无法工作，必须选择以下之一：
 uv sync --extra cpu    # CPU版本
 uv sync --extra gpu    # GPU版本
-uv sync --extra dev    # 开发版本
-uv sync --all-extras   # 所有额外依赖
+
+# 开发环境安装
+uv sync --extra dev --extra cpu    # 开发环境CPU版本
+uv sync --extra dev --extra gpu    # 开发环境GPU版本
+
+# 安装所有额外依赖 (包含GPU版PyTorch)
+uv sync --all-extras
 
 # 添加新的依赖到pyproject.toml
 uv add pytest
@@ -242,8 +249,12 @@ except Exception as e:
 ### 使用 UV 开发
 
 ```bash
-# 安装开发版本 (包含所有开发工具)
-uv sync --extra dev
+# 安装开发版本 (包含所有开发工具) - 必须指定CPU或GPU
+# CPU版本开发环境 (推荐)
+uv sync --extra dev --extra cpu
+
+# GPU版本开发环境
+uv sync --extra dev --extra gpu
 
 # 或者逐个添加开发依赖
 uv add pytest --dev
