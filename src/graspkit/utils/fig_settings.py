@@ -482,7 +482,7 @@ def calculate_subplot_figure_size(base_size, layout_name, spacing='normal'):
 def create_multi_subplot_figure(layout='2x2', base_size='single_column',
                                spacing='normal', color_scheme='default',
                                legend_size='medium', sharex=False, sharey=False,
-                               squeeze=True, subplot_kw=None, gridspec_kw=None):
+                               squeeze=False, subplot_kw=None, gridspec_kw=None):
     """
     创建多子图
 
@@ -494,7 +494,7 @@ def create_multi_subplot_figure(layout='2x2', base_size='single_column',
         legend_size (str): 图例大小预设
         sharex (bool or str): 是否共享x轴
         sharey (bool or str): 是否共享y轴
-        squeeze (bool): 是否压缩单行/单列的子图
+        squeeze (bool): 是否压缩单行/单列的子图（默认False，保持2维数组）
         subplot_kw (dict): 传递给subplot的关键字参数
         gridspec_kw (dict): 传递给GridSpec的关键字参数
 
@@ -528,6 +528,90 @@ def create_multi_subplot_figure(layout='2x2', base_size='single_column',
     set_legend_size(legend_size)
 
     return fig, axes
+
+def add_reference_lines_to_subplots(axes, layout='2x2', y_values=None, x_values=None,
+                                   y_styles=None, x_styles=None, y_colors=None, x_colors=None,
+                                   y_labels=None, x_labels=None):
+    """
+    为所有子图添加参考线（如y=0的辅助线）
+
+    Args:
+        axes: matplotlib axes对象或axes数组
+        layout (str): 布局名称
+        y_values (float or list): y轴参考线的值（如[0]表示y=0线）
+        x_values (float or list): x轴参考线的值
+        y_styles (str or list): y轴参考线样式（如'--', ':', '-'）
+        x_styles (str or list): x轴参考线样式
+        y_colors (str or list): y轴参考线颜色
+        x_colors (str or list): x轴参考线颜色
+        y_labels (str or list): y轴参考线标签
+        x_labels (str or list): x轴参考线标签
+
+    Returns:
+        bool: 设置是否成功
+    """
+    try:
+        nrows, ncols = get_subplot_layout(layout)
+
+        # 确保axes是数组格式
+        if nrows == 1 and ncols == 1:
+            axes = np.array([[axes]])
+        elif nrows == 1:
+            axes = np.array([axes])
+        elif ncols == 1:
+            axes = np.array([axes]).reshape(-1, 1)
+
+        # 设置默认值
+        if y_values is None:
+            y_values = [0]  # 默认添加y=0线
+        if x_values is None:
+            x_values = []
+        if y_styles is None:
+            y_styles = ['--']
+        if x_styles is None:
+            x_styles = ['--']
+        if y_colors is None:
+            y_colors = ['gray']
+        if x_colors is None:
+            x_colors = ['gray']
+        if y_labels is None:
+            y_labels = [None] * len(y_values)
+        if x_labels is None:
+            x_labels = [None] * len(x_values)
+
+        # 确保样式、颜色、标签列表长度匹配
+        if isinstance(y_styles, str):
+            y_styles = [y_styles] * len(y_values)
+        if isinstance(x_styles, str):
+            x_styles = [x_styles] * len(x_values)
+        if isinstance(y_colors, str):
+            y_colors = [y_colors] * len(y_values)
+        if isinstance(x_colors, str):
+            x_colors = [x_colors] * len(x_values)
+        if isinstance(y_labels, str):
+            y_labels = [y_labels] * len(y_values)
+        if isinstance(x_labels, str):
+            x_labels = [x_labels] * len(x_values)
+
+        # 为每个子图添加参考线
+        for i in range(nrows):
+            for j in range(ncols):
+                ax = axes[i, j]
+
+                # 添加y轴参考线
+                for y_val, style, color, label in zip(y_values, y_styles, y_colors, y_labels):
+                    ax.axhline(y=y_val, color=color, linestyle=style, alpha=0.7,
+                             linewidth=1, label=label)
+
+                # 添加x轴参考线
+                for x_val, style, color, label in zip(x_values, x_styles, x_colors, x_labels):
+                    ax.axvline(x=x_val, color=color, linestyle=style, alpha=0.7,
+                             linewidth=1, label=label)
+
+        return True
+    except Exception as e:
+        warnings.warn(f"Failed to add reference lines: {e}")
+        return False
 
 def configure_subplot_grid(fig, axes, layout='2x2',
                           title=None, subtitle=None,
@@ -770,6 +854,15 @@ def demo_multi_subplot_usage():
             fig1, axes1, layout='2x2',
             title=['Sine & Cosine', 'Random Scatter', 'Bar Chart', 'Heatmap'],
             suptitle='Multi-Subplot Demo'
+        )
+
+        # 为所有子图添加y=0的参考线
+        add_reference_lines_to_subplots(
+            axes1, layout='2x2',
+            y_values=[0],  # 添加y=0线
+            y_styles='--',  # 虚线样式
+            y_colors='gray',  # 灰色
+            y_labels='y=0'  # 标签（可选）
         )
 
         # 为热图子图添加颜色条（仅针对该子图，匹配热图高度）
