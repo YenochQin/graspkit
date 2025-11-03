@@ -12,12 +12,17 @@
 - 针对不同用途的保存设置
 - LaTeX兼容性设置
 - 图表类型专用优化
+- 多子图布局和配置
+- 多子图间距和尺寸管理
+- 共享颜色条和图例
+- 多子图保存优化
 """
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import warnings
 from cycler import cycler
+import numpy as np
 
 def configure_matplotlib_for_publication():
     """
@@ -128,6 +133,48 @@ FIGURE_SIZES = {
     'tall': (3.0, 6.0),               # 高图
     'poster': (12.0, 8.0),            # 海报尺寸
     'default': (6.4, 4.8)             # 默认尺寸
+}
+
+# 多子图布局预设
+SUBPLOT_LAYOUTS = {
+    '1x1': (1, 1),                    # 单图
+    '1x2': (1, 2),                    # 1行2列
+    '2x1': (2, 1),                    # 2行1列
+    '2x2': (2, 2),                    # 2行2列
+    '2x3': (2, 3),                    # 2行3列
+    '3x2': (3, 2),                    # 3行2列
+    '3x3': (3, 3),                    # 3行3列
+    '2x4': (2, 4),                    # 2行4列
+    '4x2': (4, 2),                    # 4行2列
+    '1x3': (1, 3),                    # 1行3列
+    '3x1': (3, 1),                    # 3行1列
+    '4x4': (4, 4),                    # 4行4列
+    'custom': None                    # 自定义布局
+}
+
+# 多子图间距预设（单位：英寸）
+SUBPLOT_SPACING = {
+    'tight': {'wspace': 0.1, 'hspace': 0.1},      # 紧密间距
+    'compact': {'wspace': 0.2, 'hspace': 0.2},    # 紧凑间距
+    'normal': {'wspace': 0.3, 'hspace': 0.3},     # 正常间距
+    'comfortable': {'wspace': 0.4, 'hspace': 0.4}, # 舒适间距
+    'spacious': {'wspace': 0.5, 'hspace': 0.5}    # 宽松间距
+}
+
+# 多子图尺寸调整因子
+SUBPLOT_SIZE_FACTORS = {
+    '1x1': 1.0,
+    '1x2': 2.0,
+    '2x1': 2.0,
+    '2x2': 2.0,
+    '2x3': 3.0,
+    '3x2': 3.0,
+    '3x3': 3.0,
+    '2x4': 4.0,
+    '4x2': 4.0,
+    '1x3': 3.0,
+    '3x1': 3.0,
+    '4x4': 4.0
 }
 
 # 保存格式设置
@@ -380,8 +427,405 @@ def create_publication_figure(figsize='single_column', color_scheme='default', l
 
     return fig, ax
 
+def get_subplot_layout(layout_name):
+    """
+    获取多子图布局配置
+
+    Args:
+        layout_name (str): 布局名称 ('1x1', '1x2', '2x2', '2x3', '3x2', '3x3', etc.)
+
+    Returns:
+        tuple: (nrows, ncols) 行数和列数，如果布局不存在则返回 (1, 1)
+    """
+    if layout_name in SUBPLOT_LAYOUTS:
+        return SUBPLOT_LAYOUTS[layout_name]
+    else:
+        warnings.warn(f"Unknown subplot layout: {layout_name}, using 1x1")
+        return SUBPLOT_LAYOUTS['1x1']
+
+def calculate_subplot_figure_size(base_size, layout_name, spacing='normal'):
+    """
+    计算多子图的整体尺寸
+
+    Args:
+        base_size (str or tuple): 基础尺寸名称或自定义尺寸 (width, height)
+        layout_name (str): 布局名称
+        spacing (str): 间距设置 ('tight', 'compact', 'normal', 'comfortable', 'spacious')
+
+    Returns:
+        tuple: (width, height) 调整后的图表尺寸
+    """
+    # 获取基础尺寸
+    if isinstance(base_size, str):
+        if base_size in FIGURE_SIZES:
+            base_width, base_height = FIGURE_SIZES[base_size]
+        else:
+            base_width, base_height = FIGURE_SIZES['default']
+    else:
+        base_width, base_height = base_size
+
+    # 获取布局
+    nrows, ncols = get_subplot_layout(layout_name)
+
+    # 获取间距设置
+    if spacing in SUBPLOT_SPACING:
+        wspace, hspace = SUBPLOT_SPACING[spacing]['wspace'], SUBPLOT_SPACING[spacing]['hspace']
+    else:
+        wspace, hspace = SUBPLOT_SPACING['normal']['wspace'], SUBPLOT_SPACING['normal']['hspace']
+
+    # 计算调整后的尺寸
+    width = base_width * ncols + wspace * (ncols - 1)
+    height = base_height * nrows + hspace * (nrows - 1)
+
+    return (width, height)
+
+def create_multi_subplot_figure(layout='2x2', base_size='single_column',
+                               spacing='normal', color_scheme='default',
+                               legend_size='medium', sharex=False, sharey=False,
+                               squeeze=True, subplot_kw=None, gridspec_kw=None):
+    """
+    创建多子图
+
+    Args:
+        layout (str): 布局名称 ('1x1', '1x2', '2x1', '2x2', '2x3', '3x2', '3x3', etc.)
+        base_size (str or tuple): 基础尺寸名称或自定义尺寸
+        spacing (str): 间距设置 ('tight', 'compact', 'normal', 'comfortable', 'spacious')
+        color_scheme (str): 配色方案名称
+        legend_size (str): 图例大小预设
+        sharex (bool or str): 是否共享x轴
+        sharey (bool or str): 是否共享y轴
+        squeeze (bool): 是否压缩单行/单列的子图
+        subplot_kw (dict): 传递给subplot的关键字参数
+        gridspec_kw (dict): 传递给GridSpec的关键字参数
+
+    Returns:
+        tuple: (fig, axes) matplotlib figure和axes对象
+    """
+    # 获取布局
+    nrows, ncols = get_subplot_layout(layout)
+
+    # 计算整体尺寸
+    figsize = calculate_subplot_figure_size(base_size, layout, spacing)
+
+    # 准备gridspec参数
+    if gridspec_kw is None:
+        gridspec_kw = {}
+
+    # 添加间距设置
+    if spacing in SUBPLOT_SPACING:
+        gridspec_kw.setdefault('wspace', SUBPLOT_SPACING[spacing]['wspace'])
+        gridspec_kw.setdefault('hspace', SUBPLOT_SPACING[spacing]['hspace'])
+
+    # 创建多子图
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize,
+                            sharex=sharex, sharey=sharey, squeeze=squeeze,
+                            subplot_kw=subplot_kw, gridspec_kw=gridspec_kw)
+
+    # 设置配色方案
+    set_color_scheme(color_scheme)
+
+    # 设置图例大小
+    set_legend_size(legend_size)
+
+    return fig, axes
+
+def configure_subplot_grid(fig, axes, layout='2x2',
+                          title=None, subtitle=None,
+                          xlabel=None, ylabel=None,
+                          suptitle=None, suptitle_fontsize=16):
+    """
+    配置多子图的网格属性
+
+    Args:
+        fig: matplotlib figure对象
+        axes: matplotlib axes对象或axes数组
+        layout (str): 布局名称
+        title (str or list): 主标题或标题列表
+        subtitle (str or list): 副标题或副标题列表
+        xlabel (str or list): x轴标签或标签列表
+        ylabel (str or list): y轴标签或标签列表
+        suptitle (str): 总标题
+        suptitle_fontsize (int): 总标题字体大小
+
+    Returns:
+        bool: 配置是否成功
+    """
+    try:
+        nrows, ncols = get_subplot_layout(layout)
+
+        # 确保axes是数组格式
+        if nrows == 1 and ncols == 1:
+            axes = np.array([[axes]])
+        elif nrows == 1:
+            axes = np.array([axes])
+        elif ncols == 1:
+            axes = np.array([axes]).reshape(-1, 1)
+
+        # 设置总标题
+        if suptitle:
+            fig.suptitle(suptitle, fontsize=suptitle_fontsize, fontweight='bold')
+
+        # 为每个子图设置属性
+        for i in range(nrows):
+            for j in range(ncols):
+                ax = axes[i, j]
+
+                # 设置标题
+                if title:
+                    if isinstance(title, list):
+                        idx = i * ncols + j
+                        if idx < len(title) and title[idx]:
+                            ax.set_title(title[idx])
+                    else:
+                        ax.set_title(title)
+
+                # 设置副标题
+                if subtitle:
+                    if isinstance(subtitle, list):
+                        idx = i * ncols + j
+                        if idx < len(subtitle) and subtitle[idx]:
+                            ax.set_title(subtitle[idx], loc='right', fontsize=10, style='italic')
+                    else:
+                        ax.set_title(subtitle, loc='right', fontsize=10, style='italic')
+
+                # 设置x轴标签
+                if xlabel:
+                    if isinstance(xlabel, list):
+                        idx = i * ncols + j
+                        if idx < len(xlabel) and xlabel[idx]:
+                            ax.set_xlabel(xlabel[idx])
+                    else:
+                        ax.set_xlabel(xlabel)
+
+                # 设置y轴标签
+                if ylabel:
+                    if isinstance(ylabel, list):
+                        idx = i * ncols + j
+                        if idx < len(ylabel) and ylabel[idx]:
+                            ax.set_ylabel(ylabel[idx])
+                    else:
+                        ax.set_ylabel(ylabel)
+
+        return True
+    except Exception as e:
+        warnings.warn(f"Failed to configure subplot grid: {e}")
+        return False
+
+def create_shared_colorbar(fig, axes, cbar_label=None, orientation='vertical',
+                          location='right', shrink=0.8, pad=0.05):
+    """
+    为多子图创建共享的颜色条
+
+    Args:
+        fig: matplotlib figure对象
+        axes: matplotlib axes对象或axes数组
+        cbar_label (str): 颜色条标签
+        orientation (str): 方向 ('vertical' 或 'horizontal')
+        location (str): 位置 ('right', 'left', 'bottom', 'top')
+        shrink (float): 收缩因子
+        pad (float): 间距
+
+    Returns:
+        matplotlib Colorbar对象或None
+    """
+    try:
+        import matplotlib.cm as cm
+        from matplotlib.colorbar import Colorbar
+
+        # 创建colorbar axes
+        if orientation == 'vertical':
+            if location in ['right', 'left']:
+                cax = fig.add_axes([0.92, 0.1, 0.02, 0.8]) if location == 'right' else fig.add_axes([0.06, 0.1, 0.02, 0.8])
+            else:
+                cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
+        else:  # horizontal
+            if location in ['top', 'bottom']:
+                cax = fig.add_axes([0.1, 0.92, 0.8, 0.02]) if location == 'top' else fig.add_axes([0.1, 0.06, 0.8, 0.02])
+            else:
+                cax = fig.add_axes([0.1, 0.06, 0.8, 0.02])
+
+        # 这里需要根据实际的contourf或imshow对象来创建colorbar
+        # 由于没有具体的mappable对象，这里返回cax让用户自行创建colorbar
+        return cax
+    except Exception as e:
+        warnings.warn(f"Failed to create shared colorbar: {e}")
+        return None
+
+def save_multi_subplot_figure(fig, filename, layout='2x2', purpose='publication',
+                            tight_layout=True, **kwargs):
+    """
+    保存多子图
+
+    Args:
+        fig: matplotlib figure对象
+        filename (str): 保存文件名
+        layout (str): 布局名称（用于自动调整保存参数）
+        purpose (str): 用途 ('publication', 'presentation', 'web', 'latex_pdf', 'vector')
+        tight_layout (bool): 是否使用tight_layout
+        **kwargs: 其他保存参数
+
+    Returns:
+        bool: 保存是否成功
+    """
+    try:
+        # 自动调整布局
+        if tight_layout:
+            fig.tight_layout()
+
+        # 根据布局调整保存参数
+        nrows, ncols = get_subplot_layout(layout)
+
+        # 多子图通常需要更高的分辨率
+        if nrows * ncols > 4:
+            if purpose in SAVE_FORMATS:
+                settings = SAVE_FORMATS[purpose]
+                if settings['dpi'] and settings['dpi'] < 300:
+                    settings['dpi'] = 300  # 提高多子图的分辨率
+
+        return save_figure(fig, filename, purpose, **kwargs)
+    except Exception as e:
+        warnings.warn(f"Failed to save multi-subplot figure: {e}")
+        return False
+
+def optimize_for_multi_subplot(plot_types, layout='2x2'):
+    """
+    为多子图的不同图表类型进行优化设置
+
+    Args:
+        plot_types (str or list): 图表类型或类型列表 ('line', 'scatter', 'bar', 'heatmap', 'contour')
+        layout (str): 布局名称
+
+    Returns:
+        bool: 设置是否成功
+    """
+    try:
+        nrows, ncols = get_subplot_layout(layout)
+
+        if isinstance(plot_types, str):
+            plot_types = [plot_types] * (nrows * ncols)
+
+        # 为多子图优化字体大小
+        font_scale = min(1.0, 2.0 / max(nrows, ncols))
+        plt.rcParams['font.size'] = int(12 * font_scale)
+        plt.rcParams['axes.labelsize'] = int(10 * font_scale)
+        plt.rcParams['xtick.labelsize'] = int(8 * font_scale)
+        plt.rcParams['ytick.labelsize'] = int(8 * font_scale)
+        plt.rcParams['legend.fontsize'] = int(8 * font_scale)
+        plt.rcParams['axes.titlesize'] = int(10 * font_scale)
+
+        # 优化线条和标记大小
+        marker_scale = min(1.0, 1.5 / max(nrows, ncols))
+        plt.rcParams['lines.markersize'] = int(6 * marker_scale)
+        plt.rcParams['lines.linewidth'] = max(0.5, 1.5 * marker_scale)
+
+        return True
+    except Exception as e:
+        warnings.warn(f"Failed to optimize for multi-subplot: {e}")
+        return False
+
+def demo_multi_subplot_usage():
+    """
+    多子图功能使用示例
+
+    演示如何使用多子图相关的功能：
+    - 创建2x2布局的多子图
+    - 设置不同的间距和尺寸
+    - 配置标题和标签
+    - 保存多子图
+
+    Returns:
+        bool: 示例是否成功执行
+    """
+    try:
+        # 示例1: 创建2x2布局的多子图
+        fig1, axes1 = create_multi_subplot_figure(
+            layout='2x2',
+            base_size='single_column',
+            spacing='normal',
+            color_scheme='nature'
+        )
+
+        # 为每个子图添加示例数据
+        x = np.linspace(0, 10, 100)
+
+        # 子图1: 线图
+        axes1[0, 0].plot(x, np.sin(x), label='sin(x)')
+        axes1[0, 0].plot(x, np.cos(x), label='cos(x)')
+        axes1[0, 0].legend()
+
+        # 子图2: 散点图
+        axes1[0, 1].scatter(x[:50], np.random.random(50), alpha=0.6)
+
+        # 子图3: 柱状图
+        categories = ['A', 'B', 'C', 'D']
+        values = np.random.random(4)
+        axes1[1, 0].bar(categories, values)
+
+        # 子图4: 热图示例
+        data = np.random.random((10, 10))
+        im = axes1[1, 1].imshow(data, cmap='viridis')
+
+        # 配置多子图网格
+        configure_subplot_grid(
+            fig1, axes1, layout='2x2',
+            title=['Sine & Cosine', 'Random Scatter', 'Bar Chart', 'Heatmap'],
+            suptitle='Multi-Subplot Demo'
+        )
+
+        # 为热图子图添加颜色条（仅针对该子图，匹配热图高度）
+        cbar = fig1.colorbar(im, ax=axes1[1, 1], shrink=0.99, pad=0.05, aspect=30)
+        cbar.set_label('Values', fontsize=10)
+
+        # 保存多子图
+        save_multi_subplot_figure(fig1, 'demo_multi_subplot', layout='2x2', purpose='publication')
+        plt.close(fig1)
+
+        # 示例2: 1x3布局的不同间距
+        fig2, axes2 = create_multi_subplot_figure(
+            layout='1x3',
+            base_size='double_column',
+            spacing='compact',
+            color_scheme='science'
+        )
+
+        # 配置标题
+        configure_subplot_grid(
+            fig2, axes2, layout='1x3',
+            title=['Plot 1', 'Plot 2', 'Plot 3'],
+            suptitle='1x3 Layout with Compact Spacing'
+        )
+
+        save_multi_subplot_figure(fig2, 'demo_1x3_subplot', layout='1x3', purpose='presentation')
+        plt.close(fig2)
+
+        print("Multi-subplot demo completed successfully!")
+        return True
+
+    except Exception as e:
+        warnings.warn(f"Demo failed: {e}")
+        return False
+
+
 # 自动配置matplotlib（当模块被导入时）
 if __name__ != "__main__":
     success = configure_matplotlib_for_publication()
     if not success:
         disable_font_warnings()
+
+# 主函数入口（用于运行示例）
+if __name__ == "__main__":
+    print("Running figure settings demo...")
+    print(f"Available subplot layouts: {list(SUBPLOT_LAYOUTS.keys())}")
+    print(f"Available spacing presets: {list(SUBPLOT_SPACING.keys())}")
+    print(f"Available figure sizes: {list(FIGURE_SIZES.keys())}")
+    print(f"Available color schemes: {list(JOURNAL_COLOR_SCHEMES.keys())}")
+    print()
+
+    # 运行多子图示例
+    demo_multi_subplot_usage()
+
+    print()
+    print("Figure settings module loaded successfully!")
+    print("Use create_multi_subplot_figure() to create multi-subplot layouts.")
+    print("Use configure_subplot_grid() to configure subplot properties.")
+    print("Use save_multi_subplot_figure() to save multi-subplot figures.")
