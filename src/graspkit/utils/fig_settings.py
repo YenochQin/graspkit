@@ -23,6 +23,7 @@ import matplotlib as mpl
 import warnings
 from cycler import cycler
 import numpy as np
+import pandas as pd
 
 def configure_matplotlib_for_publication():
     """
@@ -806,6 +807,126 @@ def optimize_for_multi_subplot(plot_types, layout='2x2'):
     except Exception as e:
         warnings.warn(f"Failed to optimize for multi-subplot: {e}")
         return False
+    
+
+def auto_plot_wavefunction_comparison(
+                                    data_list: list[pd.DataFrame],
+                                    column_names: list[str],
+                                    x_col: str = 'r(a.u)',
+                                    labels: list[str] | None = None,
+                                    layout: str = '2x4',
+                                    alpha: float = 0.75,
+                                    max_x: int | None = None,
+                                    xscale: str = 'symlog',
+                                    linthresh: int = 1,
+                                    suptitle: str = 'Wavefunction Comparison',
+                                    colors  = None,
+                                    linestyles: list[str] | None = None
+                                ):
+    """
+    自动绘制波函数对比图的通用函数，支持多个DataFrame对比
+
+    Args:
+        data_list: 数据集列表，包含多个DataFrame [data1, data2, data3, ...]
+        column_names: 要绘制的列名列表
+        x_col: x轴数据的列名 (默认: 'r(a.u)')
+        labels: 数据集标签列表，如 ['old', 'new', 'modified'] (默认: ['Data 1', 'Data 2', ...])
+        layout: 子图布局 (默认: '2x4')
+        alpha: 透明度 (默认: 0.75)
+        max_x: x轴最大值，如果为None则自动计算
+        xscale: x轴比例类型 (默认: 'symlog')
+        linthresh: symlog的线性阈值 (默认: 1)
+        suptitle: 总标题 (默认: 'Wavefunction Comparison')
+        colors: 线条颜色列表，如 ['blue', 'red', 'green'] (默认: 自动分配)
+        linestyles: 线条样式列表，如 ['-', '--', '-.'] (默认: 全为实线)
+
+    Returns:
+        fig, axes: matplotlib的figure和axes对象
+    """
+
+    # 创建多子图
+    fig, axes = create_multi_subplot_figure(
+        layout=layout,
+        base_size='single_column',
+        spacing='normal',
+        color_scheme='nature'
+    )
+
+    # 验证输入
+    if not isinstance(data_list, (list, tuple)):
+        raise ValueError("data_list must be a list or tuple of DataFrames")
+
+    n_datasets = len(data_list)
+
+    # 设置默认标签
+    if labels is None:
+        labels = [f'Data {i+1}' for i in range(n_datasets)]
+    elif len(labels) != n_datasets:
+        raise ValueError(f"Number of labels ({len(labels)}) must match number of datasets ({n_datasets})")
+
+    # 设置默认颜色和线条样式
+    if colors is None:
+        # 使用matplotlib的默认颜色循环
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color'][:n_datasets]
+    elif len(colors) < n_datasets:
+        # 如果提供的颜色不够，循环使用
+        colors = (colors * (n_datasets // len(colors) + 1))[:n_datasets]
+
+    if linestyles is None:
+        linestyles = ['-'] * n_datasets
+    elif len(linestyles) < n_datasets:
+        # 如果提供的样式不够，循环使用
+        linestyles = (linestyles * (n_datasets // len(linestyles) + 1))[:n_datasets]
+
+    # 计算x轴范围
+    if max_x is None:
+        last_x = data_list[0][x_col].iloc[-1]
+        max_x = int(np.ceil(last_x / 10)) * 10
+
+    # 获取布局信息
+    nrows = int(layout.split('x')[0])
+    ncols = int(layout.split('x')[1])
+
+    # 自动绘制所有子图
+    for i, col_name in enumerate(column_names):
+        # 计算子图位置
+        row = i // ncols
+        col = i % ncols
+
+        # 绘制所有数据集
+        for j, data in enumerate(data_list):
+            axes[row, col].plot(np.sqrt(data[x_col]), data[col_name],
+                               alpha=alpha,
+                               label=labels[j],
+                               color=colors[j],
+                               linestyle=linestyles[j])
+
+        # 设置x轴
+        axes[row, col].set_xlim(0, max_x)
+        if xscale == 'symlog':
+            axes[row, col].set_xscale('symlog', linthresh=linthresh)
+
+        # 添加图例
+        axes[row, col].legend()
+
+    # 添加参考线
+    add_reference_lines_to_subplots(
+        axes, layout=layout,
+        y_values=[0],
+        y_styles='--',
+        y_colors='gray',
+        y_labels=None
+    )
+
+    # 配置子图网格
+    configure_subplot_grid(
+        fig, axes, layout=layout,
+        title=column_names,
+        suptitle=suptitle
+    )
+
+    return fig, axes
+
 
 def demo_multi_subplot_usage():
     """
