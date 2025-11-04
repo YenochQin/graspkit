@@ -24,6 +24,7 @@ import warnings
 from cycler import cycler
 import numpy as np
 import pandas as pd
+import re
 
 def configure_matplotlib_for_publication():
     """
@@ -428,21 +429,65 @@ def create_publication_figure(figsize='single_column', color_scheme='default', l
 
     return fig, ax
 
-def get_subplot_layout(layout_name):
+def _get_axes_at(axes, i, j):
     """
-    获取多子图布局配置
+    安全地获取axes数组中的特定位置的ax对象
 
     Args:
-        layout_name (str): 布局名称 ('1x1', '1x2', '2x2', '2x3', '3x2', '3x3', etc.)
+        axes: matplotlib axes对象（可能是一维或二维数组）
+        i: 行索引
+        j: 列索引
 
     Returns:
-        tuple: (nrows, ncols) 行数和列数，如果布局不存在则返回 (1, 1)
+        matplotlib axes对象
     """
+    # 如果axes是单个Axes对象（1x1布局）
+    if not isinstance(axes, np.ndarray):
+        return axes
+
+    # 如果axes是一维数组（1xN或Nx1布局）
+    if axes.ndim == 1:
+        if axes.shape[0] == 1:  # 1x1
+            return axes[0]
+        elif i == 0:  # 1xN布局
+            return axes[j]
+        else:  # Nx1布局
+            return axes[i]
+
+    # 如果axes是二维数组（MxN布局）
+    return axes[i, j]
+
+def get_subplot_layout(layout_name):
+    """
+    获取多子图布局配置，支持正则匹配任意布局
+
+    Args:
+        layout_name (str): 布局名称 ('1x1', '1x2', '2x2', '1x4', '3x5', '10x3', etc.)
+
+    Returns:
+        tuple: (nrows, ncols) 行数和列数，如果布局格式无效则返回 (1, 1)
+    """
+    # 首先检查是否在预定义布局中
     if layout_name in SUBPLOT_LAYOUTS:
         return SUBPLOT_LAYOUTS[layout_name]
+
+    # 使用正则匹配解析布局格式 (如 "1x4", "3x5", "10x2" 等)
+    pattern = r'^(\d+)x(\d+)$'
+    match = re.match(pattern, layout_name.strip())
+
+    if match:
+        nrows = int(match.group(1))
+        ncols = int(match.group(2))
+
+        # 检查行列数的合理性
+        if nrows > 0 and ncols > 0 and nrows <= 20 and ncols <= 20:
+            return (nrows, ncols)
+        else:
+            warnings.warn(f"Invalid subplot dimensions: {nrows}x{ncols}, using 1x1")
+            return (1, 1)
     else:
-        warnings.warn(f"Unknown subplot layout: {layout_name}, using 1x1")
-        return SUBPLOT_LAYOUTS['1x1']
+        warnings.warn(f"Invalid layout format: {layout_name}, using 1x1")
+        return (1, 1)
 
 def calculate_subplot_figure_size(base_size, layout_name, spacing='normal'):
     """
@@ -597,17 +642,21 @@ def add_reference_lines_to_subplots(axes, layout='2x2', y_values=None, x_values=
         # 为每个子图添加参考线
         for i in range(nrows):
             for j in range(ncols):
-                ax = axes[i, j]
+                try:
+                    ax = _get_axes_at(axes, i, j)
 
-                # 添加y轴参考线
-                for y_val, style, color, label in zip(y_values, y_styles, y_colors, y_labels):
-                    ax.axhline(y=y_val, color=color, linestyle=style, alpha=0.7,
-                             linewidth=1, label=label)
+                    # 添加y轴参考线
+                    for y_val, style, color, label in zip(y_values, y_styles, y_colors, y_labels):
+                        ax.axhline(y=y_val, color=color, linestyle=style, alpha=0.7,
+                                 linewidth=1, label=label)
 
-                # 添加x轴参考线
-                for x_val, style, color, label in zip(x_values, x_styles, x_colors, x_labels):
-                    ax.axvline(x=x_val, color=color, linestyle=style, alpha=0.7,
-                             linewidth=1, label=label)
+                    # 添加x轴参考线
+                    for x_val, style, color, label in zip(x_values, x_styles, x_colors, x_labels):
+                        ax.axvline(x=x_val, color=color, linestyle=style, alpha=0.7,
+                                 linewidth=1, label=label)
+                except Exception as e:
+                    warnings.warn(f"Failed to add reference lines to subplot ({i},{j}): {e}")
+                    continue
 
         return True
     except Exception as e:
@@ -653,43 +702,47 @@ def configure_subplot_grid(fig, axes, layout='2x2',
         # 为每个子图设置属性
         for i in range(nrows):
             for j in range(ncols):
-                ax = axes[i, j]
+                try:
+                    ax = _get_axes_at(axes, i, j)
 
-                # 设置标题
-                if title:
-                    if isinstance(title, list):
-                        idx = i * ncols + j
-                        if idx < len(title) and title[idx]:
-                            ax.set_title(title[idx])
-                    else:
-                        ax.set_title(title)
+                    # 设置标题
+                    if title:
+                        if isinstance(title, list):
+                            idx = i * ncols + j
+                            if idx < len(title) and title[idx]:
+                                ax.set_title(title[idx])
+                        else:
+                            ax.set_title(title)
 
-                # 设置副标题
-                if subtitle:
-                    if isinstance(subtitle, list):
-                        idx = i * ncols + j
-                        if idx < len(subtitle) and subtitle[idx]:
-                            ax.set_title(subtitle[idx], loc='right', fontsize=10, style='italic')
-                    else:
-                        ax.set_title(subtitle, loc='right', fontsize=10, style='italic')
+                    # 设置副标题
+                    if subtitle:
+                        if isinstance(subtitle, list):
+                            idx = i * ncols + j
+                            if idx < len(subtitle) and subtitle[idx]:
+                                ax.set_title(subtitle[idx], loc='right', fontsize=10, style='italic')
+                        else:
+                            ax.set_title(subtitle, loc='right', fontsize=10, style='italic')
 
-                # 设置x轴标签
-                if xlabel:
-                    if isinstance(xlabel, list):
-                        idx = i * ncols + j
-                        if idx < len(xlabel) and xlabel[idx]:
-                            ax.set_xlabel(xlabel[idx])
-                    else:
-                        ax.set_xlabel(xlabel)
+                    # 设置x轴标签
+                    if xlabel:
+                        if isinstance(xlabel, list):
+                            idx = i * ncols + j
+                            if idx < len(xlabel) and xlabel[idx]:
+                                ax.set_xlabel(xlabel[idx])
+                        else:
+                            ax.set_xlabel(xlabel)
 
-                # 设置y轴标签
-                if ylabel:
-                    if isinstance(ylabel, list):
-                        idx = i * ncols + j
-                        if idx < len(ylabel) and ylabel[idx]:
-                            ax.set_ylabel(ylabel[idx])
-                    else:
-                        ax.set_ylabel(ylabel)
+                    # 设置y轴标签
+                    if ylabel:
+                        if isinstance(ylabel, list):
+                            idx = i * ncols + j
+                            if idx < len(ylabel) and ylabel[idx]:
+                                ax.set_ylabel(ylabel[idx])
+                        else:
+                            ax.set_ylabel(ylabel)
+                except Exception as e:
+                    warnings.warn(f"Failed to configure subplot ({i},{j}): {e}")
+                    continue
 
         return True
     except Exception as e:

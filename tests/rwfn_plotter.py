@@ -19,27 +19,27 @@ def auto_plot_wavefunction_comparison(data_list, column_names, x_col='r(a.u)',
                                     linthresh=1, suptitle='Wavefunction Comparison',
                                     colors=None, linestyles=None):
     """
-    自动绘制波函数对比图的通用函数，支持多个DataFrame对比
+    Automatically plot wavefunction comparison charts, supporting multiple DataFrame comparison
 
     Args:
-        data_list: 数据集列表，包含多个DataFrame [data1, data2, data3, ...]
-        column_names: 要绘制的列名列表
-        x_col: x轴数据的列名 (默认: 'r(a.u)')
-        labels: 数据集标签列表，如 ['old', 'new', 'modified'] (默认: ['Data 1', 'Data 2', ...])
-        layout: 子图布局 (默认: '2x4')
-        alpha: 透明度 (默认: 0.75)
-        max_x: x轴最大值，如果为None则自动计算
-        xscale: x轴比例类型 (默认: 'symlog')
-        linthresh: symlog的线性阈值 (默认: 1)
-        suptitle: 总标题 (默认: 'Wavefunction Comparison')
-        colors: 线条颜色列表，如 ['blue', 'red', 'green'] (默认: 自动分配)
-        linestyles: 线条样式列表，如 ['-', '--', '-.'] (默认: 全为实线)
+        data_list: List of datasets, containing multiple DataFrames [data1, data2, data3, ...]
+        column_names: List of column names to plot
+        x_col: Column name for x-axis data (default: 'r(a.u)')
+        labels: List of dataset labels, e.g., ['old', 'new', 'modified'] (default: ['Data 1', 'Data 2', ...])
+        layout: Subplot layout (default: '2x4')
+        alpha: Transparency (default: 0.75)
+        max_x: Maximum x-axis value, auto-calculated if None
+        xscale: x-axis scale type (default: 'symlog')
+        linthresh: Linear threshold for symlog (default: 1)
+        suptitle: Main title (default: 'Wavefunction Comparison')
+        colors: List of line colors, e.g., ['blue', 'red', 'green'] (default: auto-allocated)
+        linestyles: List of line styles, e.g., ['-', '--', '-.'] (default: all solid lines)
 
     Returns:
-        fig, axes: matplotlib的figure和axes对象
+        fig, axes: matplotlib figure and axes objects
     """
 
-    # 创建多子图
+    # Create multi-subplot
     fig, axes = gfs.create_multi_subplot_figure(
         layout=layout,
         base_size='single_column',
@@ -47,64 +47,89 @@ def auto_plot_wavefunction_comparison(data_list, column_names, x_col='r(a.u)',
         color_scheme='nature'
     )
 
-    # 验证输入
+    # Validate input
     if not isinstance(data_list, (list, tuple)):
         raise ValueError("data_list must be a list or tuple of DataFrames")
 
     n_datasets = len(data_list)
 
-    # 设置默认标签
+    # Set default labels
     if labels is None:
         labels = [f'Data {i+1}' for i in range(n_datasets)]
     elif len(labels) != n_datasets:
         raise ValueError(f"Number of labels ({len(labels)}) must match number of datasets ({n_datasets})")
 
-    # 设置默认颜色和线条样式
+    # Set default colors and line styles
     if colors is None:
-        # 使用matplotlib的默认颜色循环
+        # Use matplotlib's default color cycle
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color'][:n_datasets]
     elif len(colors) < n_datasets:
-        # 如果提供的颜色不够，循环使用
+        # If not enough colors provided, cycle them
         colors = (colors * (n_datasets // len(colors) + 1))[:n_datasets]
 
     if linestyles is None:
         linestyles = ['-'] * n_datasets
     elif len(linestyles) < n_datasets:
-        # 如果提供的样式不够，循环使用
+        # If not enough styles provided, cycle them
         linestyles = (linestyles * (n_datasets // len(linestyles) + 1))[:n_datasets]
 
-    # 计算x轴范围
+    # Calculate x-axis range
     if max_x is None:
         last_x = data_list[0][x_col].iloc[-1]
         max_x = int(np.ceil(last_x / 10)) * 10
 
-    # 获取布局信息
+    # Get layout information
     nrows = int(layout.split('x')[0])
     ncols = int(layout.split('x')[1])
 
-    # 自动绘制所有子图
+    # Automatically plot all subplots
     for i, col_name in enumerate(column_names):
-        # 计算子图位置
+        # Calculate subplot position
         row = i // ncols
         col = i % ncols
 
-        # 绘制所有数据集
+        # Plot all datasets
         for j, data in enumerate(data_list):
-            axes[row, col].plot(np.sqrt(data[x_col]), data[col_name],
-                               alpha=alpha,
-                               label=labels[j],
-                               color=colors[j],
-                               linestyle=linestyles[j])
+            # 使用与fig_settings中相同的辅助函数来安全访问axes
+            if not isinstance(axes, np.ndarray):
+                ax = axes  # 单个axes对象
+            elif axes.ndim == 1:
+                if axes.shape[0] == 1:  # 1x1布局
+                    ax = axes[0]
+                elif row == 0:  # 1xN布局
+                    ax = axes[col]
+                else:  # Nx1布局
+                    ax = axes[row]
+            else:  # MxN布局
+                ax = axes[row, col]
 
-        # 设置x轴
-        axes[row, col].set_xlim(0, max_x)
+            ax.plot(np.sqrt(data[x_col]), data[col_name],
+                   alpha=alpha,
+                   label=labels[j],
+                   color=colors[j],
+                   linestyle=linestyles[j])
+
+        # Set x-axis
+        if not isinstance(axes, np.ndarray):
+            ax = axes
+        elif axes.ndim == 1:
+            if axes.shape[0] == 1:
+                ax = axes[0]
+            elif row == 0:
+                ax = axes[col]
+            else:
+                ax = axes[row]
+        else:
+            ax = axes[row, col]
+
+        ax.set_xlim(0, max_x)
         if xscale == 'symlog':
-            axes[row, col].set_xscale('symlog', linthresh=linthresh)
+            ax.set_xscale('symlog', linthresh=linthresh)
 
-        # 添加图例
-        axes[row, col].legend()
+        # Add legend
+        ax.legend()
 
-    # 添加参考线
+    # Add reference lines
     gfs.add_reference_lines_to_subplots(
         axes, layout=layout,
         y_values=[0],
@@ -113,7 +138,7 @@ def auto_plot_wavefunction_comparison(data_list, column_names, x_col='r(a.u)',
         y_labels=None
     )
 
-    # 配置子图网格
+    # Configure subplot grid
     gfs.configure_subplot_grid(
         fig, axes, layout=layout,
         title=column_names,
@@ -123,12 +148,12 @@ def auto_plot_wavefunction_comparison(data_list, column_names, x_col='r(a.u)',
     return fig, axes
 
 
-# 定义要绘制的列名列表
+# Define list of column names to plot
 column_names = ['P(5f )', 'Q(5f )', 'P(5f-)', 'Q(5f-)', 'P(5d )', 'Q(5d )', 'P(5d-)', 'Q(5d-)']
 
-# 使用新的多DataFrame函数自动绘制所有子图
+# Use new multi-DataFrame function to automatically plot all subplots
 fig, axes = auto_plot_wavefunction_comparison(
-    [rwfn_data_e1_as1, rwfn_data_e1_as1_2],  # 数据列表
+    [rwfn_data_e1_as1, rwfn_data_e1_as1_2],  # data list
     column_names,
     labels=('old', 'new'),
     suptitle='Radial Wavefunction'
@@ -136,9 +161,9 @@ fig, axes = auto_plot_wavefunction_comparison(
 
 fig.show()
 
-# ===== 使用示例 =====
+# ===== Usage Examples =====
 
-# 示例1：只绘制5f轨道的数据
+# Example 1: Plot only 5f orbital data
 fig1, axes1 = auto_plot_wavefunction_comparison(
     [rwfn_data_e1_as1, rwfn_data_e1_as1_2],
     ['P(5f )', 'Q(5f )', 'P(5f-)', 'Q(5f-)'],
@@ -146,7 +171,7 @@ fig1, axes1 = auto_plot_wavefunction_comparison(
     suptitle='5f Orbital Wavefunctions'
 )
 
-# 示例2：只绘制5d轨道的数据，使用不同的标签和样式
+# Example 2: Plot only 5d orbital data with different labels and styles
 fig2, axes2 = auto_plot_wavefunction_comparison(
     [rwfn_data_e1_as1, rwfn_data_e1_as1_2],
     ['P(5d )', 'Q(5d )', 'P(5d-)', 'Q(5d-)'],
@@ -156,10 +181,10 @@ fig2, axes2 = auto_plot_wavefunction_comparison(
     suptitle='5d Orbital Wavefunctions'
 )
 
-# 示例3：模拟多个DataFrame对比（如果有更多数据）
-# 这里我们重复使用现有数据来演示多DataFrame功能
+# Example 3: Simulate multiple DataFrame comparison (if you have more data)
+# Here we reuse existing data to demonstrate multi-DataFrame functionality
 fig3, axes3 = auto_plot_wavefunction_comparison(
-    [rwfn_data_e1_as1, rwfn_data_e1_as1_2, rwfn_data_e1_as1],  # 3个数据集
+    [rwfn_data_e1_as1, rwfn_data_e1_as1_2, rwfn_data_e1_as1],  # 3 datasets
     ['P(5f )', 'Q(5f )'],
     labels=('calculation_A', 'calculation_B', 'calculation_C'),
     colors=['blue', 'red', 'green'],
@@ -168,21 +193,21 @@ fig3, axes3 = auto_plot_wavefunction_comparison(
     suptitle='Three-Way Comparison'
 )
 
-# 示例4：自定义x轴范围和多个数据集
+# Example 4: Custom x-axis range and multiple datasets
 fig4, axes4 = auto_plot_wavefunction_comparison(
     [rwfn_data_e1_as1, rwfn_data_e1_as1_2],
     ['P(5f )', 'Q(5f )', 'P(5d )', 'Q(5d )'],
-    max_x=50,  # 固定x轴范围
+    max_x=50,  # fixed x-axis range
     labels=('old_method', 'new_method'),
     colors=['darkblue', 'darkred'],
     alpha=0.8,
     suptitle='Custom Range Comparison'
 )
 
-# 示例5：只比较一个子图，但显示多个数据集
+# Example 5: Compare only one subplot but show multiple datasets
 fig5, axes5 = auto_plot_wavefunction_comparison(
     [rwfn_data_e1_as1, rwfn_data_e1_as1_2, rwfn_data_e1_as1],
-    ['P(5f )'],  # 只绘制一个列
+    ['P(5f )'],  # plot only one column
     labels=('baseline', 'improved', 'experimental'),
     colors=['black', 'red', 'blue'],
     linestyles=['-', '--', '-.'],
@@ -190,19 +215,19 @@ fig5, axes5 = auto_plot_wavefunction_comparison(
     suptitle='Detailed P(5f) Comparison'
 )
 
-print("绘图完成！")
-print("\n使用方法：")
-print("1. 修改column_names列表来选择要绘制的列")
-print("2. 调整layout参数改变子图布局")
-print("3. 修改labels参数自定义图例标签")
-print("4. 调整alpha参数改变透明度")
-print("5. 设置max_x参数自定义x轴范围")
-print("6. 使用colors参数自定义颜色")
-print("7. 使用linestyles参数自定义线条样式")
-print("8. 在data_list中传入任意数量的DataFrame")
-print("\n示例：比较3个计算结果")
+print("Plotting completed!")
+print("\nUsage:")
+print("1. Modify column_names list to select columns to plot")
+print("2. Adjust layout parameter to change subplot layout")
+print("3. Modify labels parameter to customize legend labels")
+print("4. Adjust alpha parameter to change transparency")
+print("5. Set max_x parameter to customize x-axis range")
+print("6. Use colors parameter to customize colors")
+print("7. Use linestyles parameter to customize line styles")
+print("8. Pass any number of DataFrames in data_list")
+print("\nExample: Compare 3 calculation results")
 print("fig, axes = auto_plot_wavefunction_comparison(")
-print("    [data1, data2, data3],  # 3个DataFrame")
+print("    [data1, data2, data3],  # 3 DataFrames")
 print("    column_names,")
 print("    labels=['method_A', 'method_B', 'method_C'],")
 print("    colors=['blue', 'red', 'green'],")
