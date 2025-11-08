@@ -874,7 +874,9 @@ def auto_plot_wavefunction_comparison(
                                     linthresh: int = 1,
                                     suptitle: str = 'Wavefunction Comparison',
                                     colors  = None,
-                                    linestyles: list[str] | None = None
+                                    linestyles: list[str] | None = None,
+                                    xlabel: str | None = None,
+                                    ylabel: str | None = None
                                 ):
     """
     自动绘制波函数对比图的通用函数，支持多个DataFrame对比
@@ -892,6 +894,8 @@ def auto_plot_wavefunction_comparison(
         suptitle: 总标题 (默认: 'Wavefunction Comparison')
         colors: 线条颜色列表，如 ['blue', 'red', 'green'] (默认: 自动分配)
         linestyles: 线条样式列表，如 ['-', '--', '-.'] (默认: 全为实线)
+        xlabel: x轴标签，只在最底行显示 (默认: None)
+        ylabel: y轴标签，只在最左列显示 (默认: None)
 
     Returns:
         fig, axes: matplotlib的figure和axes对象
@@ -933,7 +937,7 @@ def auto_plot_wavefunction_comparison(
 
     # 计算x轴范围
     if max_x is None:
-        last_x = data_list[0][x_col].iloc[-1]
+        last_x = np.sqrt(data_list[0][x_col].iloc[-1])
         max_x = int(np.ceil(last_x / 10)) * 10
 
     # 获取布局信息
@@ -958,6 +962,8 @@ def auto_plot_wavefunction_comparison(
         axes[row, col].set_xlim(0, max_x)
         if xscale == 'symlog':
             axes[row, col].set_xscale('symlog', linthresh=linthresh)
+        elif xscale == 'log':
+            axes[row, col].set_xscale('log')
 
         # 添加图例
         axes[row, col].legend()
@@ -977,6 +983,24 @@ def auto_plot_wavefunction_comparison(
         title=column_names,
         suptitle=suptitle
     )
+
+    # 智能添加坐标轴标签（只在最外层显示）
+    if xlabel is not None or ylabel is not None:
+        # 添加共享的x轴标签（只在最底行）
+        if xlabel is not None:
+            fig.text(0.5, 0.01, xlabel, ha='center', va='center', fontsize=12)
+
+        # 添加共享的y轴标签（只在最左列）
+        if ylabel is not None:
+            fig.text(0.01, 0.5, ylabel, ha='center', va='center', rotation='vertical', fontsize=12)
+
+    # 调整布局以减少留白
+    if xlabel is not None or ylabel is not None:
+        # 如果有坐标轴标签，预留更少的空间
+        fig.subplots_adjust(top=0.92, bottom=0.05, left=0.03)
+    else:
+        # 如果没有坐标轴标签，使用标准调整
+        fig.subplots_adjust(top=0.92)
 
     return fig, axes
 
