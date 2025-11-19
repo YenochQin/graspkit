@@ -883,7 +883,7 @@ def auto_plot_wavefunction_comparison(
 
     Args:
         data_list: 数据集列表，包含多个DataFrame [data1, data2, data3, ...]
-        column_names: 要绘制的列名列表
+        column_names: 要绘制的列名列表，包含成对的P和Q分量，如 ['P(4p-)', 'Q(4p-)', 'P(4p )', 'Q(4p )']
         x_col: x轴数据的列名 (默认: 'r(a.u)')
         labels: 数据集标签列表，如 ['old', 'new', 'modified'] (默认: ['Data 1', 'Data 2', ...])
         layout: 子图布局 (默认: '2x4')
@@ -900,6 +900,58 @@ def auto_plot_wavefunction_comparison(
     Returns:
         fig, axes: matplotlib的figure和axes对象
     """
+
+    def extract_orbital_name(col_name):
+        """
+        从列名中提取轨道名称（括号内的字符）
+
+        Args:
+            col_name (str): 列名，如 'P(4p-)', 'Q(4p-)'
+
+        Returns:
+            str: 轨道名称，如 '4p-'
+        """
+        match = re.search(r'\((.*?)\)', col_name)
+        if match:
+            return match.group(1)
+        return col_name
+
+    def group_columns_by_orbital(column_names):
+        """
+        将列名按轨道分组，返回每组对应的P和Q列名以及轨道名称
+
+        Args:
+            column_names: 列名列表，如 ['P(4p-)', 'Q(4p-)', 'P(4p )', 'Q(4p )']
+
+        Returns:
+            list: 包含轨道信息的列表，每个元素为 {'orbital': str, 'p_col': str, 'q_col': str}
+        """
+        # 首先提取所有轨道名称
+        orbital_map = {}
+        for col_name in column_names:
+            orbital = extract_orbital_name(col_name)
+            if orbital not in orbital_map:
+                orbital_map[orbital] = {'p_col': None, 'q_col': None}
+
+            # 根据列名确定是P还是Q分量
+            if col_name.startswith('P(') or col_name.startswith('P '):
+                orbital_map[orbital]['p_col'] = col_name
+            elif col_name.startswith('Q(') or col_name.startswith('Q '):
+                orbital_map[orbital]['q_col'] = col_name
+
+        # 转换为列表格式，并验证每个轨道都有P和Q分量
+        orbital_groups = []
+        for orbital, cols in orbital_map.items():
+            if cols['p_col'] is not None and cols['q_col'] is not None:
+                orbital_groups.append({
+                    'orbital': orbital,
+                    'p_col': cols['p_col'],
+                    'q_col': cols['q_col']
+                })
+            else:
+                warnings.warn(f"Orbital {orbital} is missing P or Q component, skipping...")
+
+        return orbital_groups
 
     # 创建多子图
     fig, axes = create_multi_subplot_figure(
@@ -923,14 +975,59 @@ def auto_plot_wavefunction_comparison(
 
     # 设置默认颜色和线条样式
     if colors is None:
-        # 使用matplotlib的默认颜色循环
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color'][:n_datasets]
+        # 扩展的颜色列表，包含足够多的颜色来支持大量数据集
+        extended_colors = [
+            # matplotlib默认颜色
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
+            # 更多蓝色系
+            '#17becf', '#0080ff', '#0066cc', '#004499', '#002266', '#001133',
+            # 更多红色系
+            '#e377c2', '#ff1493', '#dc143c', '#b22222', '#8b0000', '#800000',
+            # 更多绿色系
+            '#7fff00', '#32cd32', '#228b22', '#006400', '#004000', '#002000',
+            # 更多橙色/黄色系
+            '#ffd700', '#ffb347', '#ff8c00', '#ff6347', '#ff4500', '#ff0000',
+            # 更多紫色系
+            '#9370db', '#8a2be2', '#800080', '#4b0082', '#6a0dad', '#483d8b',
+            # 更多青色/青绿色系
+            '#40e0d0', '#00ced1', '#008b8b', '#008080', '#20b2aa', '#5f9ea0',
+            # 更多棕色系
+            '#daa520', '#b8860b', '#cd853f', '#8b4513', '#a0522d', '#d2691e',
+            # 更多灰色系
+            '#708090', '#778899', '#696969', '#2f4f4f', '#556b2f', '#8b7355',
+            # 更多粉色系
+            '#ffb6c1', '#ffc0cb', '#ff69b4', '#ff1493', '#c71585', '#db7093',
+            # 更多特殊颜色
+            '#ffdead', '#f0e68c', '#dda0dd', '#ee82ee', '#fa8072', '#ffa07a',
+            '#20b2aa', '#87ceeb', '#87cefa', '#4682b4', '#b0c4de', '#add8e6'
+        ]
+
+        # 如果数据集数量超过扩展颜色列表，则循环使用
+        if n_datasets > len(extended_colors):
+            colors = (extended_colors * (n_datasets // len(extended_colors) + 1))[:n_datasets]
+        else:
+            colors = extended_colors[:n_datasets]
     elif len(colors) < n_datasets:
         # 如果提供的颜色不够，循环使用
         colors = (colors * (n_datasets // len(colors) + 1))[:n_datasets]
 
     if linestyles is None:
-        linestyles = ['-'] * n_datasets
+        # 扩展的线条样式列表，提供更多样化的线条样式
+        extended_linestyles = [
+            '-', '--', '-.', ':',      # 基本线条样式
+            (0, (3, 1, 1, 1)),        # 密集点划线
+            (0, (5, 1, 1, 1)),        # 稀疏点划线
+            (0, (3, 1, 3, 1, 1, 1)),  # 复杂点划线
+            (0, (1, 1)),              # 密点线
+            (0, (2, 2)),              # 中等点线
+            (0, (5, 5)),              # 稀疏点线
+        ]
+
+        # 如果数据集数量超过线条样式列表，则循环使用
+        if n_datasets > len(extended_linestyles):
+            linestyles = (extended_linestyles * (n_datasets // len(extended_linestyles) + 1))[:n_datasets]
+        else:
+            linestyles = extended_linestyles[:n_datasets]
     elif len(linestyles) < n_datasets:
         # 如果提供的样式不够，循环使用
         linestyles = (linestyles * (n_datasets // len(linestyles) + 1))[:n_datasets]
@@ -944,15 +1041,37 @@ def auto_plot_wavefunction_comparison(
     nrows = int(layout.split('x')[0])
     ncols = int(layout.split('x')[1])
 
-    # 自动绘制所有子图
-    for i, col_name in enumerate(column_names):
+    # 按轨道分组列名
+    orbital_groups = group_columns_by_orbital(column_names)
+    n_orbitals = len(orbital_groups)
+
+    if n_orbitals == 0:
+        raise ValueError("No valid orbital groups found in column_names")
+
+    # 自动绘制所有轨道的 P²+Q² 图
+    for i, orbital_group in enumerate(orbital_groups):
+        if i >= nrows * ncols:  # 超出子图数量则跳过
+            break
+
         # 计算子图位置
         row = i // ncols
         col = i % ncols
 
-        # 绘制所有数据集
+        orbital_name = orbital_group['orbital']
+        p_col = orbital_group['p_col']
+        q_col = orbital_group['q_col']
+
+        # 绘制所有数据集的 P²+Q²
         for j, data in enumerate(data_list):
-            axes[row, col].plot(np.sqrt(data[x_col]), data[col_name],
+            # 验证列是否存在
+            if p_col not in data.columns or q_col not in data.columns:
+                warnings.warn(f"Columns {p_col} or {q_col} not found in dataset {j+1}, skipping...")
+                continue
+
+            # 计算 P²+Q²
+            p_squared_plus_q_squared = data[p_col]**2 + data[q_col]**2
+
+            axes[row, col].plot(np.sqrt(data[x_col]), p_squared_plus_q_squared,
                                alpha=alpha,
                                label=labels[j],
                                color=colors[j],
@@ -977,10 +1096,11 @@ def auto_plot_wavefunction_comparison(
         y_labels=None
     )
 
-    # 配置子图网格
+    # 配置子图网格，使用轨道名称作为标题
+    orbital_titles = [group['orbital'] for group in orbital_groups[:nrows*ncols]]
     configure_subplot_grid(
         fig, axes, layout=layout,
-        title=column_names,
+        title=orbital_titles,
         suptitle=suptitle
     )
 

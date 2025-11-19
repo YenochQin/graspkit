@@ -63,6 +63,8 @@ from .utils import (
     log_stage_end,
     calculate_deformation,
     LS_shell_full_charged,
+    inter_coupling_channel_bar,
+    auto_plot_wavefunction_comparison
 )
 
 from .CSFs_processor import (
@@ -260,4 +262,8 @@ __all__ = [
     "progress_context",
     "log_stage_start",
     "log_stage_end",
+
+    # 作图
+    "inter_coupling_channel_bar",
+    "auto_plot_wavefunction_comparison"
 ]
