@@ -168,12 +168,22 @@ def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None
     tick_fontsize = int(10 * fontsize_scale)
 
     ax1.set_ylabel('Percentage Share (%)', fontsize=label_fontsize, color='blue')
-    ax1.set_xlabel('Categories', fontsize=label_fontsize)
+    ax1.set_xlabel('Intermediate coupling channel', fontsize=label_fontsize)
     ax1.tick_params(axis='y', labelcolor='blue', labelsize=tick_fontsize)
     ax1.tick_params(axis='x', labelsize=tick_fontsize, rotation=45)
 
     ax2.set_ylabel('Contribution Value', fontsize=label_fontsize, color='darkred')
     ax2.tick_params(axis='y', labelcolor='darkred', labelsize=tick_fontsize)
+
+    # 设置Y轴范围，为顶部标签留出空间
+    max_percentage = max(quantity_percent)
+
+
+    # 设置主Y轴（百分比），增加20%的上边距为标签留空间
+    ax1.set_ylim(0, max_percentage * 1.25)
+
+    # 设置副Y轴（贡献值），增加20%的上边距
+    ax2.set_ylim(0, 1.05)
 
     # 设置完整的边框
     for ax in [ax1, ax2]:
