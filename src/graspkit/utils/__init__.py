@@ -49,6 +49,11 @@ from .quadrupole_deformation import (
     calculate_deformation,
 )
 
+from .plot_functions import (
+    inter_coupling_channel_bar,
+    auto_plot_wavefunction_comparison
+)
+
 __all__ = [
     # 数据类
     'MixCoefficientData',
@@ -87,4 +92,8 @@ __all__ = [
     
     # 四极形变
     'calculate_deformation',
+
+    # 作图
+    "inter_coupling_channel_bar",
+    "auto_plot_wavefunction_comparison"
 ]
