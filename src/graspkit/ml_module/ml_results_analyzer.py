@@ -181,7 +181,7 @@ def save_iteration_results(
     actual_eval_time = metadata.get("eval_time", eval_time)
 
     # 保存到CSV文件
-    results_file = Path(config.root_path) / "results" / "iteration_results.csv"
+    results_file = Path(config.target.root_path) / "results" / "iteration_results.csv"
     results_file.parent.mkdir(parents=True, exist_ok=True)
 
     # 创建表头（如果文件不存在）
@@ -233,7 +233,7 @@ def save_iteration_results(
         writer = csv.writer(file)
         writer.writerow(
             [
-                config.cal_loop_num,  # 迭代轮次
+                config.cal_settings.cal_loop_num,  # 迭代轮次
                 important_count,  # 重要组态数量
                 ml_predicted_count,  # ML预测的高概率组态总数
                 ml_new_count,  # ML新增的组态数（下次计算用）
@@ -262,12 +262,12 @@ def save_iteration_results(
 
     logger.info(f"迭代结果已保存到: {results_file}")
     logger.info(
-        f"第{config.cal_loop_num}轮 - 重要组态: {important_count} (占原始: {important_retention_rate:.4%})"
+        f"第{config.cal_settings.cal_loop_num}轮 - 重要组态: {important_count} (占原始: {important_retention_rate:.4%})"
     )
     logger.info(
-        f"第{config.cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
+        f"第{config.cal_settings.cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
     )
-    logger.info(f"第{config.cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
+    logger.info(f"第{config.cal_settings.cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
 
 def save_and_plot_results(
