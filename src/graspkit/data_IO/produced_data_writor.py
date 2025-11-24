@@ -6,7 +6,7 @@
 """
 
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Union
+from typing import Dict, List, Optional, Union
 from types import SimpleNamespace
 from dataclasses import dataclass
 import gzip
@@ -115,7 +115,7 @@ def save_csfs_binary(csf_obj: CSFs, filepath: Union[str, Path]):
 #######################################################################
 
 
-def continue_calculate(save_path: Union[str, Path], continue_calculate: bool):
+def continue_calculate(save_path: str | Path, continue_calculate: bool):
     save_path = Path(save_path)
 
     with open(save_path / "run.input", "rw") as file:
@@ -124,13 +124,17 @@ def continue_calculate(save_path: Union[str, Path], continue_calculate: bool):
     return f"Continue calculate is set to {continue_calculate}"
 
 
-def update_config(config_path, updates):
+def update_config(config_path: str | Path, updates):
     """更新TOML配置文件
 
     Args:
         config_path: 配置文件路径
         updates: 要更新的键值对字典
     """
+    # 确保路径是Path对象
+    if isinstance(config_path, str):
+        config_path = Path(config_path)
+
     # 使用 rtoml 读取TOML文件
     config = rtoml.load(config_path)
 

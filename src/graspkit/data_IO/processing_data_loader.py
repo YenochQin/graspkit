@@ -6,7 +6,7 @@
 """
 
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Union
+from typing import Dict, Tuple, List, Optional, Union, Any
 from types import SimpleNamespace
 from dataclasses import dataclass
 import gzip
@@ -105,40 +105,64 @@ def load_large_hash(file_path: Union[str, Path]) -> Dict[int, Dict[str, int]]:
 
 
 #######################################################################
-
-
-def load_config(config_path: Union[str, Path]):
+def load_config(config_path: Union[str, Path]) -> SimpleNamespace:
     """加载TOML配置文件并进行类型转换和数据处理"""
     # 转换为Path对象
     config_path = Path(config_path)
 
     # 使用 rtoml 读取TOML文件
-    config = rtoml.load(config_path)
+    raw: Any = rtoml.load(config_path)
+
+    # 运行时校验 + 静态窄化：确保顶层是 dict
+    if not isinstance(raw, dict):
+        raise TypeError("Top-level TOML must be a table")
 
     # 类型转换和数据处理
-    config = _process_config_data(config)
+    processed = _process_config_data(raw)
 
-    return SimpleNamespace(**config)
+    # 递归将字典转换为SimpleNamespace，支持嵌套访问
+    return _dict_to_namespace(processed)
 
 
-def _process_config_data(config):
+def _dict_to_namespace(d: dict[str, Any]) -> SimpleNamespace:
+    """递归将字典转换为SimpleNamespace"""
+    if isinstance(d, dict):
+        return SimpleNamespace(**{k: _dict_to_namespace(v) for k, v in d.items()})
+    elif isinstance(d, list):
+        return [_dict_to_namespace(item) for item in d]
+    else:
+        return d
+
+
+def _process_config_data(config: dict[str, Any]) -> dict[str, Any]:
     """处理配置数据，进行类型转换和验证"""
-    # 浮点数转换
-    config["cutoff_value"] = float(config["cutoff_value"])
-    config["chosen_ratio"] = float(config["chosen_ratio"])
+    # 浮点数转换 - 从新的配置结构中获取
+    config["cal_settings"]["cutoff_value"] = float(config["cal_settings"]["cutoff_value"])
+    config["cal_settings"]["sampling_ratio"] = float(config["cal_settings"]["sampling_ratio"])
+    config["cal_settings"]["expansion_ratio"] = float(config["cal_settings"]["expansion_ratio"])
     config["ml_config"]["expansion_ratio"] = float(
         config["ml_config"]["expansion_ratio"]
     )
 
-    # 整数转换
-    config["cal_loop_num"] = int(config["cal_loop_num"])
-    config["difference"] = int(config["difference"])
+    # 整数转换 - 从新的配置结构中获取
+    config["cal_settings"]["cal_loop_num"] = int(config["cal_settings"]["cal_loop_num"])
+    config["cal_settings"]["difference"] = int(config["cal_settings"]["difference"])
+    config["rnucleus"]["atomic_number"] = int(config["rnucleus"]["atomic_number"])
+    config["rnucleus"]["mass_number"] = int(config["rnucleus"]["mass_number"])
 
-    # 路径转换
-    config["root_path"] = Path(config["root_path"])
-    config["scf_cal_path"] = (
-        config["root_path"] / f"{config['conf']}_{config['cal_loop_num']}"
+    # 路径转换 - 从 target 节中获取
+    config["target"]["root_path"] = Path(config["target"]["root_path"])
+    config["target"]["scf_cal_path"] = (
+        config["target"]["root_path"] / f"{config['target']['conf']}_{config['cal_settings']['cal_loop_num']}"
     )
+
+    # 服务器配置整数转换
+    if "server_settings" in config:
+        server_settings = config["server_settings"]
+        if "tasks_per_node" in server_settings:
+            server_settings["tasks_per_node"] = int(server_settings["tasks_per_node"])
+        if "cpu_threads" in server_settings:
+            server_settings["cpu_threads"] = int(server_settings["cpu_threads"])
 
     # 模型参数处理
     if "model_params" in config:
@@ -150,11 +174,11 @@ def _process_config_data(config):
         if "random_state" in model_params:
             model_params["random_state"] = int(model_params["random_state"])
 
-        # 处理class_weight字典，确保键为整数
+        # 处理class_weight字典（如果存在），确保键为整数
         if "class_weight" in model_params and isinstance(
             model_params["class_weight"], dict
         ):
-            class_weight = {}
+            class_weight: dict[int, float] = {}
             for k, v in model_params["class_weight"].items():
                 class_weight[int(k)] = float(v)
             model_params["class_weight"] = class_weight
@@ -165,40 +189,60 @@ def _process_config_data(config):
     return config
 
 
-def _validate_config_data(config):
+def _validate_config_data(config: dict[str, Any]) -> None:
     """验证配置数据的有效性"""
-    # 验证必需字段
-    required_fields = ["atom", "conf", "cal_loop_num", "cutoff_value", "chosen_ratio"]
-    missing_fields = [field for field in required_fields if field not in config]
-    if missing_fields:
-        raise ValueError(f"配置文件缺少必需字段: {missing_fields}")
+    # 验证必需字段 - 更新为新结构
+    required_sections = ["target", "cal_settings", "ml_config"]
+    missing_sections = [section for section in required_sections if section not in config]
+    if missing_sections:
+        raise ValueError(f"配置文件缺少必需的节: {missing_sections}")
 
-    # 验证数值范围
-    if "cutoff_value" in config:
-        if config["cutoff_value"] <= 0:
-            raise ValueError("cutoff_value 必须大于 0")
+    # 验证 target 节的必需字段
+    target_required = ["atom", "conf"]
+    target_missing = [field for field in target_required if field not in config["target"]]
+    if target_missing:
+        raise ValueError(f"target 节缺少必需字段: {target_missing}")
 
-    if "chosen_ratio" in config:
-        if not (0 < config["chosen_ratio"] <= 1):
-            raise ValueError("chosen_ratio 必须在 (0, 1] 范围内")
+    # 验证 cal_settings 节的必需字段
+    cal_required = ["cal_loop_num", "cutoff_value", "sampling_ratio"]
+    cal_missing = [field for field in cal_required if field not in config["cal_settings"]]
+    if cal_missing:
+        raise ValueError(f"cal_settings 节缺少必需字段: {cal_missing}")
 
-    if "expansion_ratio" in config["ml_config"]:
-        if config["ml_config"]["expansion_ratio"] < 1:
-            raise ValueError("expansion_ratio 必须大于等于 1")
+    # 验证数值范围 - 从新结构中获取
+    cutoff_value = config["cal_settings"]["cutoff_value"]
+    if cutoff_value <= 0:
+        raise ValueError("cutoff_value 必须大于 0")
 
-    # 验证光谱项列表
-    if "spectral_term" in config:
+    sampling_ratio = config["cal_settings"]["sampling_ratio"]
+    if not (0 < sampling_ratio <= 1):
+        raise ValueError("sampling_ratio 必须在 (0, 1] 范围内")
+
+    # 验证光谱项列表 - 从 cal_settings 节中获取
+    if "spectral_term" in config["cal_settings"]:
+        spectral_term = config["cal_settings"]["spectral_term"]
         if (
-            not isinstance(config["spectral_term"], list)
-            or len(config["spectral_term"]) == 0
+            not isinstance(spectral_term, list)
+            or len(spectral_term) == 0
         ):
             raise ValueError("spectral_term 必须是非空列表")
 
+    # 验证服务器配置
+    if "server_settings" in config:
+        server_settings = config["server_settings"]
+        if "tasks_per_node" in server_settings and server_settings["tasks_per_node"] <= 0:
+            raise ValueError("tasks_per_node 必须大于 0")
+
+    # 验证原子核配置
+    if "rnucleus" in config:
+        rnucleus = config["rnucleus"]
+        if "atomic_number" in rnucleus and rnucleus["atomic_number"] <= 0:
+            raise ValueError("atomic_number 必须大于 0")
+
     print(
-        f"配置验证通过: cutoff_value={config.get('cutoff_value')}, chosen_ratio={config.get('chosen_ratio')}"
+        f"配置验证通过: cutoff_value={cutoff_value}, sampling_ratio={sampling_ratio}, "
+        f"atom={config['target']['atom']}, conf={config['target']['conf']}"
     )
-
-
 #######################################################################
 
 
