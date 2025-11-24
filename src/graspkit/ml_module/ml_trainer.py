@@ -49,7 +49,7 @@ def train_model(
     )
 
     # 初始化或加载模型
-    models_dir = Path(config.root_path) / "models"
+    models_dir = Path(config.target.root_path) / "models"
     models_dir.mkdir(exist_ok=True)
 
     # 检查数据平衡性 (移到最前面)
@@ -61,7 +61,7 @@ def train_model(
     )
 
     # 模型初始化
-    if config.cal_loop_num == 1:
+    if config.cal_settings.cal_loop_num == 1:
         # 第一轮：直接创建新模型
         pos_weight = negative_count / positive_count  # 约为13
         class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
@@ -81,7 +81,7 @@ def train_model(
         )
     else:
         # 后续轮次：尝试加载之前的模型
-        model_path = models_dir / f"{config.conf}_{config.cal_loop_num - 1}.pkl"
+        model_path = models_dir / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
         if model_path.exists():
             model = joblib.load(model_path)
             logger.info(f"加载已有模型: {model_path}")
@@ -128,15 +128,15 @@ def train_model(
         cpu_count = os.cpu_count() or 4  # 如果无法获取则默认使用4核
 
         # 从配置文件读取PyTorch线程数，如果未设置则使用默认值
-        config_threads = config.cpu_config.get("cpu_threads", None)
-        if config_threads is not None:
+        cpu_threads = getattr(config.server_settings, "cpu_threads", 16)
+        if cpu_threads is not None:
             try:
-                config_threads = int(config_threads)
-                optimal_threads = min(config_threads, cpu_count)  # 不超过系统核心数
-                logger.info(f"使用配置文件中的PyTorch线程数: {config_threads}")
+                cpu_threads = int(cpu_threads)
+                optimal_threads = min(cpu_threads, cpu_count)  # 不超过系统核心数
+                logger.info(f"使用配置文件中的PyTorch线程数: {cpu_threads}")
             except (ValueError, TypeError):
                 logger.warning(
-                    f"配置文件中的cpu_threads值无效: {config_threads}，使用默认值"
+                    f"配置文件中的cpu_threads值无效: {cpu_threads}，使用默认值"
                 )
                 optimal_threads = min(32, cpu_count)
         else:
@@ -153,7 +153,7 @@ def train_model(
 
         logger.info(f"启用CPU多线程优化:")
         logger.info(f"- 系统CPU核心数: {cpu_count}")
-        logger.info(f"- 配置的线程数: {config_threads if config_threads else '未设置'}")
+        logger.info(f"- 配置的线程数: {cpu_threads if cpu_threads else '未设置'}")
         logger.info(f"- 实际PyTorch线程数: {optimal_threads}")
         logger.info(f"- 建议配置: max_epochs=150, batch_size=4096, hidden_size=96")
 
@@ -385,18 +385,18 @@ def evaluate_model(
 
 def handle_calculation_error(config, logger):
     """处理计算错误的情况"""
-    config_file_path = config.root_path / "config.toml"
-    if config.cal_error_num < 3:
+    config_file_path = config.target.root_path / "config.toml"
+    if config.cal_settings.cal_error_num < 3:
         # 更新配置文件
-        update_config(config_file_path, {"cal_error_num": config.cal_error_num + 1})
+        update_config(config_file_path, {"cal_error_num": config.cal_settings.cal_error_num + 1})
         update_config(config_file_path, {"continue_cal": True})
-        # continue_calculate(config.root_path, True)
+        # continue_calculate(config.target.root_path, True)
 
         # 重命名结果目录
-        original_cal_path = config.root_path / f"{config.conf}_{config.cal_loop_num}"
+        original_cal_path = config.target.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
         new_cal_path = (
-            config.root_path
-            / f"{config.conf}_{config.cal_loop_num}_err_{config.cal_error_num + 1}"
+            config.target.root_path
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_err_{config.cal_settings.cal_error_num + 1}"
         )
 
         if original_cal_path.exists():
@@ -409,7 +409,7 @@ def handle_calculation_error(config, logger):
     else:
         logger.info("连续三次波函数未改进，迭代收敛，退出筛选程序")
         update_config(config_file_path, {"continue_cal": False})
-        # continue_calculate(config.root_path, False)
+        # continue_calculate(config.target.root_path, False)
 
 
 def calculate_dynamic_chosen_ratio(
@@ -443,7 +443,7 @@ def calculate_dynamic_chosen_ratio(
     total_available_csfs = len(target_pool_csfs_data.CSFs_block_data[0])
     current_selected_count = len(all_chosen_indices)
     current_actual_ratio = current_selected_count / total_available_csfs
-    base_ratio = config.chosen_ratio
+    base_ratio = config.cal_settings.sampling_ratio
 
     logger.info(f"             === 动态选择率计算 ===")
     logger.info(f"             当前实际选择率: {current_actual_ratio:.4f}")
@@ -460,9 +460,9 @@ def calculate_dynamic_chosen_ratio(
 
         # 读取当前轮次的重要组态索引
         current_important_path = (
-            config.root_path
+            config.target.root_path
             / "results"
-            / f"{config.conf}_{config.cal_loop_num}_important_indices.pkl"
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_important_indices.pkl"
         )
         if current_important_path.exists():
             with open(current_important_path, "rb") as f:
@@ -496,11 +496,11 @@ def calculate_dynamic_chosen_ratio(
             )
 
         # 读取前一轮次的重要组态索引（如果存在）
-        if config.cal_loop_num > 1:
+        if config.cal_settings.cal_loop_num > 1:
             prev_important_path = (
-                config.root_path
+                config.target.root_path
                 / "results"
-                / f"{config.conf}_{config.cal_loop_num - 1}_important_indices.pkl"
+                / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_important_indices.pkl"
             )
             if prev_important_path.exists():
                 with open(prev_important_path, "rb") as f:
@@ -579,7 +579,7 @@ def calculate_dynamic_chosen_ratio(
         )
 
     # 策略2: 基于数据留存率调整
-    if config.cal_loop_num > 1:
+    if config.cal_settings.cal_loop_num > 1:
         if data_retention_rate > 0.8:
             # 留存率过高，说明计算过于保守，可以适当减少选择率
             factor = 0.95
@@ -612,7 +612,7 @@ def calculate_dynamic_chosen_ratio(
         )
 
     # 策略4: 迭代轮次考虑（随轮次递减，但受组态质量影响）
-    if config.cal_loop_num > 3:
+    if config.cal_settings.cal_loop_num > 3:
         # 基础衰减，但根据组态质量调整衰减速度
         base_decay = 0.95
         if important_ratio_in_calculation > 0.6 and data_retention_rate > 0.6:
@@ -624,7 +624,7 @@ def calculate_dynamic_chosen_ratio(
 
         adjustment_factor *= decay_factor
         adjustment_reasons.append(
-            f"迭代衰减(轮次{config.cal_loop_num}) -> 降低{1 - decay_factor:.1%}"
+            f"迭代衰减(轮次{config.cal_settings.cal_loop_num}) -> 降低{1 - decay_factor:.1%}"
         )
 
     # 策略5: 安全边界检查

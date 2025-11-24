@@ -139,10 +139,7 @@ def _process_config_data(config: dict[str, Any]) -> dict[str, Any]:
     # 浮点数转换 - 从新的配置结构中获取
     config["cal_settings"]["cutoff_value"] = float(config["cal_settings"]["cutoff_value"])
     config["cal_settings"]["sampling_ratio"] = float(config["cal_settings"]["sampling_ratio"])
-    config["cal_settings"]["expansion_ratio"] = float(config["cal_settings"]["expansion_ratio"])
-    config["ml_config"]["expansion_ratio"] = float(
-        config["ml_config"]["expansion_ratio"]
-    )
+    config["ml_config"]["expansion_ratio"] = float(config["ml_config"]["expansion_ratio"])
 
     # 整数转换 - 从新的配置结构中获取
     config["cal_settings"]["cal_loop_num"] = int(config["cal_settings"]["cal_loop_num"])
