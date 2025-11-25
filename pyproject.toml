@@ -12,37 +12,28 @@ keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", 
 requires-python = ">= 3.12.6,<3.14"
 
 dependencies = [
-  # 核心数据处理库
-  "numpy>=2.0.0",
-  "pandas>=2.2.2",
-  "matplotlib>=3.8.4",
-  "tqdm>=4.66.4",
-
-  # 机器学习库
-  "scikit-learn>=1.3.0",
-  "imbalanced-learn>=0.11.0",
-
-  # 注意：PyTorch依赖已移至optional-dependencies
-  # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
-
-  # 数据可视化
-  "seaborn>=0.11.0",
-
-  # 模型序列化和工具
-  "joblib>=1.1.0",
-
-  # 表格格式化
-  "tabulate>=0.8.9",
-
-  # 位数组处理 (可选)
-  "bitarray>=2.0.0",
-
-  # 配置文件处理
-  "rtoml>=0.9.0",
-
-  # HDF5 支持
-  "h5py>=3.8.0",
-
+    # 核心数据处理库
+    "numpy>=2.0.0",
+    "pandas>=2.2.2",
+    "matplotlib>=3.8.4",
+    "tqdm>=4.66.4",
+    # 机器学习库
+    "scikit-learn>=1.3.0",
+    "imbalanced-learn>=0.11.0",
+    # 注意：PyTorch依赖已移至optional-dependencies
+    # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
+    # 数据可视化
+    "seaborn>=0.11.0",
+    # 模型序列化和工具
+    "joblib>=1.1.0",
+    # 表格格式化
+    "tabulate>=0.8.9",
+    # 位数组处理 (可选)
+    "bitarray>=2.0.0",
+    # 配置文件处理
+    "rtoml>=0.9.0",
+    # HDF5 支持
+    "h5py>=3.8.0",
 ]
 
 # Optional dependencies for different environments
@@ -77,6 +68,7 @@ dev = [
     "twine>=4.0.0",
     "wheel>=0.40.0",
     "polars>=1.35.0",
+    "pyarrow>=22.0.0",
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
@@ -99,25 +91,25 @@ all = [
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 extra-index-url = ["https://pypi.org/simple"]
 required-environments = [
-"sys_platform == 'linux' and platform_machine == 'x86_64'",
-"sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
 ]
 
 conflicts = [
-  [
-    { extra = "cpu" },
-    { extra = "gpu" },
-  ],
+    [
+        { extra = "cpu" },
+        { extra = "gpu" },
+    ],
 ]
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "gpu" },
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "gpu" },
 ]
 torchvision = [
-  { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "gpu" },
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "gpu" },
 ]
 
 [[tool.uv.index]]
@@ -140,22 +132,22 @@ authors = [
 ]
 
 classifiers = [
-  # How mature is this project? Common values are
-  #   3 - Alpha
-  #   4 - Beta
-  # "Development Status :: 5 - Production/Stable",
-  "Development Status :: 4 - Beta",
+    # How mature is this project? Common values are
+    #   3 - Alpha
+    #   4 - Beta
+    # "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
 
-  # Specify the Python versions you support here.
-  "Programming Language :: Python :: 3",
+     # Specify the Python versions you support here.
+    "Programming Language :: Python :: 3",
 
-  # Topic classification
-  "Topic :: Scientific/Engineering :: Physics",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Intended Audience :: Science/Research",
+     # Topic classification
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Science/Research",
 
-  # Environment
-  "Environment :: Console",
+    # Environment
+    "Environment :: Console",
 ]
 
 [tool.hatch.build.targets.wheel]
