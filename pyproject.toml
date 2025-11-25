@@ -76,6 +76,7 @@ dev = [
     "build>=0.10.0",
     "twine>=4.0.0",
     "wheel>=0.40.0",
+    "polars>=1.35.0",
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
