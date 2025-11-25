@@ -10,7 +10,7 @@ A Python package for data collection and processing of results from GRASP (Gener
 
 ### Package Structure
 - **graspkit/** - Main Python package (in `src/`)
-  - **CSFs_processor/** - Configuration State Function processing and selection
+  - **CSFs_processor/** - Configuration State Function processing and selection algorithms
   - **data_IO/** - Data input/output handling, including specialized loaders for different data formats
   - **grasp_data_extractor/** - Data extraction from GRASP2018 calculations (ASF and transition data)
   - **ml_module/** - Machine learning infrastructure (neural networks, training, analysis)
@@ -26,74 +26,58 @@ A Python package for data collection and processing of results from GRASP (Gener
 
 ### Environment Setup
 
-#### 方法一：使用UV (推荐)
-UV 是超快速的Python包和项目管理器，提供极快的依赖解析和安装。
-
+#### UV Package Manager (Recommended)
 ```bash
-# 安装 UV (如果尚未安装)
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 克隆项目并进入目录
-git clone https://github.com/YenochQin/graspkit-tools.git
-cd graspkit-tools
-
-# 创建虚拟环境
+# Create and activate environment
 uv venv
-
-# 激活环境
 # Windows
 .venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
 
-# 安装依赖
-uv pip install -e .
+# Install dependencies (must choose CPU or GPU)
+uv sync --extra cpu --extra dev    # CPU version with dev tools
+uv sync --extra gpu --extra dev     # GPU version with dev tools (NVIDIA CUDA)
 
-# 运行特定命令
-uv run python your_script.py
+# Alternative legacy installation
+uv pip install -e .
 ```
 
-**UV 环境特性**：
-- 超快的依赖解析和安装（比pip快10-100倍）
-- 自动管理Python版本 (>=3.12)
-- 支持CPU和GPU两种环境配置
-- 跨平台支持 (Linux, Windows, macOS)
-- 现代化的锁文件机制 (uv.lock)
-- 隔离的开发环境
-- 与pip完全兼容
-
-#### 方法二：使用传统pip安装
+#### Traditional pip Installation
 ```bash
-# Choose appropriate environment
-pip install -r requirements-cpu.txt    # CPU environment
-pip install -r requirements-gpu.txt    # GPU environment
+# Create and activate environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
 
-# Development installation
-pip install -e .
+# Install dependencies
+pip install -e .  # Uses CPU dependencies by default
+```
 
-# Build package
+### Building and Quality
+
+#### Package Building
+```bash
+# Build the package (cross-platform scripts)
+python build_package.py --clean    # Clean build
+./build_package.sh --clean         # Unix-like systems
+build_package.bat --clean          # Windows
+
+# Manual build
 python -m build
 ```
 
-### Linting
+#### Linting and Quality
 ```bash
-# Run Ruff linting
+# Run Ruff linting with NumPy 2.0 compatibility rules
 ruff check .
 
 # Auto-fix linting issues
 ruff check . --fix
 ```
 
-### Common Workflows
-
-#### Package Installation and Verification
+#### Package Verification
 ```bash
-# Install from source
-pip install -e .
-
 # Verify installation
 python -c "import graspkit; print('✅ Package OK')"
 
@@ -101,66 +85,50 @@ python -c "import graspkit; print('✅ Package OK')"
 python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-#### Data Processing Workflow
-```bash
-# Process HDF5 descriptors
-python read_hdf5_descriptors.py
-```
+### Key Development Patterns
+
+#### Centralized Import Structure
+The package exposes all functionality through `src/graspkit/__init__.py` with comprehensive imports:
+- Data I/O operations (GraspFileLoad, descriptor loading/saving)
+- Utility functions (CSFs, energy calculations, transition data)
+- Machine learning modules (ANNClassifier, training functions)
+- Data processing tools (ASF composition, transition analysis)
+
+#### Module Interdependencies
+- **data_IO** serves as foundation, providing file loading and persistence
+- **CSFs_processor** contains core quantum mechanics algorithms
+- **ml_module** depends on processed data from CSFs_processor
+- **grasp_data_extractor** handles GRASP-specific data formats
+- **utils** provides shared functionality across all modules
+
+#### Version Management
+- Dynamic version from `src/graspkit/version.py` (currently 2.8dev1)
+- Hatchling build backend configured in `pyproject.toml`
+- Cross-platform build scripts available for automation
 
 ### Configuration Management
 
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
 - **uv.lock** - UV lock file for reproducible dependency management
-- **Version management** - Dynamic versioning from `src/graspkit/version.py`
-- **Linting** - Ruff with NumPy 2.0 compatibility rules
+- **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
+- **Ruff Configuration** - NumPy 2.0 compatibility rules in pyproject.toml
 
-#### Dependencies
-- **UV environment** - Managed environments with ultra-fast dependency resolution
-- **requirements-cpu.txt** - CPU-optimized dependencies with PyTorch CPU version (legacy)
-- **requirements-gpu.txt** - GPU-enabled dependencies with CUDA support (legacy)
-
-## Important Implementation Notes
+#### Dependencies Management
+- **CPU Environment** - PyTorch CPU version for general compatibility
+- **GPU Environment** - PyTorch CUDA version for NVIDIA GPUs
+- **Development Tools** - pytest, ruff, mypy, black, jupyter ecosystem
+- **Data Processing** - pandas, numpy, matplotlib, h5py, polars, pyarrow
 
 ### Current Repository Status
-- **Version**: 2.7.dev1 (development version)
+- **Version**: 2.8dev1 (development version)
 - **Python Version**: Requires 3.12+
-- **Package Manager**: Hatchling (modern Python packaging)
-- **No test suite** - Tests mentioned in previous CLAUDE.md are not present in current repository
-- **No script directories** - The ml_CSFs_selection_scripts/ directory exists in parent project structure but not in this repository
-
-### Key Dependencies
-- **PyTorch >= 2.0.0** - Machine learning framework (CPU/GPU versions)
-- **NumPy >= 2.0.0** - Numerical computing
-- **Pandas >= 2.2.2** - Data manipulation and analysis
-- **Scikit-learn >= 1.3.0** - Traditional machine learning algorithms
-- **Matplotlib >= 3.8.4** - Data visualization
-- **rtoml >= 0.9.0** - TOML configuration file handling
-
-### Development Patterns
-
-#### Package Import Structure
-The package uses a centralized import system in `src/graspkit/__init__.py` that exposes key functionality:
-- Data I/O operations (GraspFileLoad, descriptor loading/saving)
-- Utility functions (CSFs, energy calculations, transition data)
-- Machine learning modules
-- Data processing tools
-
-#### Module Organization
-- **data_IO/** - Handles all file I/O operations with support for multiple formats
-- **ml_module/** - Contains neural network implementations and training logic
-- **grasp_data_extractor/** - Specialized tools for extracting data from GRASP calculations
-- **utils/** - Shared utilities and data structures
-- **CSFs_processor/** - Core CSF processing and selection algorithms
-
-### Build System
-- Uses modern Python packaging with `pyproject.toml`
-- Dynamic version management from `version.py`
-- Ruff linting with NumPy 2.0 compatibility focus
-- Pre-built distributions available in `dist/` directory
+- **Package Manager**: Hatchling with UV support
+- **Build System**: Modern packaging with optional dependencies
+- **Testing**: No formal test suite present in current repository
 
 ### Performance Considerations
-- PyTorch thread count should be configured based on available CPU cores
+- PyTorch environment choice affects computational performance
+- UV provides 10-100x faster dependency resolution than pip
 - Large CSF datasets require careful memory management
-- Multi-block processing available for descriptor generation
 - HDF5 format supported for efficient large dataset handling
