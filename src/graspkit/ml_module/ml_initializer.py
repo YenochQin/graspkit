@@ -32,7 +32,7 @@ def setup_logging(config):
     log_config = env_config.get_logging_config()
 
     # 创建日志目录
-    log_dir = config.target.root_path / "logs"
+    log_dir = config.cal_settings.root_path / "logs"
     log_dir.mkdir(exist_ok=True)
 
     # 配置日志级别
@@ -76,7 +76,7 @@ def setup_directories(config):
     directories = ["models", "descripotors", "test_data", "roc_curves", "results"]
 
     for directory in directories:
-        (config.target.root_path / directory).mkdir(parents=True, exist_ok=True)
+        (config.cal_settings.root_path / directory).mkdir(parents=True, exist_ok=True)
 
     return "目录创建成功"
 
@@ -89,7 +89,7 @@ def initialize_iteration_results_csv(config, logger=None):
         config: 配置对象
         logger: 日志记录器
     """
-    results_file = Path(config.target.root_path) / "results" / "iteration_results.csv"
+    results_file = Path(config.cal_settings.root_path) / "results" / "iteration_results.csv"
 
     # 如果文件已存在，不重新创建表头
     if results_file.exists():
@@ -135,7 +135,7 @@ def initialize_iteration_results_csv(config, logger=None):
 def validate_initial_files(config, logger) -> None:
     """验证初始文件的存在和有效性"""
     # 验证目标总组态文件
-    target_pool_file_path = config.target.root_path / config.target.full_CSFs_set_file
+    target_pool_file_path = config.cal_settings.root_path / config.target.full_CSFs_set_file
     try:
         if not target_pool_file_path.is_file():
             logger.error(f"目标总组态文件无效或不存在: {target_pool_file_path}")
@@ -162,11 +162,13 @@ def load_data_files(config, logger) -> tuple:
     Returns:
         tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict)
     """
-    # config.yaml文件读取时已经处理好root_path和config.scf_cal_path路径
+    # config.yaml文件读取时已经处理好root_path和scf_cal_path路径
+
+    scf_cal_path = config.cal_settings.root_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
     # 加载能级文件
     energy_level_file_path = (
-        config.scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.level"
+        scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.level"
     )
     energy_level_file_load = LevelsEnergyData.from_filepath(
         str(energy_level_file_path), "LEVEL"
@@ -177,9 +179,9 @@ def load_data_files(config, logger) -> tuple:
     # 加载rmix文件
     # 根据计算轮次确定文件后缀
     if config.cal_settings.cal_method == "rmcdhf":
-        rmix_file_path = config.scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.m"
+        rmix_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.m"
     elif config.cal_settings.cal_method == "rci":
-        rmix_file_path = config.scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.cm"
+        rmix_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.cm"
     else:
         raise ValueError(f"不支持的计算方法: {config.cal_settings.cal_method}")
 
@@ -188,7 +190,7 @@ def load_data_files(config, logger) -> tuple:
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
     # 加载初始 CSFs 描述符文件
-    target_pool_file_path = config.target.root_path / f"{config.target.conf}"
+    target_pool_file_path = config.cal_settings.root_path / f"{config.target.conf}"
     use_cpp = getattr(config.ml_config, "use_cpp_descriptor_generator", False)
     if use_cpp:
         # 使用C++生成的HDF5文件
@@ -214,14 +216,14 @@ def load_data_files(config, logger) -> tuple:
         logger.info(f"加载初始 CSFs 描述符文件: {target_pool_file_path}")
 
     # 加载本轮计算CSFs文件
-    cal_csfs_file_path = config.scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
+    cal_csfs_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
     cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
     cal_csfs_data = cal_csfs_file_laod.data_file_process()
     logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_indices_file_path = (
-        config.scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_sampled_indices.pkl"
+        scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_sampled_indices.pkl"
     )
     caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
@@ -305,7 +307,7 @@ def check_energy_convergence(
     try:
         # 获取上一轮的能量数据文件路径
         previous_energy_path = (
-            config.target.root_path
+            config.cal_settings.root_path
             / f"{config.target.conf}_{config.loop_num}"
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_correct_levels.csv"
         )
@@ -378,7 +380,7 @@ def evaluate_calculation_convergence(config, logger, current_calculation_csfs=No
         for i in range(3):
             loop_num = config.cal_settings.cal_loop_num - 2 + i  # 前3次：当前-2, 当前-1, 当前
             csv_path = (
-                config.target.root_path
+                config.cal_settings.root_path
                 / f"{config.target.conf}_{loop_num}"
                 / f"{config.target.conf}_{loop_num}_correct_levels.csv"
             )
@@ -396,7 +398,7 @@ def evaluate_calculation_convergence(config, logger, current_calculation_csfs=No
             return True
 
         # 读取组态数量数据
-        iteration_results_path = config.target.root_path / "results" / "iteration_results.csv"
+        iteration_results_path = config.cal_settings.root_path / "results" / "iteration_results.csv"
         csfs_num = []  # 存储每轮的组态数量
 
         # 如果提供了当前轮的CSFs数量，则优先使用
@@ -649,7 +651,7 @@ def generate_train_csfs_descriptors(
 
     # 加载当前轮次选择的CSF索引
     current_indices_ci_path = (
-        config.target.root_path
+        config.cal_settings.root_path
         / "results"
         / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_ci_squared.pkl"
     )
@@ -674,7 +676,7 @@ def generate_train_csfs_descriptors(
     if config.cal_settings.cal_loop_num > 1:
         # 读取历次迭代保存的CI系数数据
         previous_indices_ci_path = (
-            config.target.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
+            config.cal_settings.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
         )
         if not previous_indices_ci_path.exists():
             raise FileNotFoundError(
@@ -738,7 +740,7 @@ def generate_train_csfs_descriptors(
     }
 
     accumulated_ci_path = (
-        config.target.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
+        config.cal_settings.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
     )
     pkl_storage(accumulated_ci_data, accumulated_ci_path)
     logger.info(
@@ -746,7 +748,7 @@ def generate_train_csfs_descriptors(
     )
 
     # 保存描述符文件
-    cal_path = config.target.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
+    cal_path = config.cal_settings.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
     save_descriptors(
         caled_csfs_descriptors,
         f"{cal_path}/{config.target.conf}_{config.cal_settings.cal_loop_num}_full",

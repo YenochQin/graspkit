@@ -139,7 +139,7 @@ def _process_config_data(config: dict[str, Any]) -> dict[str, Any]:
     # 浮点数转换 - 从新的配置结构中获取
     config["cal_settings"]["cutoff_value"] = float(config["cal_settings"]["cutoff_value"])
     config["cal_settings"]["sampling_ratio"] = float(config["cal_settings"]["sampling_ratio"])
-    config["ml_config"]["expansion_ratio"] = float(config["ml_config"]["expansion_ratio"])
+    config["cal_settings"]["expansion_ratio"] = float(config["cal_settings"]["expansion_ratio"])
 
     # 整数转换 - 从新的配置结构中获取
     config["cal_settings"]["cal_loop_num"] = int(config["cal_settings"]["cal_loop_num"])
@@ -148,9 +148,9 @@ def _process_config_data(config: dict[str, Any]) -> dict[str, Any]:
     config["rnucleus"]["mass_number"] = int(config["rnucleus"]["mass_number"])
 
     # 路径转换 - 从 target 节中获取
-    config["target"]["root_path"] = Path(config["target"]["root_path"])
-    config["target"]["scf_cal_path"] = (
-        config["target"]["root_path"] / f"{config['target']['conf']}_{config['cal_settings']['cal_loop_num']}"
+    config["cal_settings"]["root_path"] = Path(config["cal_settings"]["root_path"])
+    config["cal_settings"]["scf_cal_path"] = (
+        config["cal_settings"]["root_path"] / f"{config['target']['conf']}_{config['cal_settings']['cal_loop_num']}"
     )
 
     # 服务器配置整数转换

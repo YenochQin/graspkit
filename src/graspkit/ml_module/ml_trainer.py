@@ -49,7 +49,7 @@ def train_model(
     )
 
     # 初始化或加载模型
-    models_dir = Path(config.target.root_path) / "models"
+    models_dir = Path(config.cal_settings.root_path) / "models"
     models_dir.mkdir(exist_ok=True)
 
     # 检查数据平衡性 (移到最前面)
@@ -266,12 +266,13 @@ def train_model(
     logger.info(f"y_probability_all形状: {y_probability_all.shape}")
     logger.info(f"正确能级位置: {asfs_position}")
 
+    scf_cal_path = config.cal_settings.root_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
     roc_auc, pr_auc = ANNClassifier.plot_curve(
         csf_mix_coeff_squared_sum,
         y_probability_all,
         y_test,
         y_probability,
-        config.scf_cal_path.joinpath("roc_auc.png"),
+        scf_cal_path.joinpath("roc_auc.png"),
     )
     f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
         y_test, y_prediction, y_probability
@@ -385,17 +386,20 @@ def evaluate_model(
 
 def handle_calculation_error(config, logger):
     """处理计算错误的情况"""
-    config_file_path = config.target.root_path / "config.toml"
+    config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:
         # 更新配置文件
-        update_config(config_file_path, {"cal_error_num": config.cal_settings.cal_error_num + 1})
-        update_config(config_file_path, {"continue_cal": True})
-        # continue_calculate(config.target.root_path, True)
+        update_config(config_file_path, {
+            'cal_settings': {
+                "cal_error_num": config.cal_settings.cal_error_num + 1,
+                "continue_cal": True
+            }
+        })
 
         # 重命名结果目录
-        original_cal_path = config.target.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
+        original_cal_path = config.cal_settings.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
         new_cal_path = (
-            config.target.root_path
+            config.cal_settings.root_path
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_err_{config.cal_settings.cal_error_num + 1}"
         )
 
@@ -408,8 +412,11 @@ def handle_calculation_error(config, logger):
 
     else:
         logger.info("连续三次波函数未改进，迭代收敛，退出筛选程序")
-        update_config(config_file_path, {"continue_cal": False})
-        # continue_calculate(config.target.root_path, False)
+        update_config(config_file_path, {
+            'cal_settings': {
+                "continue_cal": True
+            }
+        })
 
 
 def calculate_dynamic_chosen_ratio(
@@ -460,7 +467,7 @@ def calculate_dynamic_chosen_ratio(
 
         # 读取当前轮次的重要组态索引
         current_important_path = (
-            config.target.root_path
+            config.cal_settings.root_path
             / "results"
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_important_indices.pkl"
         )
@@ -498,7 +505,7 @@ def calculate_dynamic_chosen_ratio(
         # 读取前一轮次的重要组态索引（如果存在）
         if config.cal_settings.cal_loop_num > 1:
             prev_important_path = (
-                config.target.root_path
+                config.cal_settings.root_path
                 / "results"
                 / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_important_indices.pkl"
             )
