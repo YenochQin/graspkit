@@ -45,13 +45,10 @@ def validate_csf_descriptors_coverage(
         values_per_orbital = 3
         electron_index_in_orbital = 0
 
-    # 从描述符结构推断轨道数量
-    actual_n_orbitals = descriptors.shape[1] // values_per_orbital
-
     # 直接通过切片获取每个轨道的电子填充
     electron_indices = np.arange(
         electron_index_in_orbital,
-        actual_n_orbitals * values_per_orbital,
+        descriptors.shape[1],
         values_per_orbital,
     )
 
@@ -105,9 +102,8 @@ def select_csfs_for_coverage(
         electron_index_in_orbital = 0
 
     # 获取每个轨道的电子填充位置索引
-    n_orbitals = full_descriptors.shape[1] // values_per_orbital
     electron_indices = np.arange(
-        electron_index_in_orbital, n_orbitals * values_per_orbital, values_per_orbital
+        electron_index_in_orbital, full_descriptors.shape[1], values_per_orbital
     )
 
     # 提取完整描述符中的电子数信息
@@ -181,7 +177,8 @@ def save_iteration_results(
     actual_eval_time = metadata.get("eval_time", eval_time)
 
     # 保存到CSV文件
-    results_file = Path(config.target.root_path) / "results" / "iteration_results.csv"
+    root_path = getattr(config.cal_settings, "root_path", Path("."))
+    results_file = root_path / "results" / "iteration_results.csv"
     results_file.parent.mkdir(parents=True, exist_ok=True)
 
     # 创建表头（如果文件不存在）
@@ -229,11 +226,15 @@ def save_iteration_results(
     important_retention_rate = selection_results.get("important_retention_rate", 0.0)
     ml_retention_rate = selection_results.get("ml_retention_rate", 0.0)
 
+    # 安全获取配置参数
+    cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
+
     with open(results_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
+
         writer.writerow(
             [
-                config.cal_settings.cal_loop_num,  # 迭代轮次
+                cal_loop_num,  # 迭代轮次
                 important_count,  # 重要组态数量
                 ml_predicted_count,  # ML预测的高概率组态总数
                 ml_new_count,  # ML新增的组态数（下次计算用）
@@ -262,12 +263,12 @@ def save_iteration_results(
 
     logger.info(f"迭代结果已保存到: {results_file}")
     logger.info(
-        f"第{config.cal_settings.cal_loop_num}轮 - 重要组态: {important_count} (占原始: {important_retention_rate:.4%})"
+        f"第{cal_loop_num}轮 - 重要组态: {important_count} (占原始: {important_retention_rate:.4%})"
     )
     logger.info(
-        f"第{config.cal_settings.cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
+        f"第{cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
     )
-    logger.info(f"第{config.cal_settings.cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
+    logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
 
 def save_and_plot_results(
@@ -308,10 +309,10 @@ def save_and_plot_results(
         logger.info("开始保存结果和绘制图表")
 
     # 使用config中的root_path，这是setup_directories创建目录的基础路径
-    root_path = getattr(config, "root_path", Path("."))
+    root_path = getattr(config.cal_settings, "root_path", Path("."))
 
     # 获取文件名
-    file_name = getattr(config, "file_name", f"model_{int(time.time())}")
+    file_name = f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
 
     saved_files = {}
 

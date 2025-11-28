@@ -6,7 +6,7 @@
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from types import SimpleNamespace
 from dataclasses import dataclass
 import gzip
@@ -124,12 +124,13 @@ def continue_calculate(save_path: str | Path, continue_calculate: bool):
     return f"Continue calculate is set to {continue_calculate}"
 
 
-def update_config(config_path: str | Path, updates):
+def update_config(config_path: str | Path, updates: Dict[str, Any]):
     """更新TOML配置文件
 
     Args:
         config_path: 配置文件路径
-        updates: 要更新的键值对字典
+        updates: 要更新的键值对字典，支持嵌套字典结构
+                 例如：{'cal_settings': {'sampling_ratio': 0.1}}
     """
     # 确保路径是Path对象
     if isinstance(config_path, str):
@@ -138,8 +139,15 @@ def update_config(config_path: str | Path, updates):
     # 使用 rtoml 读取TOML文件
     config = rtoml.load(config_path)
 
-    # 更新配置值
-    config.update(updates)
+    # 深度更新配置值，保留缺失的参数
+    for key, value in updates.items():
+        if key in config and isinstance(config[key], dict) and isinstance(value, dict):
+            # 递归更新嵌套字典
+            for subkey, subvalue in value.items():
+                config[key][subkey] = subvalue
+        else:
+            # 更新或添加键值对
+            config[key] = value
 
     # 写入配置文件
     rtoml.dump(config, config_path)
