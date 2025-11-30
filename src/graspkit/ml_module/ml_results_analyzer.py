@@ -18,17 +18,14 @@ from .neural_network import ANNClassifier
 
 
 def validate_csf_descriptors_coverage(
-    descriptors: np.ndarray, with_subshell_info: bool = False
-) -> Tuple[bool, List[int]]:
+                                        descriptors: np.ndarray
+                                     ) -> Tuple[bool, List[int]]:
     """
-    验证选取的CSFs描述符子集是否满足覆盖条件：
-    对于每个轨道，至少有一个CSF在其对应的电子填充数位置不为零
+    验证选取的CSFs描述符子集是否满足覆盖条件:
+    对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
 
     Args:
-        descriptors (np.ndarray): 选取出的CSFs描述符数组，形状为 (n_csfs, n_features)
-        with_subshell_info (bool): 是否包含子壳层信息
-            - False: 使用parse_csf_2_descriptor生成的描述符（每个轨道3个值）
-            - True: 使用parse_csf_2_descriptor_with_subshell生成的描述符（每个轨道5个值）
+        descriptors (np.ndarray): 选取出的CSFs描述符数组,形状为 (n_csfs, n_features)
 
     Returns:
         tuple[bool, list[int]]: (是否满足覆盖条件, 未覆盖的轨道索引列表)
@@ -38,12 +35,8 @@ def validate_csf_descriptors_coverage(
         return False, []
 
     # 确定每个轨道的电子填充位置索引
-    if with_subshell_info:
-        values_per_orbital = 5
-        electron_index_in_orbital = 2
-    else:
-        values_per_orbital = 3
-        electron_index_in_orbital = 0
+    values_per_orbital = 3
+    electron_index_in_orbital = 0
 
     # 直接通过切片获取每个轨道的电子填充
     electron_indices = np.arange(
@@ -71,79 +64,70 @@ def validate_csf_descriptors_coverage(
 
 
 def select_csfs_for_coverage(
-    descriptors: np.ndarray,
-    uncovered_orbitals: List[int],
-    full_descriptors: np.ndarray,
-    with_subshell_info: bool = False,
-) -> Tuple[np.ndarray, List[int]]:
+                            descriptors: np.ndarray,
+                            uncovered_orbitals: List[int],
+                            candidate_descriptors: np.ndarray,
+                            ) -> Tuple[np.ndarray, List[int]]:
     """
-    当覆盖验证失败时，从给定的完整描述符中按顺序选取包含缺少轨道的CSF描述符
+    当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
     Args:
-        descriptors (np.ndarray): 当前的CSFs描述符数组，形状为 (n_csfs, n_features)
+        descriptors (np.ndarray): 当前的CSFs描述符数组,形状为 (n_csfs, n_features)
         uncovered_orbitals (list[int]): 未覆盖的轨道索引列表
-        full_descriptors (np.ndarray): 完整的CSFs描述符数组，形状为 (n_full_csfs, n_features)
-        with_subshell_info (bool): 是否包含子壳层信息
+        candidate_descriptors (np.ndarray): 候选CSFs描述符数组,形状为 (n_candidates, n_features)
 
     Returns:
         tuple[np.ndarray, list[int]]: (更新后的描述符数组, 选取的CSF索引列表)
             - 更新后的描述符数组包含原有描述符和新选取的描述符
-            - 选取的CSF索引列表对应于full_descriptors中的索引
+            - 选取的CSF索引列表对应于candidate_descriptors中的相对索引
     """
     if not uncovered_orbitals:
         return descriptors, []
 
+    if candidate_descriptors.size == 0:
+        return descriptors, []
+
     # 确定每个轨道的电子填充位置索引
-    if with_subshell_info:
-        values_per_orbital = 5
-        electron_index_in_orbital = 2
-    else:
-        values_per_orbital = 3
-        electron_index_in_orbital = 0
+    values_per_orbital = 3
+    electron_index_in_orbital = 0
 
     # 获取每个轨道的电子填充位置索引
     electron_indices = np.arange(
-        electron_index_in_orbital, full_descriptors.shape[1], values_per_orbital
+        electron_index_in_orbital, candidate_descriptors.shape[1], values_per_orbital
     )
 
-    # 提取完整描述符中的电子数信息
-    full_electron_counts = full_descriptors[:, electron_indices]
+    # 提取候选描述符中的电子数信息
+    candidate_electron_counts = candidate_descriptors[:, electron_indices]
 
-    # 找出当前描述符中已包含的CSF索引（避免重复选择）
-    current_csfs_set = set(range(len(descriptors))) if descriptors.size > 0 else set()
-
-    selected_indices = []
+    selected_relative_indices = []
     remaining_uncovered = set(uncovered_orbitals)
 
-    # 按顺序遍历完整描述符
-    for idx in range(len(full_descriptors)):
-        if idx in current_csfs_set:
-            continue  # 跳过已包含的CSF
-
+    # 按顺序遍历候选描述符
+    for idx in range(len(candidate_descriptors)):
         # 检查当前CSF是否包含任何剩余未覆盖的轨道
-        csf_electrons = full_electron_counts[idx]
+        csf_electrons = candidate_electron_counts[idx]
         covers_orbitals = [orb for orb in remaining_uncovered if csf_electrons[orb] > 0]
 
         if covers_orbitals:
-            selected_indices.append(idx)
+            selected_relative_indices.append(idx)
             remaining_uncovered -= set(covers_orbitals)
 
             # 如果所有轨道都已覆盖，提前退出
             if not remaining_uncovered:
                 break
 
-    if not selected_indices:
+    if not selected_relative_indices:
         return descriptors, []
 
     # 构建更新后的描述符数组
-    new_descriptors = full_descriptors[selected_indices]
+    new_descriptors = candidate_descriptors[selected_relative_indices]
 
     if descriptors.size == 0:
         updated_descriptors = new_descriptors
     else:
         updated_descriptors = np.vstack([descriptors, new_descriptors])
 
-    return updated_descriptors, selected_indices
+    return updated_descriptors, selected_relative_indices
 
 
 def save_iteration_results(

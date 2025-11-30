@@ -43,7 +43,7 @@ def test_coverage_function():
 
     # 测试函数
     is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
-        test_descriptors_no_subshell, with_subshell_info=False
+        test_descriptors_no_subshell
     )
 
     print(f"是否所有轨道都被覆盖: {is_covered}")
@@ -73,7 +73,7 @@ def test_coverage_function():
 
     # 测试函数
     is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
-        test_descriptors_with_subshell, with_subshell_info=True
+        test_descriptors_with_subshell
     )
 
     print(f"是否所有轨道都被覆盖: {is_covered}")
@@ -91,7 +91,7 @@ def test_coverage_function():
     ])
 
     is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
-        fully_covered_descriptors, with_subshell_info=False
+        fully_covered_descriptors
     )
 
     print(f"是否所有轨道都被覆盖: {is_covered}")
@@ -105,7 +105,7 @@ def test_coverage_function():
     empty_descriptors = np.array([])
 
     is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
-        empty_descriptors, with_subshell_info=False
+        empty_descriptors
     )
 
     print(f"是否所有轨道都被覆盖: {is_covered}")

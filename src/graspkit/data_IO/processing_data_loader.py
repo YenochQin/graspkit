@@ -275,9 +275,14 @@ def load_descriptors(
             try:
                 with h5py.File(hdf5_path, "r") as f:
                     if "descriptors" in f:
-                        descriptors = f["descriptors"][:]
-                        print(f"Descriptors loaded from HDF5: {hdf5_path}")
-                        return descriptors
+                        # 检查descriptors是否是一个数据集，而不是数据类型
+                        descriptors_obj = f["descriptors"]
+                        if isinstance(descriptors_obj, h5py.Dataset):
+                            descriptors = descriptors_obj[:]
+                            print(f"Descriptors loaded from HDF5: {hdf5_path}")
+                            return descriptors
+                        else:
+                            print(f"Error: 'descriptors' is not a dataset but a {type(descriptors_obj)}")
                     else:
                         print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
             except Exception as e:
@@ -351,7 +356,7 @@ def load_descriptors_with_multi_block(
     load_path: Union[str, Path],
     file_format: Optional[str] = None,
     use_cpp: bool = False,
-) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+) -> Tuple[np.ndarray, np.ndarray] | None:
     """
     加载带标签的描述符数组
 
@@ -378,14 +383,24 @@ def load_descriptors_with_multi_block(
         if hdf5_path.exists():
             try:
                 with h5py.File(hdf5_path, "r") as f:
-                    descriptors = None
-                    labels = None
+                    descriptors = np.array([])
+                    labels = np.array([])
 
+                    # 检查并加载descriptors
                     if "descriptors" in f:
-                        descriptors = f["descriptors"][:]
+                        desc_obj = f["descriptors"]
+                        if isinstance(desc_obj, h5py.Dataset):
+                            descriptors = desc_obj[:]
+                        else:
+                            print(f"Warning: 'descriptors' is not a dataset but a {type(desc_obj)}")
 
+                    # 检查并加载labels
                     if "labels" in f:
-                        labels = f["labels"][:]
+                        labels_obj = f["labels"]
+                        if isinstance(labels_obj, h5py.Dataset):
+                            labels = labels_obj[:]
+                        else:
+                            print(f"Warning: 'labels' is not a dataset but a {type(labels_obj)}")
 
                     if descriptors is not None:
                         print(f"Descriptors loaded from HDF5: {hdf5_path}")
@@ -393,9 +408,8 @@ def load_descriptors_with_multi_block(
                             print(f"Labels loaded from HDF5: {hdf5_path}")
                         return descriptors, labels
                     else:
-                        print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
+                        print(f"Error: 'descriptors' dataset not found or invalid in {hdf5_path}")
                         return None
-
             except Exception as e:
                 print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
                 return None

@@ -40,7 +40,7 @@ def test_simple_coverage():
 
     # 测试无子壳层信息
     is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
-        test_descriptors, with_subshell_info=False
+        test_descriptors
     )
 
     print("测试结果:")
