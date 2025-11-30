@@ -635,8 +635,8 @@ def parse_csf_2_descriptor_with_subshell(
 
 
 def batch_process_csfs_to_descriptors(
-    CSFs_file_data: CSFs, with_subshell_info: bool = False
-) -> np.ndarray:
+                                    CSFs_file_data: CSFs
+                                ) -> np.ndarray:
     """
     批量处理CSFs文件中的所有CSF数据，转换为描述符数组
 
@@ -670,13 +670,9 @@ def batch_process_csfs_to_descriptors(
                         f"Warning: CSF item in block {block_idx}, index {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
                     )
                     continue
-
-                if with_subshell_info:
-                    descriptor = parse_csf_2_descriptor_with_subshell(
+                descriptor = parse_csf_2_descriptor_with_subshell(
                         peel_subshells_List, csf_item
                     )
-                else:
-                    descriptor = parse_csf_2_descriptor(peel_subshells_List, csf_item)
                 all_descriptors.append(descriptor)
 
             except Exception as e:
@@ -695,90 +691,6 @@ def batch_process_csfs_to_descriptors(
     print(f"Number of orbitals: {len(peel_subshells_List)}")
 
     return descriptors_array
-
-
-def batch_process_csfs_with_multi_block(
-    CSFs_file_data: CSFs, label_type: str = "block", with_subshell_info: bool = False
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    批量处理CSFs数据并生成带标签的描述符数组（适合机器学习）
-
-    Args:
-        CSFs_file_data (CSFs): CSFs文件数据对象
-        label_type (str): 标签类型
-            - 'block': 使用块索引 (0, 0, 0, 1, 1, 1...)
-            - 'sequential': 使用每个块内的CSF索引 (0, 1, 2, 0, 1, 2...)
-            - 'global_sequential': 使用全局连续索引 (0, 1, 2, 3, 4, 5...)
-            - 'custom': 使用字符串格式 (block_0_csf_0, block_0_csf_1...)
-        progress_bar (bool): 是否显示进度条
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: (描述符数组, 标签数组)
-    355 236 443  prVZ7Y7t
-    Example:
-        >>> # 使用块内索引
-        >>> X, y = batch_process_csfs_with_multi_block(csfs_data, label_type='sequential')
-        >>> # 使用全局索引
-        >>> X, y = batch_process_csfs_with_multi_block(csfs_data, label_type='global_sequential')
-    """
-    peel_subshells_List = get_CSFs_peel_subshells(CSFs_file_data)
-
-    all_descriptors = []
-    all_multi_block = []
-
-    global_csf_counter = 0  # 全局计数器
-
-    for block_idx, block in enumerate(CSFs_file_data.CSFs_block_data):
-        # 遍历块中的每个CSF项
-        for csf_idx, csf_item in enumerate(
-            wrap_iterator(block, desc=f"处理多块CSF {block_idx + 1}")
-        ):
-            try:
-                # 检查CSF项是否包含3行
-                if len(csf_item) != 3:
-                    print(
-                        f"Warning: CSF item in block {block_idx}, index {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
-                    )
-                    continue
-
-                if with_subshell_info:
-                    descriptor = parse_csf_2_descriptor_with_subshell(
-                        peel_subshells_List, csf_item
-                    )
-                else:
-                    descriptor = parse_csf_2_descriptor(peel_subshells_List, csf_item)
-                all_descriptors.append(descriptor)
-
-                # 生成标签
-                if label_type == "block":
-                    label = block_idx
-                elif label_type == "sequential":
-                    label = csf_idx  # 使用块内索引
-                elif label_type == "global_sequential":
-                    label = global_csf_counter  # 使用全局索引
-                else:  # custom - 可以根据需要扩展
-                    label = f"block_{block_idx}_csf_{csf_idx}"
-
-                all_multi_block.append(label)
-                global_csf_counter += 1
-
-            except Exception as e:
-                print(f"Error processing CSF in block {block_idx}, item {csf_idx}: {e}")
-                continue
-
-    if not all_descriptors:
-        raise ValueError("No valid CSF data processed!")
-
-    # 转换为numpy数组
-    descriptors_array = np.stack(all_descriptors)
-    labels_array = np.array(all_multi_block)
-
-    print(f"Successfully processed {len(descriptors_array)} CSFs with labels")
-    print(f"Descriptor array shape: {descriptors_array.shape}")
-    print(f"Labels array shape: {labels_array.shape}")
-    print(f"Label type used: {label_type}")
-
-    return descriptors_array, labels_array
 
 
 def create_csf_dataset_for_ml(

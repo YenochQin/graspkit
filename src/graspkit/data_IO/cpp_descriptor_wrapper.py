@@ -77,9 +77,12 @@ class CppDescriptorGenerator:
         self,
         input_file: str,
         output_file: Optional[str] = None,
-        with_subshell_info: bool = False,
         cpu_threads: int = 0,
         quiet: bool = True,
+        stream: bool = True,
+        auto_config: bool = True,
+        normalized: bool = True,
+        debug: bool = False,
     ) -> Dict[str, Union[int, float, str]]:
         """
         Run the CSF descriptor program.
@@ -87,9 +90,15 @@ class CppDescriptorGenerator:
         Args:
             input_file: Path to the input CSF file
             output_file: Path for the output HDF5 file. If None, generates automatically
-            with_subshell_info: Whether to use extended descriptor format
-            threads: Number of threads to use (0 for auto-detection)
+            cpu_threads: Number of threads to use (0 for auto-detection)
             quiet: Whether to suppress console output
+            stream: Use streaming processing mode (for very large files)
+            auto_config: Automatically optimize settings for file size
+            normalized: Use new normalized descriptor scheme
+            chunk_lines: Set chunk size in lines for streaming mode
+            stream_memory: Set memory limit for streaming mode in MB
+            estimate_time: Estimate processing time before starting
+            debug: Enable debug mode with detailed error messages
 
         Returns:
             Dictionary with processing statistics
@@ -108,9 +117,6 @@ class CppDescriptorGenerator:
         # Build command
         cmd = [str(self.executable_path)]
 
-        if with_subshell_info:
-            cmd.append("-e")
-
         if cpu_threads > 0:
             cmd.extend(["-t", str(cpu_threads)])
 
@@ -119,6 +125,19 @@ class CppDescriptorGenerator:
 
         if output_file:
             cmd.extend(["-o", str(output_file)])
+
+        # New streaming and processing options
+        if stream:
+            cmd.append("--stream")
+
+        if auto_config:
+            cmd.append("--auto-config")
+
+        if normalized:
+            cmd.append("--normalized")
+
+        if debug:
+            cmd.append("--debug")
 
         cmd.append(str(input_file))
 
@@ -147,9 +166,12 @@ class CppDescriptorGenerator:
         self,
         input_files: List[str],
         output_dir: str,
-        with_subshell_info: bool = False,
         cpu_threads: int = 0,
         verbose: bool = True,
+        stream: bool = True,
+        auto_config: bool = True,
+        normalized: bool = True,
+        debug: bool = False,
     ) -> List[Dict]:
         """
         Wrapper function compatible with existing Python API
@@ -157,9 +179,15 @@ class CppDescriptorGenerator:
         Args:
             input_files: List of input CSF files
             output_dir: Directory to save output files
-            with_subshell_info: Whether to use extended descriptor format
             cpu_threads: Number of threads to use
             verbose: Whether to print progress
+            stream: Use streaming processing mode (for very large files)
+            auto_config: Automatically optimize settings for file size
+            normalized: Use new normalized descriptor scheme
+            chunk_lines: Set chunk size in lines for streaming mode
+            stream_memory: Set memory limit for streaming mode in MB
+            estimate_time: Estimate processing time before starting
+            debug: Enable debug mode with detailed error messages
         Returns:
             List of processing results for each file
         """
@@ -179,9 +207,12 @@ class CppDescriptorGenerator:
                 result = self.generate_descriptors(
                     input_file,
                     output_file,
-                    with_subshell_info=with_subshell_info,
                     cpu_threads=cpu_threads,
                     quiet=verbose,
+                    stream=stream,
+                    auto_config=auto_config,
+                    normalized=normalized,
+                    debug=debug,
                 )
                 results.append(result)
 
@@ -217,9 +248,12 @@ class CppDescriptorGenerator:
 def batch_process_csfs_with_multi_block_cpp(
     input_files: List[str],
     output_dir: str,
-    with_subshell_info: bool = False,
     cpu_threads: int = 0,
     verbose: bool = True,
+    stream: bool = True,
+    auto_config: bool = True,
+    normalized: bool = True,
+    debug: bool = False,
 ) -> List[Dict]:
     """
     Drop-in replacement for batch_process_csfs_with_multi_block using C++ backend
@@ -228,7 +262,10 @@ def batch_process_csfs_with_multi_block_cpp(
     return generator.batch_process_with_multi_block(
         input_files,
         output_dir,
-        with_subshell_info=with_subshell_info,
         cpu_threads=cpu_threads,
         verbose=verbose,
+        stream=stream,
+        auto_config=auto_config,
+        normalized=normalized,
+        debug=debug,
     )
