@@ -122,7 +122,85 @@ def load_config(config_path: Union[str, Path]) -> SimpleNamespace:
 
     # 递归将字典转换为SimpleNamespace，支持嵌套访问
     return _dict_to_namespace(processed)
+'''
 
+  模型文件:
+  - models/{conf}_{loop_num}.pkl
+  - 例如: he_1.pkl, li_2.pkl
+
+  结果文件:
+  - results/{file_name}_test_results.csv
+  - results/{file_name}_train_results.csv
+  - results/{file_name}_other_predictions.csv
+  - results/iteration_results.csv
+
+  图像文件:
+  - {file_name}_roc_pr_curves.png
+  - probability_distribution.png
+
+  GRASP计算文件:
+  - {conf}_{loop_num}.level  # 能级数据
+  - {conf}_{loop_num}.m      # rmcdhf混合系数
+  - {conf}_{loop_num}.cm     # rci混合系数
+  - {conf}_{loop_num}.c      # CSFs文件
+
+  3. 动态路径生成规则
+
+  基于循环的路径:
+  # 当前计算路径
+  scf_cal_path = root_path / f'{conf}_{loop_num}'
+
+  # 模型路径
+  model_path = models_dir / f"{conf}_{loop_num-1}.pkl"
+
+  # 错误处理路径
+  error_path = root_path / f"{conf}_{loop_num}_err_{error_num+1}"
+
+  CI系数相关路径:
+  # 当前CI系数路径
+  current_ci_path = results_path /
+  f"{conf}_{loop_num}_ci_squared.pkl"
+
+  # 累积CI系数路径
+  accumulated_ci_path = results_path /
+  f"{conf}_previous_ci_squared.pkl"
+
+  4. 文件扩展名使用
+
+  | 扩展名    | 用途           | 示例
+          |
+  |--------|--------------|------------------------------------------
+  -|
+  | .pkl   | 模型和数据存储      | *_sampled_indices.pkl, 模型文件
+              |
+  | .csv   | 数据和结果存储      | *_test_results.csv
+          |
+  | .npy   | NumPy数组存储    | *_full.npy (描述符)
+          |
+  | .png   | 图像文件         | *_roc_pr_curves.png
+       |
+  | .level | GRASP能级数据    | {conf}_{loop_num}.level
+       |
+  | .m/.cm | GRASP混合系数    | {conf}_{loop_num}.m,
+  {conf}_{loop_num}.cm |
+  | .c     | GRASP CSFs文件 | {conf}_{loop_num}.c
+     |
+  | .h5    | HDF5格式       | {conf}.h5
+     |
+
+  5. 特殊路径模式
+
+  方法相关扩展:
+  - rmcdhf 方法: .m 扩展名
+  - rci 方法: .cm 扩展名
+
+  环境感知路径:
+  - 日志目录自动创建: root_path / "logs"
+  - 多个子目录统一创建: models, test_data, roc_curves, results
+
+  这个路径系统非常结构化，基于配置文件动态生成，支持多种文件格式，并
+  包含完整的错误处理机制。
+'''
 
 def _dict_to_namespace(d: dict[str, Any]) -> SimpleNamespace:
     """递归将字典转换为SimpleNamespace"""

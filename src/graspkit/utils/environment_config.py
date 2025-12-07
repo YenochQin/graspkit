@@ -105,7 +105,7 @@ class EnvironmentConfig:
             # 生产模式：结构化日志，关注关键信息
             return {
                 'level': 'INFO',
-                'format': '%(asctime)s - %(levelname)s - %(message)s',
+                'format': '%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
                 'show_progress_logs': False,
                 'highlight_stages': True
             }
@@ -113,7 +113,7 @@ class EnvironmentConfig:
             # 调试模式：详细日志
             return {
                 'level': 'DEBUG',
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                'format': '%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
                 'show_progress_logs': True,
                 'highlight_stages': True
             }

@@ -7,10 +7,12 @@
 
 import logging
 from pathlib import Path
+from typing import Dict, Tuple, List
+
 import csv
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, List, Optional
+
 
 from ..data_IO import (
     GraspFileLoad,
@@ -21,8 +23,7 @@ from ..data_IO import (
 )
 from ..data_IO.h5_descriptor_loader import load_hdf5_descriptors
 from ..grasp_data_extractor.ASF_data_collection import LevelsEnergyData
-from ..CSFs_processor import batch_asfs_mix_square_above_threshold
-from ..utils.data_modules import MixCoefficientData
+
 from ..utils.environment_config import get_environment_config
 
 
@@ -41,7 +42,7 @@ def setup_logging(config):
     # 创建处理器列表
     handlers = []
     handlers.append(
-        logging.FileHandler(log_dir / "machine_learning_training.log", encoding="utf-8")
+        logging.FileHandler(log_dir / "ml_training.log", encoding="utf-8")
     )
 
     # 在调试模式下添加控制台输出
@@ -61,11 +62,11 @@ def setup_logging(config):
     # 输出环境信息
     env_info = env_config.get_environment_info()
     logger.info(
-        f"🔧 环境配置 - SLURM: {env_info['is_slurm']}, 调试模式: {env_info['is_debug']}, 生产模式: {env_info['is_production']}"
+        f"环境配置 - SLURM: {env_info['is_slurm']}, 调试模式: {env_info['is_debug']}, 生产模式: {env_info['is_production']}"
     )
 
     if env_info["slurm_job_id"]:
-        logger.info(f"🔧 SLURM作业ID: {env_info['slurm_job_id']}")
+        logger.info(f"SLURM作业ID: {env_info['slurm_job_id']}")
 
     return logger
 
@@ -73,7 +74,7 @@ def setup_logging(config):
 def setup_directories(config):
     """创建必要的目录结构"""
 
-    directories = ["models", "descripotors", "test_data", "roc_curves", "results"]
+    directories = ["models", "test_data", "roc_curves", "results"]
 
     for directory in directories:
         (config.cal_settings.root_path / directory).mkdir(parents=True, exist_ok=True)
@@ -134,21 +135,23 @@ def initialize_iteration_results_csv(config, logger=None):
 
 def validate_initial_files(config, logger) -> None:
     """验证初始文件的存在和有效性"""
-    # 验证目标总组态文件
     target_pool_file_path = config.cal_settings.root_path / config.target.full_CSFs_set_file
+    
     try:
+        # 简洁的核心验证逻辑
         if not target_pool_file_path.is_file():
-            logger.error(f"目标总组态文件无效或不存在: {target_pool_file_path}")
-            raise FileNotFoundError(
-                f"目标总组态文件无效或不存在: {target_pool_file_path}"
-            )
-        logger.info(f"成功加载目标总组态文件: {target_pool_file_path}")
-    except PermissionError as e:
-        logger.error(f"无权限访问目标总组态文件: {target_pool_file_path}")
+            raise FileNotFoundError(f"总组态文件不存在: {target_pool_file_path}")
+        
+        logger.info(f"总组态文件验证通过: {target_pool_file_path}")
+        
+    except FileNotFoundError as e:
+        logger.error(f"文件验证失败: {str(e)}")
         raise
+        
     except Exception as e:
-        logger.error(f"加载目标总组态文件时发生未知错误: {str(e)}")
+        logger.error(f"文件验证异常: {type(e).__name__}: {str(e)}")
         raise
+
 
 
 def load_data_files(config, logger) -> tuple:
