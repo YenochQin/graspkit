@@ -161,41 +161,10 @@ def save_iteration_results(
     actual_eval_time = metadata.get("eval_time", eval_time)
 
     # 保存到CSV文件
-    root_path = getattr(config.cal_settings, "root_path", Path("."))
-    results_file = root_path / "results" / "iteration_results.csv"
-    results_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # 创建表头（如果文件不存在）
-    if not results_file.exists():
-        headers = [
-            "iteration",
-            "important_count",
-            "ml_predicted_count",
-            "ml_new_count",
-            "total_original_count",
-            "current_calculation_count",
-            "data_retention_rate",
-            "important_retention_rate",
-            "ml_retention_rate",
-            "training_time",
-            "inference_time",
-            "execution_time",
-            "total_time",
-            "test_f1",
-            "test_roc_auc",
-            "test_accuracy",
-            "test_precision",
-            "test_recall",
-            "train_f1",
-            "train_roc_auc",
-            "train_accuracy",
-            "train_precision",
-            "train_recall",
-            "overfitting_gap",
-        ]
-        with open(results_file, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow(headers)
+    results_file = config.result_path / "iteration_results.csv"
+    
+    with open(results_file, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
 
     # 计算过拟合差距
     overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
@@ -275,7 +244,6 @@ def save_and_plot_results(
     Args:
         evaluation_results: evaluate_model函数返回的结果字典
         model: 训练好的模型对象
-        config: 配置对象，包含root_path和file_name等信息
         rmix_file_data: 混合系数数据对象，包含真实的Ci值用于绘图
         asfs_position: 正确能级位置索引列表
         caled_csfs_indices_dict: 当前计算的CSF索引字典（用于数据对应检查）
@@ -292,20 +260,13 @@ def save_and_plot_results(
     if logger:
         logger.info("开始保存结果和绘制图表")
 
-    # 使用config中的root_path，这是setup_directories创建目录的基础路径
-    root_path = getattr(config.cal_settings, "root_path", Path("."))
-
-    # 获取文件名
-    file_name = f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
-
     saved_files = {}
 
     # 1. 保存预测结果数据到test_data目录
     if save_data:
-        test_data_dir = root_path / "test_data"
 
         # 保存测试集结果
-        test_file = test_data_dir / f"{file_name}_test_results.csv"
+        test_file = config.results_path / f"{config.loop_file_name}_test_results.csv"
         pd.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_test"],
@@ -316,8 +277,7 @@ def save_and_plot_results(
         saved_files["test_data"] = str(test_file)
 
         # 保存训练集结果到results目录
-        results_dir = root_path / "results"
-        train_file = results_dir / f"{file_name}_train_results.csv"
+        train_file = config.results_path / f"{config.loop_file_name}_train_results.csv"
         pd.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_train"],
@@ -328,7 +288,7 @@ def save_and_plot_results(
         saved_files["train_data"] = str(train_file)
 
         # 保存其他数据预测结果到results目录
-        other_file = results_dir / f"{file_name}_other_predictions.csv"
+        other_file = config.results_path / f"{config.loop_file_name}_other_predictions.csv"
         pd.DataFrame(
             {
                 "y_prediction": evaluation_results["predictions"]["y_prediction_other"],
@@ -338,12 +298,11 @@ def save_and_plot_results(
         saved_files["other_predictions"] = str(other_file)
 
         if logger:
-            logger.info(f"预测数据已保存到: {test_data_dir} 和 {results_dir}")
+            logger.info(f"预测数据已保存到: {test_file} 和 {train_file}")
 
     # 2. 保存模型文件到models目录
     if save_model:
-        models_dir = root_path / "models"
-        model_file = models_dir / f"{file_name}.pkl"
+        model_file = config.models_path / f"{config.loop_file_name}.pkl"
         joblib.dump(model, model_file)
         saved_files["model"] = str(model_file)
 
@@ -352,8 +311,6 @@ def save_and_plot_results(
 
     # 3. 绘制性能曲线到roc_curves目录
     if plot_curves:
-        roc_curves_dir = root_path / "roc_curves"
-
         try:
             # 获取真实的混合系数数据或使用占位数据
             y_prob_all = evaluation_results["probabilities"]["y_probability_all"]
@@ -422,7 +379,7 @@ def save_and_plot_results(
                     )
 
             # 绘制ROC和PR曲线
-            plot_file = roc_curves_dir / f"{file_name}_roc_pr_curves.png"
+            plot_file = config.roc_curves_path / f"{config.loop_file_name}_roc_pr_curves.png"
             roc_auc, pr_auc = ANNClassifier.plot_curve(
                 cal_mix_coeff_list,
                 y_prob_current_cal,  # 使用对应的概率数据
@@ -432,19 +389,8 @@ def save_and_plot_results(
             )
             saved_files["roc_pr_plot"] = str(plot_file)
 
-            # 额外绘制概率分布直方图
-            prob_hist_file = (
-                roc_curves_dir / f"{file_name}_probability_distribution.png"
-            )
-            _plot_probability_distribution(
-                evaluation_results["probabilities"]["y_probability_test"],
-                evaluation_results["true_labels"]["y_test"],
-                str(prob_hist_file),
-            )
-            saved_files["prob_distribution"] = str(prob_hist_file)
-
             if logger:
-                logger.info(f"性能图表已保存到: {roc_curves_dir}")
+                logger.info(f"性能图表已保存到: {config.roc_curves_path}")
 
         except Exception as e:
             if logger:
@@ -457,58 +403,3 @@ def save_and_plot_results(
 
     return saved_files
 
-
-def _plot_probability_distribution(y_probability, y_true, save_path):
-    """
-    绘制预测概率分布直方图
-
-    Args:
-        y_proba: 预测概率
-        y_true: 真实标签
-        save_path: 保存路径
-    """
-    import matplotlib.pyplot as plt
-
-    # matplotlib样式已通过fig_settings模块自动配置
-
-    plt.figure(figsize=(10, 6))
-
-    # 分别绘制正负样本的概率分布
-    pos_probability = y_probability[y_true == 1]
-    neg_probability = y_probability[y_true == 0]
-
-    plt.hist(
-        neg_probability,
-        bins=50,
-        alpha=0.7,
-        label=f"Negative samples (n={len(neg_probability)})",
-        color="lightcoral",
-        density=True,
-    )
-
-    plt.hist(
-        pos_probability,
-        bins=50,
-        alpha=0.7,
-        label=f"Positive samples (n={len(pos_probability)})",
-        color="lightblue",
-        density=True,
-    )
-
-    plt.axvline(
-        x=0.5,
-        color="red",
-        linestyle="--",
-        alpha=0.8,
-        label="Classification threshold (0.5)",
-    )
-
-    plt.xlabel("Predicted Probability")
-    plt.ylabel("Density")
-    plt.title("Probability Distribution")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()

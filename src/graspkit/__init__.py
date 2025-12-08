@@ -113,6 +113,7 @@ from .grasp_data_extractor import (
 
 from .ml_module import (
     ANNClassifier,
+    setup_config,
     setup_logging,
     setup_directories,
     initialize_iteration_results_csv,
@@ -228,6 +229,7 @@ __all__ = [
     # neural_network
     "ANNClassifier",
     # ml_initializer
+    "setup_config",
     "setup_logging",
     "setup_directories",
     "initialize_iteration_results_csv",
