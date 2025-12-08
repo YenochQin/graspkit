@@ -5,7 +5,6 @@
 @author :YenochQin (秦毅)
 """
 
-import time
 from pathlib import Path
 from typing import List, Tuple
 import csv

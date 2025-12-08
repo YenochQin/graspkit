@@ -6,12 +6,8 @@
 """
 
 # 标准库导入
-import argparse
-import logging
-import math
 import os
 import shutil
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -49,8 +45,7 @@ def train_model(
     )
 
     # 初始化或加载模型
-    models_dir = Path(config.cal_settings.root_path) / "models"
-    models_dir.mkdir(exist_ok=True)
+    config.models_path.mkdir(exist_ok=True)
 
     # 检查数据平衡性 (移到最前面)
     positive_count = np.sum(y_train == 1)
@@ -81,7 +76,7 @@ def train_model(
         )
     else:
         # 后续轮次：尝试加载之前的模型
-        model_path = models_dir / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
+        model_path = config.models_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
         if model_path.exists():
             model = joblib.load(model_path)
             logger.info(f"加载已有模型: {model_path}")
@@ -266,20 +261,12 @@ def train_model(
     logger.info(f"y_probability_all形状: {y_probability_all.shape}")
     logger.info(f"正确能级位置: {asfs_position}")
 
-    scf_cal_path = config.cal_settings.root_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
-    roc_auc, pr_auc = ANNClassifier.plot_curve(
-        csf_mix_coeff_squared_sum,
-        y_probability_all,
-        y_test,
-        y_probability,
-        scf_cal_path.joinpath("roc_auc.png"),
-    )
     f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
         y_test, y_prediction, y_probability
     )
     logger.info("测试集预测结果:")
     logger.info(
-        f"AUC:{roc_auc}, pr_auc:{pr_auc}, f1:{f1}, accuracy:{accuracy}, precision:{precision}, recall:{recall}"
+        f"AUC:{roc_auc}, f1:{f1}, accuracy:{accuracy}, precision:{precision}, recall:{recall}"
     )
 
     # Overfitting and underfitting monitoring
@@ -295,8 +282,8 @@ def train_model(
 
 
 def evaluate_model(
-    model, X_train, X_test, y_train, y_test, X_unselected, config, logger
-):
+            model, X_train, X_test, y_train, y_test, X_unselected, config, logger
+        ):
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -417,250 +404,3 @@ def handle_calculation_error(config, logger):
                 "continue_cal": True
             }
         })
-
-
-def calculate_dynamic_chosen_ratio(
-    config,
-    all_chosen_indices,
-    target_pool_csfs_data,
-    y_all_probability,
-    evaluation_results,
-    energy_level_data_pd,
-    logger,
-):
-    """
-    基于组态分析的动态选择率计算
-
-    根据重要组态占比、数据留存率和ML推理组态数量等直接指标，
-    动态调整CSF选择率，更符合物理意义。
-
-    Args:
-        config: 配置对象，包含当前选择率和迭代轮次等信息
-        all_chosen_indices: 当前轮次选择的所有CSF索引数组
-        target_pool_csfs_data: 目标CSF池数据对象
-        y_all_probability: 所有CSF的预测概率数组
-        evaluation_results: evaluate_model函数返回的完整评估结果字典
-        energy_level_data_pd: 当前轮次的能级数据DataFrame
-        logger: 日志记录器
-
-    Returns:
-        float: 动态调整后的选择率，范围在[0.03, 0.30]之间
-    """
-
-    total_available_csfs = len(target_pool_csfs_data.CSFs_block_data[0])
-    current_selected_count = len(all_chosen_indices)
-    current_actual_ratio = current_selected_count / total_available_csfs
-    base_ratio = config.cal_settings.sampling_ratio
-
-    logger.info(f"             === 动态选择率计算 ===")
-    logger.info(f"             当前实际选择率: {current_actual_ratio:.4f}")
-    logger.info(f"             基础选择率: {base_ratio:.4f}")
-
-    # === 统一读取重要组态文件 ===
-    current_important_indices = None
-    previous_important_indices = None
-    important_ratio_in_calculation = 0.5  # 默认值
-    data_retention_rate = 0.0
-
-    try:
-        import pickle
-
-        # 读取当前轮次的重要组态索引
-        current_important_path = (
-            config.cal_settings.root_path
-            / "results"
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_important_indices.pkl"
-        )
-        if current_important_path.exists():
-            with open(current_important_path, "rb") as f:
-                current_important_dict = pickle.load(f)
-            # 验证字典结构
-            if not current_important_dict:
-                logger.warning(
-                    f"             当前重要组态字典为空: {current_important_path}"
-                )
-                current_important_indices = None
-            elif 0 not in current_important_dict:
-                logger.warning(
-                    f"             当前重要组态字典中缺少键0，可用键: {list(current_important_dict.keys())}"
-                )
-                current_important_indices = None
-            else:
-                current_important_indices = current_important_dict[0]
-                current_important_count = len(current_important_indices)
-                important_ratio_in_calculation = (
-                    current_important_count / current_selected_count
-                )
-                logger.info(
-                    f"             当前重要组态占计算比例: {important_ratio_in_calculation:.4f}"
-                )
-        else:
-            logger.warning(
-                f"             未找到当前重要组态文件: {current_important_path}"
-            )
-            logger.warning(
-                f"             使用默认重要组态占比: {important_ratio_in_calculation}"
-            )
-
-        # 读取前一轮次的重要组态索引（如果存在）
-        if config.cal_settings.cal_loop_num > 1:
-            prev_important_path = (
-                config.cal_settings.root_path
-                / "results"
-                / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_important_indices.pkl"
-            )
-            if prev_important_path.exists():
-                with open(prev_important_path, "rb") as f:
-                    prev_important_dict = pickle.load(f)
-                # 验证字典结构
-                if not prev_important_dict:
-                    logger.warning(
-                        f"             前一轮重要组态字典为空: {prev_important_path}"
-                    )
-                    previous_important_indices = None
-                elif 0 not in prev_important_dict:
-                    logger.warning(
-                        f"             前一轮重要组态字典中缺少键0，可用键: {list(prev_important_dict.keys())}"
-                    )
-                    previous_important_indices = None
-                else:
-                    previous_important_indices = prev_important_dict[0]
-
-                # 计算数据留存率（仅当两个文件都存在时）
-                if (
-                    current_important_indices is not None
-                    and previous_important_indices is not None
-                ):
-                    intersection = np.intersect1d(
-                        current_important_indices, previous_important_indices
-                    )
-                    data_retention_rate = len(intersection) / current_selected_count
-                    logger.info(f"             数据留存率: {data_retention_rate:.4f}")
-                    logger.info(
-                        f"             - 本次重要组态数: {len(current_important_indices)}"
-                    )
-                    logger.info(
-                        f"             - 上次重要组态数: {len(previous_important_indices)}"
-                    )
-                    logger.info(f"             - 交集组态数: {len(intersection)}")
-                else:
-                    logger.warning(f"             无法计算留存率：缺少重要组态数据")
-            else:
-                logger.warning(
-                    f"             未找到前一轮重要组态文件: {prev_important_path}"
-                )
-        else:
-            logger.info(f"             第一轮计算，无法计算数据留存率")
-
-    except Exception as e:
-        logger.warning(f"             重要组态文件读取失败: {e}")
-        logger.warning(f"             使用默认值进行计算")
-
-    # === 3. ML推理组态数量分析 ===
-    # 使用95分位数作为高概率阈值
-    high_prob_threshold = np.percentile(y_all_probability, 95)
-    high_prob_count = np.sum(y_all_probability > high_prob_threshold)
-    ml_prediction_ratio = high_prob_count / total_available_csfs
-
-    logger.info(f"             ML高概率组态数: {high_prob_count}")
-    logger.info(f"             ML预测高概率比例: {ml_prediction_ratio:.4f}")
-
-    # === 4. 动态调整策略 ===
-    adjustment_factor = 1.0
-    adjustment_reasons = []
-
-    # 策略1: 基于重要组态占比调整
-    if important_ratio_in_calculation > 0.7:
-        # 重要组态占比过高，说明计算组态质量好，可以适当减少选择率
-        factor = 0.9
-        adjustment_factor *= factor
-        adjustment_reasons.append(
-            f"重要组态占比高({important_ratio_in_calculation:.3f}) -> 降低{1 - factor:.1%}"
-        )
-    elif important_ratio_in_calculation < 0.3:
-        # 重要组态占比过低，需要更多组态来捕获重要信息
-        factor = 1.2
-        adjustment_factor *= factor
-        adjustment_reasons.append(
-            f"重要组态占比低({important_ratio_in_calculation:.3f}) -> 增加{factor - 1:.1%}"
-        )
-
-    # 策略2: 基于数据留存率调整
-    if config.cal_settings.cal_loop_num > 1:
-        if data_retention_rate > 0.8:
-            # 留存率过高，说明计算过于保守，可以适当减少选择率
-            factor = 0.95
-            adjustment_factor *= factor
-            adjustment_reasons.append(
-                f"留存率过高({data_retention_rate:.3f}) -> 降低{1 - factor:.1%}"
-            )
-        elif data_retention_rate < 0.3:
-            # 留存率过低，说明重要组态变化太大，需要更多组态稳定计算
-            factor = 1.15
-            adjustment_factor *= factor
-            adjustment_reasons.append(
-                f"留存率过低({data_retention_rate:.3f}) -> 增加{factor - 1:.1%}"
-            )
-
-    # 策略3: 基于ML预测组态数量调整
-    if ml_prediction_ratio > 0.15:
-        # ML预测高概率组态过多，可能阈值偏低，适当减少选择率
-        factor = 0.9
-        adjustment_factor *= factor
-        adjustment_reasons.append(
-            f"ML高概率组态过多({ml_prediction_ratio:.3f}) -> 降低{1 - factor:.1%}"
-        )
-    elif ml_prediction_ratio < 0.03:
-        # ML预测高概率组态过少，可能需要更宽松的选择策略
-        factor = 1.1
-        adjustment_factor *= factor
-        adjustment_reasons.append(
-            f"ML高概率组态过少({ml_prediction_ratio:.3f}) -> 增加{factor - 1:.1%}"
-        )
-
-    # 策略4: 迭代轮次考虑（随轮次递减，但受组态质量影响）
-    if config.cal_settings.cal_loop_num > 3:
-        # 基础衰减，但根据组态质量调整衰减速度
-        base_decay = 0.95
-        if important_ratio_in_calculation > 0.6 and data_retention_rate > 0.6:
-            # 质量较好，可以更快衰减
-            decay_factor = base_decay**1.2
-        else:
-            # 质量一般，缓慢衰减
-            decay_factor = base_decay**0.8
-
-        adjustment_factor *= decay_factor
-        adjustment_reasons.append(
-            f"迭代衰减(轮次{config.cal_settings.cal_loop_num}) -> 降低{1 - decay_factor:.1%}"
-        )
-
-    # 策略5: 安全边界检查
-    if current_actual_ratio < 0.05:
-        # 选择率过低保护
-        factor = 1.3
-        adjustment_factor *= factor
-        adjustment_reasons.append(f"选择率过低保护 -> 增加{factor - 1:.1%}")
-    elif current_actual_ratio > 0.25:
-        # 选择率过高保护
-        factor = 0.8
-        adjustment_factor *= factor
-        adjustment_reasons.append(f"选择率过高保护 -> 降低{1 - factor:.1%}")
-
-    # === 5. 计算最终选择率 ===
-    # 使用当前实际比例作为基础，应用调整因子
-    dynamic_ratio = current_actual_ratio * adjustment_factor
-
-    # 严格的范围限制
-    dynamic_ratio = np.clip(dynamic_ratio, 0.03, 0.30)
-
-    # === 6. 输出调整日志 ===
-    logger.info(f"             调整因子: {adjustment_factor:.4f}")
-    for reason in adjustment_reasons:
-        logger.info(f"             - {reason}")
-    logger.info(f"             调整前选择率: {current_actual_ratio:.4f}")
-    logger.info(f"             调整后选择率: {dynamic_ratio:.4f}")
-    logger.info(
-        f"             选择率变化: {(dynamic_ratio / current_actual_ratio - 1) * 100:+.1f}%"
-    )
-
-    return dynamic_ratio

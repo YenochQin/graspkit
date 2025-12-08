@@ -130,7 +130,6 @@ from .ml_module import (
     handle_calculation_error,
     get_unselected_descriptors,
     save_and_plot_results,
-    calculate_dynamic_chosen_ratio,
     validate_csf_descriptors_coverage,
     select_csfs_for_coverage,
 )
@@ -245,7 +244,6 @@ __all__ = [
     "train_model",
     "evaluate_model",
     "handle_calculation_error",
-    "calculate_dynamic_chosen_ratio",
     # ml_results_analyzer
     "validate_csf_descriptors_coverage",
     "select_csfs_for_coverage",
