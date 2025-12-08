@@ -20,11 +20,83 @@ from ..data_IO import (
     pkl_loader,
     save_descriptors,
     load_descriptors_with_multi_block,
+    load_config
 )
 from ..data_IO.h5_descriptor_loader import load_hdf5_descriptors
 from ..grasp_data_extractor.ASF_data_collection import LevelsEnergyData
 
 from ..utils.environment_config import get_environment_config
+
+
+def setup_config(config_path: str | Path):
+    """
+    初始化机器学习配置并设置相关路径
+
+    Args:
+        config_path (str | Path): 配置文件的路径
+
+    Returns:
+        config: 配置对象，包含所有初始化后的路径和参数
+
+    该函数执行以下步骤：
+    1. 从指定路径加载配置文件
+    2. 调用内部函数设置所有相关文件路径
+    3. 返回完整的配置对象
+    """
+    # 从配置文件路径加载配置信息
+    config = load_config(config_path)
+
+    # 设置配置对象中的所有相关路径
+    return _setup_config_paths(config)
+
+def _setup_config_paths(config):
+    """
+    为配置对象设置所有必需的文件路径
+
+    Args:
+        config: 包含基本配置信息的对象，应包含root_path、target和cal_settings属性
+
+    Returns:
+        config: 更新后的配置对象，包含所有路径信息
+
+    该函数设置以下路径：
+    1. 全量CSF集合相关文件路径
+    2. 压缩的二进制CSF文件路径
+    3. 当前计算循环的路径
+    4. 结果文件存储路径
+    5. 如果是后续循环，设置前一轮的重要索引和ML结果路径
+    """
+    # 获取根目录路径，确保是Path对象类型
+    root_path = Path(config.cal_settings.root_path)
+
+    # 设置全量CSF集合文件的完整路径
+    config.full_CSFs_set_file_path = root_path / config.target.full_CSFs_set_file
+    # 设置CSF配置文件的路径
+    config.full_CSFs_set_path = root_path / config.target.conf
+
+    # 设置压缩的CSF二进制文件路径，使用pkl.gz格式
+    config.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
+
+    config.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
+
+    # 设置当前计算循环的工作目录路径，格式：{配置名}_{循环编号}
+    config.cal_path = root_path / config.loop_file_name
+
+    # 设置计算结果文件的存储路径
+    config.results_path = root_path / 'results'
+    config.test_data_path = root_path / "test_data"
+    config.models_path = root_path / "models"
+    config.roc_curves_path = root_path / "roc_curves"
+    config.log_dir = root_path / "logs"
+
+    # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
+    if config.cal_settings.cal_loop_num > 1:
+        # 前一轮计算保存的重要索引文件路径
+        config.previous_indices_file = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
+        # 前一轮机器学习生成的最终采样索引文件路径
+        config.ml_results_path = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
+
+    return config
 
 
 def setup_logging(config):
@@ -33,8 +105,7 @@ def setup_logging(config):
     log_config = env_config.get_logging_config()
 
     # 创建日志目录
-    log_dir = config.cal_settings.root_path / "logs"
-    log_dir.mkdir(exist_ok=True)
+    config.log_dir.mkdir(exist_ok=True)
 
     # 配置日志级别
     log_level = getattr(logging, log_config["level"])
@@ -42,7 +113,7 @@ def setup_logging(config):
     # 创建处理器列表
     handlers = []
     handlers.append(
-        logging.FileHandler(log_dir / "ml_training.log", encoding="utf-8")
+        logging.FileHandler(config.log_dir / "ml_training.log", encoding="utf-8")
     )
 
     # 在调试模式下添加控制台输出
@@ -76,8 +147,8 @@ def setup_directories(config):
 
     directories = ["models", "test_data", "roc_curves", "results"]
 
-    for directory in directories:
-        (config.cal_settings.root_path / directory).mkdir(parents=True, exist_ok=True)
+    for dir in directories:
+        (config.cal_settings.root_path / dir).mkdir(parents=True, exist_ok=True)
 
     return "目录创建成功"
 
@@ -90,7 +161,7 @@ def initialize_iteration_results_csv(config, logger=None):
         config: 配置对象
         logger: 日志记录器
     """
-    results_file = Path(config.cal_settings.root_path) / "results" / "iteration_results.csv"
+    results_file = config.results_path / "iteration_results.csv"
 
     # 如果文件已存在，不重新创建表头
     if results_file.exists():
@@ -103,27 +174,31 @@ def initialize_iteration_results_csv(config, logger=None):
 
     # 写入表头
     headers = [
-        "training_time",
-        "eval_time",
-        "execution_time",
-        "total_time",
-        "test_f1",
-        "test_roc_auc",
-        "test_accuracy",
-        "test_precision",
-        "test_recall",
-        "Es_term",
-        "import_count",
-        "stay_count",
-        "MLsampling_ratio",
-        "sampled_count",
-        "weight",
-        "train_f1",
-        "train_roc_auc",
-        "train_accuracy",
-        "train_precision",
-        "train_recall",
-    ]
+            "iteration",
+            "important_count",
+            "ml_predicted_count",
+            "ml_new_count",
+            "total_original_count",
+            "current_calculation_count",
+            "data_retention_rate",
+            "important_retention_rate",
+            "ml_retention_rate",
+            "training_time",
+            "inference_time",
+            "execution_time",
+            "total_time",
+            "test_f1",
+            "test_roc_auc",
+            "test_accuracy",
+            "test_precision",
+            "test_recall",
+            "train_f1",
+            "train_roc_auc",
+            "train_accuracy",
+            "train_precision",
+            "train_recall",
+            "overfitting_gap",
+        ]
 
     with open(results_file, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -135,14 +210,14 @@ def initialize_iteration_results_csv(config, logger=None):
 
 def validate_initial_files(config, logger) -> None:
     """验证初始文件的存在和有效性"""
-    target_pool_file_path = config.cal_settings.root_path / config.target.full_CSFs_set_file
+    full_CSFs_set_file_path = config.full_CSFs_set_file_path
     
     try:
         # 简洁的核心验证逻辑
-        if not target_pool_file_path.is_file():
-            raise FileNotFoundError(f"总组态文件不存在: {target_pool_file_path}")
+        if not full_CSFs_set_file_path.is_file():
+            raise FileNotFoundError(f"总组态文件不存在: {full_CSFs_set_file_path}")
         
-        logger.info(f"总组态文件验证通过: {target_pool_file_path}")
+        logger.info(f"总组态文件验证通过: {full_CSFs_set_file_path}")
         
     except FileNotFoundError as e:
         logger.error(f"文件验证失败: {str(e)}")
@@ -167,11 +242,9 @@ def load_data_files(config, logger) -> tuple:
     """
     # config.yaml文件读取时已经处理好root_path和scf_cal_path路径
 
-    scf_cal_path = config.cal_settings.root_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
-
     # 加载能级文件
     energy_level_file_path = (
-        scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.level"
+        config.cal_path / f"{config.loop_file_name}.level"
     )
     energy_level_file_load = LevelsEnergyData.from_filepath(
         str(energy_level_file_path), "LEVEL"
@@ -182,9 +255,9 @@ def load_data_files(config, logger) -> tuple:
     # 加载rmix文件
     # 根据计算轮次确定文件后缀
     if config.cal_settings.cal_method == "rmcdhf":
-        rmix_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.m"
+        rmix_file_path = config.cal_path / f"{config.loop_file_name}.m"
     elif config.cal_settings.cal_method == "rci":
-        rmix_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.cm"
+        rmix_file_path = config.cal_path / f"{config.loop_file_name}.cm"
     else:
         raise ValueError(f"不支持的计算方法: {config.cal_settings.cal_method}")
 
@@ -193,40 +266,38 @@ def load_data_files(config, logger) -> tuple:
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
     # 加载初始 CSFs 描述符文件
-    target_pool_file_path = config.cal_settings.root_path / f"{config.target.conf}"
     use_cpp = getattr(config.ml_config, "use_cpp_descriptor_generator", False)
     if use_cpp:
         # 使用C++生成的HDF5文件
-        hdf5_file_path = target_pool_file_path.with_suffix(".h5")
+        hdf5_file_path = config.full_CSFs_set_path.with_suffix(".h5")
         try:
             hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
             raw_csfs_descriptors = hdf5_data["descriptors"]
-            raw_csfs_indices = hdf5_data.get("labels", None)
             logger.info(f"使用C++ HDF5文件加载初始 CSFs 描述符: {hdf5_file_path}")
         except Exception as e:
             logger.warning(f"C++ HDF5文件加载失败: {e}")
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}"
+                f"无法加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}"
             )
     else:
         # 使用传统文件格式
-        result = load_descriptors_with_multi_block(target_pool_file_path, "npy")
+        result = load_descriptors_with_multi_block(config.full_CSFs_set_path, "npy")
         if result is None:
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {target_pool_file_path}"
+                f"无法加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}"
             )
         raw_csfs_descriptors, raw_csfs_indices = result
-        logger.info(f"加载初始 CSFs 描述符文件: {target_pool_file_path}")
+        logger.info(f"加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}")
 
     # 加载本轮计算CSFs文件
-    cal_csfs_file_path = scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
+    cal_csfs_file_path = config.cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
     cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
     cal_csfs_data = cal_csfs_file_laod.data_file_process()
     logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_indices_file_path = (
-        scf_cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_sampled_indices.pkl"
+        config.cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_sampled_indices.pkl"
     )
     caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")

@@ -7,6 +7,7 @@
 
 from .neural_network import ANNClassifier
 from .ml_initializer import (
+    setup_config,
     setup_logging,
     setup_directories,
     initialize_iteration_results_csv,
@@ -39,6 +40,7 @@ __all__ = [
     # neural_network
     "ANNClassifier",
     # ml_initializer
+    "setup_config",
     "setup_logging",
     "setup_directories",
     "initialize_iteration_results_csv",
