@@ -11,13 +11,11 @@ from .ml_initializer import (
     setup_logging,
     setup_directories,
     initialize_iteration_results_csv,
-    validate_initial_files,
     load_data_files,
     check_configuration_coupling,
     check_energy_convergence,
     evaluate_calculation_convergence,
     generate_train_csfs_descriptors,
-    get_unselected_descriptors,
     get_stay_descriptors,
 )
 
@@ -43,13 +41,11 @@ __all__ = [
     "setup_logging",
     "setup_directories",
     "initialize_iteration_results_csv",
-    "validate_initial_files",
     "load_data_files",
     "check_configuration_coupling",
     "check_energy_convergence",
     "evaluate_calculation_convergence",
     "generate_train_csfs_descriptors",
-    "get_unselected_descriptors",
     "get_stay_descriptors",
     # ml_trainer
     "train_model",

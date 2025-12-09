@@ -406,11 +406,10 @@ class LevelsEnergyData:
                     lambda x: ConfigurationFormatter(
                         x, self.show_full_charged_subshell, self.format_to_word_document
                     ).conf_format()[1]
-                )
                 + "_{"
                 + self.level_read_df["J"]
                 + "}"
-            )
+            ))
 
             self.level_read_df[f"ASF_LSJ_as{self.this_as}"] = (
                 "$"

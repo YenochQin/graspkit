@@ -70,42 +70,42 @@ def _setup_config_paths(config):
     root_path = Path(config.cal_settings.root_path)
 
     # 设置全量CSF集合文件的完整路径
-    config.full_CSFs_set_file_path = root_path / config.target.full_CSFs_set_file
+    config.cal_path.full_CSFs_set_file_path = root_path / config.target.full_CSFs_set_file
     # 设置CSF配置文件的路径
-    config.full_CSFs_set_path = root_path / config.target.conf
+    config.cal_path.full_CSFs_set_path = root_path / config.target.conf
 
     # 设置压缩的CSF二进制文件路径，使用pkl.gz格式
-    config.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
+    config.cal_path.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
 
-    config.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
+    config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
     # 设置当前计算循环的工作目录路径，格式：{配置名}_{循环编号}
-    config.cal_path = root_path / config.loop_file_name
+    config.cal_path.cal_loop_path = root_path / config.loop_file_name
 
     # 设置计算结果文件的存储路径
-    config.results_path = root_path / 'results'
-    config.test_data_path = root_path / "test_data"
-    config.models_path = root_path / "models"
-    config.roc_curves_path = root_path / "roc_curves"
-    config.log_dir = root_path / "logs"
+    config.cal_path.results_path = root_path / 'results'
+    config.cal_path.test_data_path = root_path / "test_data"
+    config.cal_path.models_path = root_path / "models"
+    config.cal_path.roc_curves_path = root_path / "roc_curves"
+    config.cal_path.log_dir = root_path / "logs"
 
     # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
     if config.cal_settings.cal_loop_num > 1:
         # 前一轮计算保存的重要索引文件路径
-        config.previous_indices_file = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
+        config.cal_path.previous_indices_file = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
         # 前一轮机器学习生成的最终采样索引文件路径
-        config.ml_results_path = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
+        config.cal_path.ml_results_path = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
 
     return config
 
 
-def setup_logging(config):
+def setup_logging(log_dir: Path):
     """配置日志系统，支持环境感知"""
     env_config = get_environment_config()
     log_config = env_config.get_logging_config()
 
     # 创建日志目录
-    config.log_dir.mkdir(exist_ok=True)
+    log_dir.mkdir(exist_ok=True)
 
     # 配置日志级别
     log_level = getattr(logging, log_config["level"])
@@ -113,7 +113,7 @@ def setup_logging(config):
     # 创建处理器列表
     handlers = []
     handlers.append(
-        logging.FileHandler(config.log_dir / "ml_training.log", encoding="utf-8")
+        logging.FileHandler(log_dir / "ml_training.log", encoding="utf-8")
     )
 
     # 在调试模式下添加控制台输出
@@ -142,18 +142,18 @@ def setup_logging(config):
     return logger
 
 
-def setup_directories(config):
+def setup_directories(root_path: Path):
     """创建必要的目录结构"""
 
     directories = ["models", "test_data", "roc_curves", "results"]
 
     for dir in directories:
-        (config.cal_settings.root_path / dir).mkdir(parents=True, exist_ok=True)
+        (root_path / dir).mkdir(parents=True, exist_ok=True)
 
     return "目录创建成功"
 
 
-def initialize_iteration_results_csv(config, logger=None):
+def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
     """
     初始化迭代结果CSV文件的表头
 
@@ -161,16 +161,15 @@ def initialize_iteration_results_csv(config, logger=None):
         config: 配置对象
         logger: 日志记录器
     """
-    results_file = config.results_path / "iteration_results.csv"
 
     # 如果文件已存在，不重新创建表头
-    if results_file.exists():
+    if iteration_results_path.exists():
         if logger:
-            logger.info(f"迭代结果文件已存在: {results_file}")
+            logger.info(f"迭代结果文件已存在: {iteration_results_path}")
         return
 
     # 创建目录
-    results_file.parent.mkdir(parents=True, exist_ok=True)
+    iteration_results_path.parent.mkdir(parents=True, exist_ok=True)
 
     # 写入表头
     headers = [
@@ -200,76 +199,58 @@ def initialize_iteration_results_csv(config, logger=None):
             "overfitting_gap",
         ]
 
-    with open(results_file, mode="w", newline="", encoding="utf-8") as file:
+    with open(iteration_results_path, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(headers)
 
     if logger:
-        logger.info(f"初始化迭代结果CSV文件: {results_file}")
+        logger.info(f"初始化迭代结果CSV文件: {iteration_results_path}")
 
 
-def validate_initial_files(config, logger) -> None:
-    """验证初始文件的存在和有效性"""
-    full_CSFs_set_file_path = config.full_CSFs_set_file_path
-    
-    try:
-        # 简洁的核心验证逻辑
-        if not full_CSFs_set_file_path.is_file():
-            raise FileNotFoundError(f"总组态文件不存在: {full_CSFs_set_file_path}")
-        
-        logger.info(f"总组态文件验证通过: {full_CSFs_set_file_path}")
-        
-    except FileNotFoundError as e:
-        logger.error(f"文件验证失败: {str(e)}")
-        raise
-        
-    except Exception as e:
-        logger.error(f"文件验证异常: {type(e).__name__}: {str(e)}")
-        raise
-
-
-
-def load_data_files(config, logger) -> tuple:
+def load_data_files(
+                    paths_cfg, 
+                    cal_method: str, 
+                    use_cpp_descriptor_generator: bool, 
+                    logger
+                    ) -> tuple:
     """加载数据文件
 
     Args:
-        config: 配置对象
+        paths_cfg: config的cal_path子类，即config.cal_path
         logger: 日志记录器
         use_cpp: 是否使用C++生成的HDF5文件格式
 
     Returns:
         tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict)
     """
-    # config.yaml文件读取时已经处理好root_path和scf_cal_path路径
 
     # 加载能级文件
     energy_level_file_path = (
-        config.cal_path / f"{config.loop_file_name}.level"
+        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.level"
     )
     energy_level_file_load = LevelsEnergyData.from_filepath(
         str(energy_level_file_path), "LEVEL"
-    )
+    ) ## !TODO 存在严重问题
     energy_level_data_pd = energy_level_file_load.energy_level_2_pd()
     logger.info(f"加载能级数据: {energy_level_file_path}")
 
     # 加载rmix文件
     # 根据计算轮次确定文件后缀
-    if config.cal_settings.cal_method == "rmcdhf":
-        rmix_file_path = config.cal_path / f"{config.loop_file_name}.m"
-    elif config.cal_settings.cal_method == "rci":
-        rmix_file_path = config.cal_path / f"{config.loop_file_name}.cm"
+    if cal_method == "rmcdhf":
+        rmix_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.m"
+    elif cal_method == "rci":
+        rmix_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.cm"
     else:
-        raise ValueError(f"不支持的计算方法: {config.cal_settings.cal_method}")
+        raise ValueError(f"不支持的计算方法: {cal_method}")
 
     rmix_file_load = GraspFileLoad.from_filepath(str(rmix_file_path), "mix")
     rmix_file_data = rmix_file_load.data_file_process()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
     # 加载初始 CSFs 描述符文件
-    use_cpp = getattr(config.ml_config, "use_cpp_descriptor_generator", False)
-    if use_cpp:
+    if use_cpp_descriptor_generator:
         # 使用C++生成的HDF5文件
-        hdf5_file_path = config.full_CSFs_set_path.with_suffix(".h5")
+        hdf5_file_path = paths_cfg.full_CSFs_set_path.with_suffix(".h5")
         try:
             hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
             raw_csfs_descriptors = hdf5_data["descriptors"]
@@ -277,27 +258,27 @@ def load_data_files(config, logger) -> tuple:
         except Exception as e:
             logger.warning(f"C++ HDF5文件加载失败: {e}")
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}"
+                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}"
             )
     else:
         # 使用传统文件格式
-        result = load_descriptors_with_multi_block(config.full_CSFs_set_path, "npy")
+        result = load_descriptors_with_multi_block(paths_cfg.full_CSFs_set_path, "npy")
         if result is None:
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}"
+                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}"
             )
         raw_csfs_descriptors, raw_csfs_indices = result
-        logger.info(f"加载初始 CSFs 描述符文件: {config.full_CSFs_set_path}")
+        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}")
 
     # 加载本轮计算CSFs文件
-    cal_csfs_file_path = config.cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
+    cal_csfs_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.c"
     cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
     cal_csfs_data = cal_csfs_file_laod.data_file_process()
     logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_indices_file_path = (
-        config.cal_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_sampled_indices.pkl"
+        paths_cfg.cal_path / f"{paths_cfg.loop_file_name}_sampled_indices.pkl"
     )
     caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
@@ -311,20 +292,24 @@ def load_data_files(config, logger) -> tuple:
     )
 
 
-def check_configuration_coupling(config, energy_level_data_pd, logger):
+def check_configuration_coupling(
+                            energy_level_data_pd: pd.DataFrame, 
+                            spectral_term: list,
+                            cal_loop_num: int,
+                            logger):
     """检查组态耦合是否正确"""
     cal_configuration_list = energy_level_data_pd["configuration"].tolist()
 
-    # 统计config.cal_settings.spectral_term中每个谱项的出现次数
+    # 统计spectral_term中每个谱项的出现次数
     spectral_term_counts = {}
-    for term in config.cal_settings.spectral_term:
+    for term in spectral_term:
         spectral_term_counts[term] = spectral_term_counts.get(term, 0) + 1
 
     # 检查每个光谱项的出现次数是否与配置中的要求一致，并记录位置
     spectral_term_positions = []
     all_found_correctly = True
 
-    for term in set(config.cal_settings.spectral_term):  # 使用set去重，避免重复检查
+    for term in set(spectral_term):  # 使用set去重，避免重复检查
         expected_count = spectral_term_counts[term]
         actual_count = cal_configuration_list.count(term)
 
@@ -351,22 +336,23 @@ def check_configuration_coupling(config, energy_level_data_pd, logger):
         # 按位置排序，保持一致的输出顺序
         spectral_term_positions.sort()
         logger.info(
-            f"cal_loop {config.cal_settings.cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
+            f"cal_loop {cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
         )
         return True, spectral_term_positions
     else:
-        logger.error(f"cal_loop {config.cal_settings.cal_loop_num} 组态耦合错误")
+        logger.error(f"cal_loop {cal_loop_num} 组态耦合错误")
         return False, []
 
 
 def check_energy_convergence(
-    config,
-    logger,
-    current_energy_data: pd.DataFrame,
-    convergence_threshold: float = 0.001,
-) -> bool:
+                config,
+                logger,
+                current_energy_data: pd.DataFrame,
+                convergence_threshold: float = 0.001,
+            ) -> bool:
     """
     检查能量收敛性：比较当前轮与上一轮的能量差异
+    ! TODO 这个还没改，上一轮的路径如何输入是个问题
 
     Args:
         config: 配置对象
@@ -430,7 +416,10 @@ def check_energy_convergence(
         return True  # 发生错误时继续计算，避免阻塞
 
 
-def evaluate_calculation_convergence(config, logger, current_calculation_csfs=None):
+def evaluate_calculation_convergence(
+                                config, 
+                                logger, 
+                                current_calculation_csfs=None):
     """
     检查GRASP计算的收敛性
 
@@ -641,8 +630,10 @@ def evaluate_calculation_convergence(config, logger, current_calculation_csfs=No
 
 
 def merge_historical_ci_data(
-    previous_indices_ci_dict, current_indices_ci_dict, logger
-) -> Tuple[np.ndarray, np.ndarray]:
+                    previous_indices_ci_dict, 
+                    current_indices_ci_dict, 
+                    logger
+                    ) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
 
@@ -695,18 +686,20 @@ def merge_historical_ci_data(
     merged_ci_squared = np.array(merged_ci_squared)
 
     logger.info(f"历史数据合并统计:")
-    logger.info(f"  历史数据CSFs数量: {len(previous_indices)}")
-    logger.info(f"  当前数据CSFs数量: {len(current_indices)}")
-    logger.info(f"  合并后CSFs数量: {len(merged_indices)}")
-    logger.info(f"  新增CSFs数量: {len(all_indices - set(previous_indices))}")
-    logger.info(f"  重复CSFs数量: {len(set(previous_indices) & set(current_indices))}")
+    logger.info(f"历史数据CSFs数量: {len(previous_indices)}")
+    logger.info(f"当前数据CSFs数量: {len(current_indices)}")
+    logger.info(f"合并后CSFs数量: {len(merged_indices)}")
+    logger.info(f"新增CSFs数量: {len(all_indices - set(previous_indices))}")
+    logger.info(f"重复CSFs数量: {len(set(previous_indices) & set(current_indices))}")
 
     return merged_indices, merged_ci_squared
 
 
 def generate_train_csfs_descriptors(
-    config, raw_csfs_descriptors: np.ndarray, logger
-) -> np.ndarray:
+                    config, 
+                    raw_csfs_descriptors: np.ndarray, 
+                    logger
+                ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
     基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
@@ -725,9 +718,8 @@ def generate_train_csfs_descriptors(
 
     # 加载当前轮次选择的CSF索引
     current_indices_ci_path = (
-        config.cal_settings.root_path
-        / "results"
-        / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_ci_squared.pkl"
+        config.cal_path.results_path
+        / f"{config.cal_path.loop_file_name}_ci_squared.pkl"
     )
     if not current_indices_ci_path.exists():
         raise FileNotFoundError(f"当前轮次CSF索引文件不存在: {current_indices_ci_path}")
@@ -739,11 +731,11 @@ def generate_train_csfs_descriptors(
         assert "ci_squared" in current_indices_ci_dict[0], "缺少子键 ci_squared"
         assert current_indices_ci_dict[0]["indices"] is not None, "indices 值为空"
         assert current_indices_ci_dict[0]["ci_squared"] is not None, "ci_squared 值为空"
-
-        print("✅ 所有键值验证通过")
+        
+        logger.info("所有键值验证通过")
 
     except AssertionError as e:
-        print(f"❌ 验证失败: {e}")
+        logger.error(f"验证失败: {e}")
 
     current_sampled_indices = np.array(current_indices_ci_dict[0]["indices"])
 
@@ -770,7 +762,7 @@ def generate_train_csfs_descriptors(
             logger.info("开始读取历次迭代的CI系数数据")
 
         except AssertionError as e:
-            print(f"❌ 验证失败: {e}")
+            logger.error(f"验证失败: {e}")
 
         accumulated_indices, accumulated_ci_squared = merge_historical_ci_data(
             previous_indices_ci_dict, current_indices_ci_dict, logger
@@ -814,7 +806,7 @@ def generate_train_csfs_descriptors(
     }
 
     accumulated_ci_path = (
-        config.cal_settings.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
+        config.cal_path.results_path / f"{config.target.conf}_previous_ci_squared.pkl"
     )
     pkl_storage(accumulated_ci_data, accumulated_ci_path)
     logger.info(
@@ -822,14 +814,13 @@ def generate_train_csfs_descriptors(
     )
 
     # 保存描述符文件
-    cal_path = config.cal_settings.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
     save_descriptors(
         caled_csfs_descriptors,
-        f"{cal_path}/{config.target.conf}_{config.cal_settings.cal_loop_num}_full",
+        f"{config.cal_path.cal_loop_path}/{config.cal_path.loop_file_name}_full",
         "npy",
     )
     logger.info(
-        f"保存完整历史数据并集描述符文件: {cal_path}/{config.target.conf}_{config.cal_settings.cal_loop_num}_full.npy"
+        f"保存完整历史数据并集描述符文件: {config.cal_path.cal_loop_path}/{config.cal_path.loop_file_name}_full.npy"
     )
 
     logger.info(f"CSFs描述符标签生成完成")
@@ -845,39 +836,10 @@ def generate_train_csfs_descriptors(
 
     return caled_csfs_descriptors
 
-
-def get_unselected_descriptors(
-    raw_csfs_descriptors: np.ndarray, sampled_csfs_indices_dict: Dict[int, List[int]]
-) -> np.ndarray:
-    """
-    找出不在sampled_csfs_indices_dict索引中的描述符
-
-    Args:
-        raw_csfs_descriptors: 原始CSFs描述符数组
-        sampled_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
-
-    Returns:
-        np.ndarray: 不在sampled_csfs_indices_dict中的描述符数组
-    """
-    # 获取所有已选择的索引
-    sampled_indices = []
-    for block_indices in sampled_csfs_indices_dict.values():
-        sampled_indices.extend(block_indices)
-    sampled_indices = set(sampled_indices)
-
-    # 获取所有可能的索引
-    all_indices = set(range(len(raw_csfs_descriptors)))
-
-    # 找出不在sampled_indices中的索引
-    uncurrent_sampled_indices = list(all_indices - sampled_indices)
-
-    # 返回对应的描述符
-    return raw_csfs_descriptors[uncurrent_sampled_indices]
-
-
 def get_stay_descriptors(
-    raw_csfs_descriptors: np.ndarray, sampled_csfs_indices_dict: Dict[int, List[int]]
-) -> np.ndarray:
+            raw_csfs_descriptors: np.ndarray, 
+            sampled_csfs_indices_dict: Dict[int, List[int]]
+        ) -> np.ndarray:
     """
     找出不在sampled_csfs_indices_dict索引中的描述符
 
