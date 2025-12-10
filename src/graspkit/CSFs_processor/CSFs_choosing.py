@@ -139,7 +139,7 @@ def batch_asfs_mix_square_above_threshold(
         block_data = asfs_mix_data.mix_coefficient_List[block][asfs_position[block]]
 
         # 计算平方并比较阈值
-        squared_above_threshold = block_data[asfs_position[block]] ** 2 > threshold
+        squared_above_threshold = block_data ** 2 > threshold
 
         # 按列求逻辑或：只要任意层级超过阈值，就保留该系数索引
         above_threshold_mask = np.any(squared_above_threshold, axis=0)
