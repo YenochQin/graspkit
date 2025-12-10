@@ -17,12 +17,11 @@ from .neural_network import ANNClassifier
 
 
 def validate_csf_descriptors_coverage(
-                                        descriptors: np.ndarray
-                                     ) -> Tuple[bool, List[int]]:
+            descriptors: np.ndarray
+            ) -> Tuple[bool, List[int]]:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
     对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
-
     Args:
         descriptors (np.ndarray): 选取出的CSFs描述符数组,形状为 (n_csfs, n_features)
 
@@ -39,34 +38,34 @@ def validate_csf_descriptors_coverage(
 
     # 直接通过切片获取每个轨道的电子填充
     electron_indices = np.arange(
-        electron_index_in_orbital,
-        descriptors.shape[1],
-        values_per_orbital,
-    )
+                            electron_index_in_orbital,
+                            descriptors.shape[1],
+                            values_per_orbital,
+                            )
 
     # 提取所有CSF的电子数信息
     electron_counts = descriptors[
-        :, electron_indices
-    ]  # 形状为 (n_csfs, actual_n_orbitals)
+                            :, electron_indices
+                            ]  # 形状为 (num_csfs, actual_n_orbitals)
 
     # 检查每个轨道是否至少有一个CSF的电子数不为零
     has_nonzero_electrons = np.any(
-        electron_counts > 0, axis=0
-    )  # 形状为 (actual_n_orbitals,)
+                                electron_counts > 0, axis=0
+                                )  # 形状为 (actual_n_orbitals,)
 
     # 找出未覆盖的轨道索引
-    uncovered_orbitals = np.where(~has_nonzero_electrons)[0].tolist()
+    uncovered_orbitals_indices = np.where(~has_nonzero_electrons)[0].tolist()
 
     # 返回验证结果
-    is_covered = len(uncovered_orbitals) == 0
-    return is_covered, uncovered_orbitals
+    is_covered = len(uncovered_orbitals_indices) == 0
+    return is_covered, uncovered_orbitals_indices
 
 
 def select_csfs_for_coverage(
-                            descriptors: np.ndarray,
-                            uncovered_orbitals: List[int],
-                            candidate_descriptors: np.ndarray,
-                            ) -> Tuple[np.ndarray, List[int]]:
+            descriptors: np.ndarray,
+            uncovered_orbitals: List[int],
+            candidate_descriptors: np.ndarray,
+            ) -> Tuple[np.ndarray, List[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
@@ -92,8 +91,10 @@ def select_csfs_for_coverage(
 
     # 获取每个轨道的电子填充位置索引
     electron_indices = np.arange(
-        electron_index_in_orbital, candidate_descriptors.shape[1], values_per_orbital
-    )
+                                electron_index_in_orbital, 
+                                candidate_descriptors.shape[1], 
+                                values_per_orbital
+                                )
 
     # 提取候选描述符中的电子数信息
     candidate_electron_counts = candidate_descriptors[:, electron_indices]
@@ -130,14 +131,13 @@ def select_csfs_for_coverage(
 
 
 def save_iteration_results(
-    config,
-    training_time,
-    eval_time,
-    execution_time,
-    evaluation_results,
-    selection_results,
-    logger,
-):
+                        config,
+                        training_time,
+                        eval_time,
+                        execution_time,
+                        evaluation_results,
+                        selection_results,
+                        logger,):
     """
     保存迭代结果到CSV文件
 
@@ -160,7 +160,7 @@ def save_iteration_results(
     actual_eval_time = metadata.get("eval_time", eval_time)
 
     # 保存到CSV文件
-    results_file = config.result_path / "iteration_results.csv"
+    results_file = config.cal_path.results_path / "iteration_results.csv"
     
     with open(results_file, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -224,18 +224,17 @@ def save_iteration_results(
 
 
 def save_and_plot_results(
-    evaluation_results,
-    model,
-    config,
-    rmix_file_data,
-    asfs_position: List[int],
-    caled_csfs_indices_dict=None,
-    y_current_calc_probability=None,
-    save_model: bool = True,
-    save_data: bool = True,
-    plot_curves: bool = True,
-    logger=None,
-):
+                    evaluation_results,
+                    model,
+                    path_cfg,
+                    correct_levels_ci: np.ndarray,
+                    asfs_position: List[int],
+                    caled_csfs_indices_dict=None,
+                    y_current_cal_probability=None,
+                    save_model: bool = True,
+                    save_data: bool = True,
+                    plot_curves: bool = True,
+                    logger=None,):
     """
     保存模型预测结果、模型文件和绘制性能曲线
     使用setup_directories创建的标准目录结构
@@ -243,10 +242,10 @@ def save_and_plot_results(
     Args:
         evaluation_results: evaluate_model函数返回的结果字典
         model: 训练好的模型对象
-        rmix_file_data: 混合系数数据对象，包含真实的Ci值用于绘图
+        correct_levels_ci: 混合系数数据Ci用于绘图
         asfs_position: 正确能级位置索引列表
         caled_csfs_indices_dict: 当前计算的CSF索引字典（用于数据对应检查）
-        y_current_calc_probability: 当前计算CSF的预测概率，与混合系数维度匹配
+        y_current_cal_probability: 当前计算CSF的预测概率，与混合系数维度匹配
         save_model: 是否保存模型文件
         save_data: 是否保存预测结果数据
         plot_curves: 是否绘制ROC/PR曲线
@@ -265,35 +264,35 @@ def save_and_plot_results(
     if save_data:
 
         # 保存测试集结果
-        test_file = config.results_path / f"{config.loop_file_name}_test_results.csv"
+        test_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
         pd.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_test"],
                 "y_prediction": evaluation_results["predictions"]["y_prediction_test"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_test"],
             }
-        ).to_csv(test_file, index=False)
+        ).to_parquet(test_file, index=False)
         saved_files["test_data"] = str(test_file)
 
         # 保存训练集结果到results目录
-        train_file = config.results_path / f"{config.loop_file_name}_train_results.csv"
+        train_file = path_cfg.results_path  / f"{path_cfg.loop_file_name}_train_results.parquet"
         pd.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_train"],
                 "y_prediction": evaluation_results["predictions"]["y_prediction_train"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_train"],
             }
-        ).to_csv(train_file, index=False)
+        ).to_parquet(train_file, index=False)
         saved_files["train_data"] = str(train_file)
 
         # 保存其他数据预测结果到results目录
-        other_file = config.results_path / f"{config.loop_file_name}_other_predictions.csv"
+        other_file = path_cfg.results_path  / f"{path_cfg.loop_file_name}_other_predictions.parquet"
         pd.DataFrame(
             {
                 "y_prediction": evaluation_results["predictions"]["y_prediction_other"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_other"],
             }
-        ).to_csv(other_file, index=False)
+        ).to_parquet(other_file, index=False)
         saved_files["other_predictions"] = str(other_file)
 
         if logger:
@@ -301,7 +300,7 @@ def save_and_plot_results(
 
     # 2. 保存模型文件到models目录
     if save_model:
-        model_file = config.models_path / f"{config.loop_file_name}.pkl"
+        model_file = path_cfg.models_path / f"{path_cfg.loop_file_name}.pkl"
         joblib.dump(model, model_file)
         saved_files["model"] = str(model_file)
 
@@ -315,20 +314,19 @@ def save_and_plot_results(
             y_prob_all = evaluation_results["probabilities"]["y_probability_all"]
 
             # 修复：使用正确能级位置的混合系数数据
-            mix_coeff = rmix_file_data.mix_coefficient_List[0][asfs_position]
-            if len(mix_coeff.shape) > 1:
+            if len(correct_levels_ci.shape) > 1:
                 # 如果是多维数组，计算每个CSF的混合系数幅值
-                cal_mix_coeff_list = np.sqrt(np.sum(mix_coeff**2, axis=0))
+                cal_mix_coeff_list = np.sqrt(np.sum(correct_levels_ci**2, axis=0))
             else:
-                cal_mix_coeff_list = np.abs(mix_coeff)
+                cal_mix_coeff_list = np.abs(correct_levels_ci)
 
             if logger:
                 logger.info(f"使用正确能级位置的混合系数: {asfs_position}")
                 logger.info(f"混合系数维度: {cal_mix_coeff_list.shape}")
 
             # 使用传入的当前计算CSF预测概率（与ann3_proba.py保持一致的数据处理）
-            if y_current_calc_probability is not None:
-                y_prob_current_cal = y_current_calc_probability
+            if y_current_cal_probability is not None:
+                y_prob_current_cal = y_current_cal_probability
 
                 if logger:
                     logger.info(
@@ -374,11 +372,11 @@ def save_and_plot_results(
                 y_prob_current_cal = y_prob_all
                 if logger:
                     logger.warning(
-                        "未提供y_current_calc_probability或caled_csfs_indices_dict，第四个子图可能显示不正确"
+                        "未提供y_current_cal_probability或caled_csfs_indices_dict，第四个子图可能显示不正确"
                     )
 
             # 绘制ROC和PR曲线
-            plot_file = config.roc_curves_path / f"{config.loop_file_name}_roc_pr_curves.png"
+            plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_roc_pr_curves.png"
             roc_auc, pr_auc = ANNClassifier.plot_curve(
                 cal_mix_coeff_list,
                 y_prob_current_cal,  # 使用对应的概率数据
@@ -389,7 +387,7 @@ def save_and_plot_results(
             saved_files["roc_pr_plot"] = str(plot_file)
 
             if logger:
-                logger.info(f"性能图表已保存到: {config.roc_curves_path}")
+                logger.info(f"性能图表已保存到: {path_cfg.roc_curves_path}")
 
         except Exception as e:
             if logger:
