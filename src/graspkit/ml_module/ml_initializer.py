@@ -92,9 +92,9 @@ def _setup_config_paths(config):
     # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
     if config.cal_settings.cal_loop_num > 1:
         # 前一轮计算保存的重要索引文件路径
-        config.cal_path.previous_indices_file = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
+        config.cal_path.previous_indices_file = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
         # 前一轮机器学习生成的最终采样索引文件路径
-        config.cal_path.ml_results_path = config.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
+        config.cal_path.ml_results_path = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
 
     return config
 
@@ -278,7 +278,7 @@ def load_data_files(
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_indices_file_path = (
-        paths_cfg.cal_path / f"{paths_cfg.loop_file_name}_sampled_indices.pkl"
+        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_sampled_indices.pkl"
     )
     caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
