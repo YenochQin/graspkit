@@ -80,7 +80,7 @@ def _setup_config_paths(config):
     config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
     # 设置当前计算循环的工作目录路径，格式：{配置名}_{循环编号}
-    config.cal_path.cal_loop_path = root_path / config.loop_file_name
+    config.cal_path.cal_loop_path = root_path / config.cal_path.loop_file_name
 
     # 设置计算结果文件的存储路径
     config.cal_path.results_path = root_path / 'results'
