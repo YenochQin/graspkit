@@ -105,7 +105,7 @@ def load_large_hash(file_path: Union[str, Path]) -> Dict[int, Dict[str, int]]:
 
 
 #######################################################################
-def load_config(config_path: Union[str, Path]) -> SimpleNamespace:
+def load_config(config_path: str | Path) -> SimpleNamespace:
     """加载TOML配置文件并进行类型转换和数据处理"""
     # 转换为Path对象
     config_path = Path(config_path)
@@ -148,9 +148,8 @@ def _process_config_data(config: dict[str, Any]) -> dict[str, Any]:
 
     # 路径转换 - 从 target 节中获取
     config["cal_settings"]["root_path"] = Path(config["cal_settings"]["root_path"])
-    config["cal_settings"]["scf_cal_path"] = (
-        config["cal_settings"]["root_path"] / f"{config['target']['conf']}_{config['cal_settings']['cal_loop_num']}"
-    )
+    
+    config["cal_path"] = {}
 
     # 服务器配置整数转换
     if "server_settings" in config:

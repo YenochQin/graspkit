@@ -45,7 +45,7 @@ def train_model(
                             )
 
     # 初始化或加载模型
-    config.models_path.mkdir(exist_ok=True)
+    config.cal_path.models_path.mkdir(exist_ok=True)
 
     # 检查数据平衡性 (移到最前面)
     positive_count = np.sum(y_train == 1)
