@@ -10,7 +10,7 @@ import numpy as np
 import joblib
 import logging
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Union, List
+from typing import Tuple, Dict
 
 class ANNClassifier:
     """
@@ -26,44 +26,56 @@ class ANNClassifier:
     """
     
     def __init__(
-                self, 
-                input_size: int, 
-                hidden_size: int = 150, 
-                output_size: int = 2, 
+                self,
+                input_size: int,
+                hidden_size: int = 150,
+                output_size: int = 2,
                 learning_rate: float = 0.001,
-                class_weights: Optional[List[float]] = None,
-                device: Optional[str] = None):
+                class_weights: list[float] | None = None,
+                device: str | None = None,
+                use_dynamic_weights: bool = True):
         """
         初始化ANN分类器
-        
+
         Args:
             input_size: 输入特征数量
             hidden_size: 隐藏层神经元数量
             output_size: 输出类别数量（默认2用于二分类）
             learning_rate: 学习率
-            class_weights: 类别权重用于处理不平衡数据
+            class_weights: 类别权重用于处理不平衡数据（如果use_dynamic_weights为True则忽略）
             device: 计算设备，如果为None则自动选择
+            use_dynamic_weights: 是否使用动态权重计算（基于训练数据中正负样本比例）
         """
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
-        
+        self.use_dynamic_weights = use_dynamic_weights
+
         # 设备配置
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-            
+
         # 类别权重处理
-        if class_weights is None:
-            class_weights = [9.0, 1.0]  # 默认权重
-        self.class_weights = torch.tensor(class_weights, dtype=torch.float32).to(self.device)
-        
+        if not use_dynamic_weights:
+            # 使用静态权重
+            if class_weights is None:
+                class_weights = [9.0, 1.0]  # 默认权重
+            self.class_weights = torch.tensor(class_weights, dtype=torch.float32).to(self.device)
+        else:
+            self.class_weights = None  # 将在训练时动态计算
+
         # 构建模型
         self.model = self._build_model()
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+
+        # 初始化损失函数（权重将在训练时设置）
+        if self.class_weights is not None:
+            self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+        else:
+            self.criterion = nn.CrossEntropyLoss()
         
         # 训练历史记录
         self.training_history = {
@@ -100,18 +112,18 @@ class ANNClassifier:
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    def fit(self, 
-            X_train: np.ndarray, 
-            y_train: np.ndarray, 
-            X_val: Optional[np.ndarray] = None, 
-            y_val: Optional[np.ndarray] = None, 
-            batch_size: int = 2048, 
+    def fit(self,
+            X_train: np.ndarray,
+            y_train: np.ndarray,
+            X_val: np.ndarray | None = None,
+            y_val: np.ndarray | None = None,
+            batch_size: int = 2048,
             max_epochs: int = 150,
             early_stopping_patience: int = 20,
-            min_delta: float = 1e-4) -> Dict[str, List[float]]:
+            min_delta: float = 1e-4) -> dict[str, list[float]]:
         """
         训练ANN模型
-        
+
         Args:
             X_train: 训练数据
             y_train: 训练标签
@@ -121,13 +133,19 @@ class ANNClassifier:
             max_epochs: 最大训练轮数
             early_stopping_patience: 早停耐心值
             min_delta: 最小改进阈值
-            
+
         Returns:
             训练历史记录字典
         """
         # 数据验证
         self._validate_input_data(X_train, y_train)
-        
+
+        # 动态计算权重（如果启用）
+        if self.use_dynamic_weights:
+            self.class_weights = self._calculate_dynamic_weights(y_train)
+            # 重新创建损失函数
+            self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+
         # 数据转换
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
         y_train_tensor = torch.tensor(y_train, dtype=torch.long).to(self.device)
@@ -143,7 +161,7 @@ class ANNClassifier:
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=10
         )
-        
+
         # 早停机制
         best_val_loss = float('inf')
         patience_counter = 0
@@ -189,7 +207,11 @@ class ANNClassifier:
 
         return self.training_history
 
-    def _train_epoch(self, X_train: torch.Tensor, y_train: torch.Tensor, batch_size: int) -> float:
+    def _train_epoch(
+                    self, 
+                    X_train: torch.Tensor, 
+                    y_train: torch.Tensor, 
+                    batch_size: int) -> float:
         """训练一个epoch"""
         self.model.train()
         total_loss = 0.0
@@ -216,7 +238,10 @@ class ANNClassifier:
 
         return total_loss / num_batches
 
-    def _validate_epoch(self, X_val: torch.Tensor, y_val: torch.Tensor) -> Tuple[float, float]:
+    def _validate_epoch(
+                    self, 
+                    X_val: torch.Tensor, 
+                    y_val: torch.Tensor) -> Tuple[float, float]:
         """验证一个epoch"""
         self.model.eval()
         total_loss = 0.0
@@ -236,14 +261,40 @@ class ANNClassifier:
 
         return total_loss, accuracy
 
+    def _calculate_dynamic_weights(self, y_train: np.ndarray) -> torch.Tensor:
+        """
+        基于训练数据中的正负样本比例动态计算类别权重
+
+        Args:
+            y_train: 训练标签
+
+        Returns:
+            类别权重张量 [负类权重, 正类权重]
+        """
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+
+        # 计算正负样本比例（与tests/ANN.py中的逻辑一致）
+        positive_ratio = y_train_tensor.sum().item() / len(y_train_tensor)  # 正类比例
+        negative_ratio = 1 - positive_ratio  # 负类比例
+
+        # 权重计算：[负类比例, 正类比例]
+        weights = [negative_ratio, positive_ratio]
+
+        # 转换为张量并移动到设备
+        weight_tensor = torch.tensor(weights, dtype=torch.float32).to(self.device)
+
+        self.logger.info(f"动态计算类别权重: {weights} (正类比例: {positive_ratio:.4f}, 负类比例: {negative_ratio:.4f})")
+
+        return weight_tensor
+
     def _validate_input_data(self, X: np.ndarray, y: np.ndarray):
         """验证输入数据的有效性"""
         if X.shape[0] != y.shape[0]:
             raise ValueError("X和y的样本数量不匹配")
-        
+
         if X.shape[1] != self.input_size:
             raise ValueError(f"输入特征维度 {X.shape[1]} 与模型期望的 {self.input_size} 不匹配")
-        
+
         if len(np.unique(y)) > self.output_size:
             raise ValueError(f"标签类别数 {len(np.unique(y))} 超过模型输出维度 {self.output_size}")
 
@@ -279,7 +330,7 @@ class ANNClassifier:
 
         return outputs.cpu().numpy()
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray, verbose: bool = True) -> Dict[str, float]:
+    def evaluate(self, X: np.ndarray, y: np.ndarray, verbose: bool = True) -> dict[str, float]:
         """
         评估模型性能
         
@@ -369,7 +420,7 @@ class ANNClassifier:
                 y_probability_all: np.ndarray, 
                 y_test: np.ndarray, 
                 y_probability: np.ndarray, 
-                filename: str) -> Tuple[float, float]:
+                filename: str):
         """
         绘制评估曲线
         
@@ -479,7 +530,7 @@ class ANNClassifier:
     @staticmethod
     def model_evaluation(y_test: np.ndarray, 
                         y_pred: np.ndarray, 
-                        y_probability: np.ndarray) -> Tuple[float, float, float, float, float]:
+                        y_probability: np.ndarray):
         """
         模型评估
         

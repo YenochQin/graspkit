@@ -32,7 +32,7 @@ from ..utils.data_modules import MixCoefficientData
 def train_model(
     config,
     caled_csfs_descriptors: np.ndarray,
-    rmix_file_data: MixCoefficientData,
+    correct_levels_ci: np.ndarray,
     asfs_position: List[int],
     logger,
 ):
@@ -41,8 +41,8 @@ def train_model(
     X = caled_csfs_descriptors[:, :-1]
     y = caled_csfs_descriptors[:, -1]
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+                                X, y, test_size=0.2, random_state=42
+                            )
 
     # 初始化或加载模型
     config.models_path.mkdir(exist_ok=True)
@@ -172,17 +172,6 @@ def train_model(
     )
     training_time = time.time() - start_time
 
-    # 收敛性检查 - 更新阈值以反映当前良好性能
-    final_loss = 0.31  # 实际Loss值，应该从model.fit返回值获取
-    if final_loss > 0.4:  # 调整阈值从0.5到0.4
-        logger.warning(f"训练Loss较高 ({final_loss:.3f})，可能存在以下问题:")
-        logger.warning("1. 数据特征质量不够好")
-        logger.warning("2. 模型容量不足")
-        logger.warning("3. 需要更多训练轮数")
-        logger.warning("4. 学习率需要调整")
-    else:
-        logger.info(f"训练Loss良好 ({final_loss:.3f})，模型收敛效果理想")
-
     # Model evaluation
     logger.info("             预测与评估")
     y_prediction = model.predict(X_test)
@@ -248,7 +237,7 @@ def train_model(
     # 修复：使用正确能级位置的混合系数进行绘图
     # 获取所有CSFs在正确能级位置的混合系数平方和
     csf_mix_coeff_squared_sum = np.sum(
-        rmix_file_data.mix_coefficient_List[0][asfs_position] ** 2, axis=0
+        correct_levels_ci ** 2, axis=0
     )
 
     # 诊断混合系数的信息

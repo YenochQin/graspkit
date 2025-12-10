@@ -87,7 +87,6 @@ def save_csf_metadata(csf_obj: CSFs, filepath: Union[str, Path]):
 
 #######################################################################
 
-
 def save_csfs_binary(csf_obj: CSFs, filepath: Union[str, Path]):
     filepath = Path(filepath)
     # 元数据存储
@@ -111,9 +110,7 @@ def save_csfs_binary(csf_obj: CSFs, filepath: Union[str, Path]):
             protocol=pickle.HIGHEST_PROTOCOL,
         )
 
-
 #######################################################################
-
 
 def continue_calculate(save_path: str | Path, continue_calculate: bool):
     save_path = Path(save_path)
@@ -122,7 +119,6 @@ def continue_calculate(save_path: str | Path, continue_calculate: bool):
         file.write(continue_calculate)
 
     return f"Continue calculate is set to {continue_calculate}"
-
 
 def update_config(config_path: str | Path, updates: Dict[str, Any]):
     """更新TOML配置文件
@@ -152,9 +148,7 @@ def update_config(config_path: str | Path, updates: Dict[str, Any]):
     # 写入配置文件
     rtoml.dump(config, config_path)
 
-
 #######################################################################
-
 
 def pkl_storage(blocks_csfs_index: Dict, save_file_path):
     """
@@ -173,8 +167,8 @@ def pkl_storage(blocks_csfs_index: Dict, save_file_path):
 
     return f"CSFs index has been stored to {file_path}"
 
-
 #######################################################################
+
 def precompute_large_hash(
     large_data: List[List[List[str]]], save_path: Union[str, Path]
 ):
