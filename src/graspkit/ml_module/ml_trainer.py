@@ -76,7 +76,7 @@ def train_model(
         )
     else:
         # 后续轮次：尝试加载之前的模型
-        model_path = config.models_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
+        model_path = config.cal_path.models_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
         if model_path.exists():
             model = joblib.load(model_path)
             logger.info(f"加载已有模型: {model_path}")
