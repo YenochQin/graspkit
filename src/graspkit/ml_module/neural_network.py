@@ -26,14 +26,14 @@ class ANNClassifier:
     """
     
     def __init__(
-                self,
-                input_size: int,
-                hidden_size: int = 150,
-                output_size: int = 2,
-                learning_rate: float = 0.001,
-                class_weights: list[float] | None = None,
-                device: str | None = None,
-                use_dynamic_weights: bool = True):
+            self,
+            input_size: int,
+            hidden_size: int = 150,
+            output_size: int = 2,
+            learning_rate: float = 0.001,
+            class_weights: list[float] | None = None,
+            device: str | None = None,
+            use_dynamic_weights: bool = True):
         """
         初始化ANN分类器
 
@@ -120,7 +120,8 @@ class ANNClassifier:
             batch_size: int = 2048,
             max_epochs: int = 150,
             early_stopping_patience: int = 20,
-            min_delta: float = 1e-4) -> dict[str, list[float]]:
+            min_delta: float = 1e-4
+            ) -> dict[str, list[float]]:
         """
         训练ANN模型
 
@@ -159,8 +160,11 @@ class ANNClassifier:
 
         # 学习率调度器
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=10
-        )
+                                self.optimizer, 
+                                mode='min', 
+                                factor=0.5, 
+                                patience=10
+                            )
 
         # 早停机制
         best_val_loss = float('inf')
@@ -208,10 +212,11 @@ class ANNClassifier:
         return self.training_history
 
     def _train_epoch(
-                    self, 
-                    X_train: torch.Tensor, 
-                    y_train: torch.Tensor, 
-                    batch_size: int) -> float:
+            self, 
+            X_train: torch.Tensor, 
+            y_train: torch.Tensor, 
+            batch_size: int
+            ) -> float:
         """训练一个epoch"""
         self.model.train()
         total_loss = 0.0
@@ -239,9 +244,10 @@ class ANNClassifier:
         return total_loss / num_batches
 
     def _validate_epoch(
-                    self, 
-                    X_val: torch.Tensor, 
-                    y_val: torch.Tensor) -> Tuple[float, float]:
+            self, 
+            X_val: torch.Tensor, 
+            y_val: torch.Tensor
+            ) -> Tuple[float, float]:
         """验证一个epoch"""
         self.model.eval()
         total_loss = 0.0
@@ -330,7 +336,11 @@ class ANNClassifier:
 
         return outputs.cpu().numpy()
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray, verbose: bool = True) -> dict[str, float]:
+    def evaluate(self, 
+                 X: np.ndarray, 
+                 y: np.ndarray, 
+                 verbose: bool = True
+                ) -> dict[str, float]:
         """
         评估模型性能
         
@@ -416,11 +426,11 @@ class ANNClassifier:
     
     @staticmethod
     def plot_curve(
-                cal_mix_coeff_List: np.ndarray, 
-                y_probability_all: np.ndarray, 
-                y_test: np.ndarray, 
-                y_probability: np.ndarray, 
-                filename: str):
+            cal_mix_coeff_List: np.ndarray, 
+            y_probability_all: np.ndarray, 
+            y_test: np.ndarray, 
+            y_probability: np.ndarray, 
+            filename: str):
         """
         绘制评估曲线
         
@@ -528,9 +538,10 @@ class ANNClassifier:
         return roc_auc, pr_auc
     
     @staticmethod
-    def model_evaluation(y_test: np.ndarray, 
-                        y_pred: np.ndarray, 
-                        y_probability: np.ndarray):
+    def model_evaluation(
+            y_test: np.ndarray, 
+            y_pred: np.ndarray, 
+            y_probability: np.ndarray):
         """
         模型评估
         
