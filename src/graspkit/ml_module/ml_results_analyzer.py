@@ -162,8 +162,15 @@ def save_iteration_results(
     # 保存到CSV文件
     results_file = config.cal_path.results_path / "iteration_results.csv"
     
-    with open(results_file, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
+    # 检查文件是否存在，如果不存在则写入表头
+    if not results_file.exists():
+        with open(results_file, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow(["iteration", "train_f1", "test_f1", "overfitting_gap", 
+                            "important_count", "ml_predicted_count", "ml_new_count",
+                            "total_original_count", "current_calculation_count",
+                            "data_retention_rate", "important_retention_rate", 
+                            "ml_retention_rate", "cal_loop_num"])
 
     # 计算过拟合差距
     overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
