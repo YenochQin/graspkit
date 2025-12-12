@@ -17,8 +17,8 @@ from .neural_network import ANNClassifier
 
 
 def validate_csf_descriptors_coverage(
-            descriptors: np.ndarray
-            ) -> Tuple[bool, List[int]]:
+        descriptors: np.ndarray
+        ) -> Tuple[bool, List[int]]:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
     对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
@@ -62,10 +62,10 @@ def validate_csf_descriptors_coverage(
 
 
 def select_csfs_for_coverage(
-            descriptors: np.ndarray,
-            uncovered_orbitals: List[int],
-            candidate_descriptors: np.ndarray,
-            ) -> Tuple[np.ndarray, List[int]]:
+        descriptors: np.ndarray,
+        uncovered_orbitals: List[int],
+        candidate_descriptors: np.ndarray,
+        ) -> Tuple[np.ndarray, List[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
@@ -131,13 +131,13 @@ def select_csfs_for_coverage(
 
 
 def save_iteration_results(
-                        config,
-                        training_time,
-                        eval_time,
-                        execution_time,
-                        evaluation_results,
-                        selection_results,
-                        logger,):
+        config,
+        training_time,
+        eval_time,
+        execution_time,
+        evaluation_results,
+        selection_results,
+        logger,):
     """
     保存迭代结果到CSV文件
 
@@ -231,17 +231,17 @@ def save_iteration_results(
 
 
 def save_and_plot_results(
-                    evaluation_results,
-                    model,
-                    path_cfg,
-                    correct_levels_ci: np.ndarray,
-                    asfs_position: List[int],
-                    caled_csfs_indices_dict=None,
-                    y_current_cal_probability=None,
-                    save_model: bool = True,
-                    save_data: bool = True,
-                    plot_curves: bool = True,
-                    logger=None,):
+        evaluation_results,
+        model,
+        path_cfg,
+        correct_levels_ci: np.ndarray,
+        asfs_position: List[int],
+        caled_csfs_indices_dict=None,
+        y_current_cal_probability=None,
+        save_model: bool = True,
+        save_data: bool = True,
+        plot_curves: bool = True,
+        logger=None,):
     """
     保存模型预测结果、模型文件和绘制性能曲线
     使用setup_directories创建的标准目录结构
