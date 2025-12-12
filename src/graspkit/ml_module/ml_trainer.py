@@ -30,12 +30,11 @@ from ..utils.data_modules import MixCoefficientData
 
 
 def train_model(
-    config,
-    caled_csfs_descriptors: np.ndarray,
-    correct_levels_ci: np.ndarray,
-    asfs_position: List[int],
-    logger,
-):
+        config,
+        caled_csfs_descriptors: np.ndarray,
+        correct_levels_ci: np.ndarray,
+        asfs_position: List[int],
+        logger):
     """训练机器学习模型"""
 
     X = caled_csfs_descriptors[:, :-1]
@@ -259,9 +258,13 @@ def train_model(
     )
 
     # Overfitting and underfitting monitoring
-    f1_train, roc_auc_train, accuracy_train, precision_train, recall_train = (
-        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
-    )
+    (f1_train, 
+     roc_auc_train, 
+     accuracy_train, 
+     precision_train, 
+     recall_train) = (
+                    ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
+                    )
     logger.info(f"训练集预测结果:")
     logger.info(
         f"AUC:{roc_auc_train}, f1:{f1_train}, accuracy:{accuracy_train}, precision:{precision_train}, recall:{recall_train}"
@@ -271,8 +274,14 @@ def train_model(
 
 
 def evaluate_model(
-            model, X_train, X_test, y_train, y_test, X_unselected, config, logger
-        ):
+        model, 
+        X_train, 
+        X_test, 
+        y_train, 
+        y_test, 
+        X_unselected, 
+        config, 
+        logger):
     """
     评估模型性能，返回所有预测结果和评估指标
 
