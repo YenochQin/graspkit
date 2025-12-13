@@ -18,9 +18,9 @@ import joblib
 import numpy as np
 import pandas as pd
 import torch
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import RandomUnderSampler
-from sklearn.ensemble import RandomForestClassifier
+# from imblearn.over_sampling import SMOTE
+# from imblearn.under_sampling import RandomUnderSampler
+# from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 # 本地模块导入
