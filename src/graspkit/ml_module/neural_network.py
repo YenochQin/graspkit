@@ -267,31 +267,132 @@ class ANNClassifier:
 
         return total_loss, accuracy
 
-    def _calculate_dynamic_weights(self, y_train: np.ndarray) -> torch.Tensor:
+    # def _calculate_dynamic_weights(self, y_train: np.ndarray) -> torch.Tensor:
+    #     """
+    #     基于训练数据中的正负样本比例动态计算类别权重
+
+    #     Args:
+    #         y_train: 训练标签
+
+    #     Returns:
+    #         类别权重张量 [负类权重, 正类权重]
+    #     """
+    #     y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+
+    #     # 计算正负样本比例（与tests/ANN.py中的逻辑一致）
+    #     positive_ratio = y_train_tensor.sum().item() / len(y_train_tensor)  # 正类比例
+    #     negative_ratio = 1 - positive_ratio  # 负类比例
+
+    #     # 权重计算：[负类比例, 正类比例]
+    #     weights = [negative_ratio, positive_ratio]
+
+    #     # 转换为张量并移动到设备
+    #     weight_tensor = torch.tensor(weights, dtype=torch.float32).to(self.device)
+
+    #     self.logger.info(f"动态计算类别权重: {weights} (正类比例: {positive_ratio:.4f}, 负类比例: {negative_ratio:.4f})")
+
+    #     return weight_tensor
+
+    def _calculate_dynamic_weights(
+            self, 
+            y_train: np.ndarray,
+            focus_on_recall: bool = True,  # 是否优先保证召回率
+            min_positive_weight: float = 3.0,  # 正类最小权重（即使它是多数类）
+            adaptive_strength: float = 0.5  # 自适应强度 (0~1)，越大越激进
+        ) -> torch.Tensor:
         """
-        基于训练数据中的正负样本比例动态计算类别权重
-
+        针对"找出重要组态"任务优化的权重计算
+        claude sonnet4.5
+        核心思想：
+        1. 始终对正类（重要组态）保持一定的权重优势，即使它变成多数类
+        2. 根据正样本比例动态调整权重强度
+        3. 避免权重过于极端导致过拟合
+        
         Args:
-            y_train: 训练标签
-
+            y_train: 训练标签 (0=不重要, 1=重要)
+            focus_on_recall: 是否优先保证召回率（推荐True）
+            min_positive_weight: 正类的最小权重倍数
+            adaptive_strength: 自适应调整的强度
+                - 0.0: 完全不自适应，始终固定权重
+                - 1.0: 完全自适应，根据比例动态调整
+                - 0.5: 折中（推荐）
+        
         Returns:
             类别权重张量 [负类权重, 正类权重]
         """
         y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-
-        # 计算正负样本比例（与tests/ANN.py中的逻辑一致）
-        positive_ratio = y_train_tensor.sum().item() / len(y_train_tensor)  # 正类比例
-        negative_ratio = 1 - positive_ratio  # 负类比例
-
-        # 权重计算：[负类比例, 正类比例]
-        weights = [negative_ratio, positive_ratio]
-
-        # 转换为张量并移动到设备
-        weight_tensor = torch.tensor(weights, dtype=torch.float32).to(self.device)
-
-        self.logger.info(f"动态计算类别权重: {weights} (正类比例: {positive_ratio:.4f}, 负类比例: {negative_ratio:.4f})")
-
+        n_samples = len(y_train_tensor)
+        
+        # 计算每个类别的数量
+        counts = torch.bincount(y_train_tensor, minlength=2).float()
+        neg_count, pos_count = counts[0].item(), counts[1].item()
+        
+        # 计算正样本比例
+        pos_ratio = pos_count / n_samples
+        neg_ratio = neg_count / n_samples
+        
+        if focus_on_recall:
+            # 策略：始终让正类权重 >= 负类权重 * min_positive_weight
+            # 确保模型不会忽视"重要组态"
+            
+            if pos_ratio <= 0.5:
+                # 早期迭代：正类是少数类或平衡
+                # 使用较强的权重来提升召回率
+                pos_weight = 1.0 / pos_ratio  # 反比
+                neg_weight = 1.0
+                
+                # 应用自适应强度调整
+                pos_weight = 1.0 + (pos_weight - 1.0) * adaptive_strength
+                
+            else:
+                # 后期迭代：正类变成多数类
+                # 仍然保持正类的权重优势，但不那么激进
+                
+                # 基础权重（如果完全平衡）
+                base_pos_weight = min_positive_weight
+                
+                # 根据正类占比调整：占比越高，权重略微降低
+                # 但始终保持 >= min_positive_weight
+                decay_factor = (pos_ratio - 0.5) / 0.5  # 0.5→1.0 映射到 0→1
+                pos_weight = base_pos_weight * (1.0 - 0.3 * decay_factor * adaptive_strength)
+                pos_weight = max(pos_weight, min_positive_weight)
+                
+                neg_weight = 1.0
+            
+            # 构建权重张量
+            weights = torch.tensor([neg_weight, pos_weight], dtype=torch.float32)
+            
+        else:
+            # 标准的平衡权重（不推荐用于你的任务）
+            weights = n_samples / (2 * counts)
+        
+        # 移动到设备
+        weight_tensor = weights.to(self.device)
+        
+        # 详细日志
+        self.logger.info(
+            f"\n{'='*70}\n"
+            f"权重计算 - 重要组态检测模式\n"
+            f"{'='*70}\n"
+            f"  样本统计:\n"
+            f"    总样本数:     {n_samples:,}\n"
+            f"    不重要组态:   {neg_count:,} ({neg_ratio:.1%})\n"
+            f"    重要组态:     {pos_count:,} ({pos_ratio:.1%})\n"
+            f"\n"
+            f"  权重配置:\n"
+            f"    负类权重:     {weights[0]:.3f}\n"
+            f"    正类权重:     {weights[1]:.3f}\n"
+            f"    权重比例:     1 : {weights[1]/weights[0]:.2f}\n"
+            f"\n"
+            f"  策略说明:\n"
+            f"    {'✓ 高召回率模式 - 优先找出所有重要组态' if focus_on_recall else '○ 平衡模式'}\n"
+            f"    正类阶段:     {'早期(少数类)' if pos_ratio <= 0.5 else '后期(多数类)'}\n"
+            f"    自适应强度:   {adaptive_strength:.1f}\n"
+            f"{'='*70}"
+        )
+        
         return weight_tensor
+
 
     def _validate_input_data(self, X: np.ndarray, y: np.ndarray):
         """验证输入数据的有效性"""
@@ -304,19 +405,15 @@ class ANNClassifier:
         if len(np.unique(y)) > self.output_size:
             raise ValueError(f"标签类别数 {len(np.unique(y))} 超过模型输出维度 {self.output_size}")
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """
-        预测标签
-        
-        Args:
-            X: 输入数据
-            
-        Returns:
-            预测标签
-        """
+    def predict(
+            self, 
+            X: np.ndarray, 
+            threshold: float = 0.5
+        ) -> np.ndarray:
+
         predictions = self.predict_proba(X)
-        predictions = predictions[:, 1] > 0.5
-        return predictions
+        return (predictions[:, 1] > threshold).astype(int)
+
     
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
@@ -404,25 +501,29 @@ class ANNClassifier:
         plt.show()
 
     def save_model(self, path: str):
-        """
-        保存模型
-        
-        Args:
-            path: 保存路径
-        """
-        torch.save(self.model.state_dict(), path)
-        joblib.dump(self, path + '_ann.pkl')
+        """保存模型完整状态"""
+        save_dict = {
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'training_history': self.training_history,
+            'hyperparameters': {
+                'input_size': self.input_size,
+                'hidden_size': self.hidden_size,
+                'output_size': self.output_size,
+                'learning_rate': self.learning_rate,
+            }
+        }
+        torch.save(save_dict, path)
 
-    def load_model(self, path: str):
-        """
-        加载模型
-        
-        Args:
-            path: 模型路径
-        """
-        self.model.load_state_dict(torch.load(path))
+    def load_model(self, path: str, device: str | None = None):
+        """加载模型"""
+        checkpoint = torch.load(path, map_location=device or self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.training_history = checkpoint['training_history']
         self.model.to(self.device)
-        return joblib.load(path + '_ann.pkl')
+        return self
+
     
     @staticmethod
     def plot_curve(
