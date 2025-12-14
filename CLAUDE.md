@@ -65,6 +65,9 @@ build_package.bat --clean          # Windows
 
 # Manual build
 python -m build
+
+# Development build with all dependencies
+python build_package.py --dev --clean
 ```
 
 #### Linting and Quality
@@ -74,6 +77,19 @@ ruff check .
 
 # Auto-fix linting issues
 ruff check . --fix
+
+# Type checking (optional)
+mypy src/
+```
+
+#### Testing
+```bash
+# Run test files in tests/ directory
+python tests/test_coverage_simple.py
+python tests/test_coverage_function.py
+
+# Run notebook examples
+jupyter notebook tests/test.ipynb
 ```
 
 #### Package Verification
@@ -125,10 +141,55 @@ The package exposes all functionality through `src/graspkit/__init__.py` with co
 - **Python Version**: Requires 3.12+
 - **Package Manager**: Hatchling with UV support
 - **Build System**: Modern packaging with optional dependencies
-- **Testing**: No formal test suite present in current repository
+- **Testing**: Example files in tests/ directory (ANN.py, rwfn_plotter.py, Nightingale_rose.py, test.ipynb)
 
 ### Performance Considerations
 - PyTorch environment choice affects computational performance
 - UV provides 10-100x faster dependency resolution than pip
 - Large CSF datasets require careful memory management
 - HDF5 format supported for efficient large dataset handling
+
+## Common Development Workflows
+
+### Running Examples and Tests
+```bash
+# Activate environment first
+source .venv/bin/activate  # Linux/macOS
+# or .venv\Scripts\activate  # Windows
+
+# Run basic examples
+python tests/ANN.py                    # ML classifier example
+python tests/rwfn_plotter.py          # Wavefunction plotting
+python tests/Nightingale_rose.py      # Visualization example
+
+# Interactive development with Jupyter
+jupyter notebook tests/test.ipynb
+```
+
+### Data Processing Pipeline
+```python
+# Typical workflow for processing GRASP data
+import graspkit as gk
+
+# Load GRASP calculation results
+data_loader = gk.GraspFileLoad("path/to/grasp/output")
+energy_data = gk.mcdhf_energy_data_collection(data_loader)
+
+# Process CSFs with ML-driven selection
+csf_processor = gk.CSFs_processor(...)
+selected_csfs = gk.radom_choose_csfs(csf_processor, n_select=1000)
+
+# Train ML model for optimization
+model = gk.ANNClassifier(...)
+gk.train_model(model, training_data)
+```
+
+### Environment-Specific Commands
+```bash
+# Check which PyTorch environment is active
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# Switch between CPU/GPU environments
+uv sync --extra cpu --extra dev    # CPU with dev tools
+uv sync --extra gpu --extra dev     # GPU with dev tools
+```
