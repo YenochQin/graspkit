@@ -7,7 +7,7 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, Tuple, List
+from typing import Tuple
 
 import csv
 import numpy as np
@@ -838,7 +838,7 @@ def generate_train_csfs_descriptors(
 
 def get_stay_descriptors(
             raw_csfs_descriptors: np.ndarray, 
-            sampled_csfs_idxs_dict: Dict[int, List[int]]
+            sampled_csfs_idxs_dict: dict[int, list[int]]
         ) -> np.ndarray:
     """
     找出不在sampled_csfs_idxs_dict索引中的描述符
