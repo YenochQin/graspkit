@@ -92,9 +92,9 @@ def _setup_config_paths(config):
     # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
     if config.cal_settings.cal_loop_num > 1:
         # 前一轮计算保存的重要索引文件路径
-        config.cal_path.previous_indices_file = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_indices'
+        config.cal_path.previous_idxs_file = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_important_idxs'
         # 前一轮机器学习生成的最终采样索引文件路径
-        config.cal_path.ml_results_path = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_indices'
+        config.cal_path.ml_results_path = config.cal_path.results_path / f'{config.target.conf}_{config.cal_settings.cal_loop_num-1}_final_sampled_idxs'
 
     return config
 
@@ -221,7 +221,7 @@ def load_data_files(
         use_cpp: 是否使用C++生成的HDF5文件格式
 
     Returns:
-        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_indices_dict)
+        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_idxs_dict)
     """
 
     # 加载能级文件
@@ -267,7 +267,7 @@ def load_data_files(
             raise FileNotFoundError(
                 f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}"
             )
-        raw_csfs_descriptors, raw_csfs_indices = result
+        raw_csfs_descriptors, raw_csfs_idxs = result
         logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}")
 
     # 加载本轮计算CSFs文件
@@ -277,18 +277,18 @@ def load_data_files(
     logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载本轮选择的CSFs的索引文件
-    caled_csfs_indices_file_path = (
-        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_sampled_indices.pkl"
+    caled_csfs_idxs_file_path = (
+        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_sampled_idxs.pkl"
     )
-    caled_csfs_indices_dict = pkl_loader(caled_csfs_indices_file_path)
-    logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_indices_file_path}")
+    caled_csfs_idxs_dict = pkl_loader(caled_csfs_idxs_file_path)
+    logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_idxs_file_path}")
 
     return (
         energy_level_data_pd,
         rmix_file_data,
         raw_csfs_descriptors,
         cal_csfs_data,
-        caled_csfs_indices_dict,
+        caled_csfs_idxs_dict,
     )
 
 
@@ -630,20 +630,20 @@ def evaluate_calculation_convergence(
 
 
 def merge_historical_ci_data(
-                    previous_indices_ci_dict, 
-                    current_indices_ci_dict, 
+                    previous_idxs_ci_dict, 
+                    current_idxs_ci_dict, 
                     logger
                     ) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
 
     合并规则：
-    1. 取indices的并集
-    2. 两个字典indices中的交集对应的ci_squared取较大值
+    1. 取idxs的并集
+    2. 两个字典idxs中的交集对应的ci_squared取较大值
 
     Args:
-        previous_indices_ci_dict: 历史CI数据字典，格式为 {0: {"indices": [...], "ci_squared": [...]}}
-        current_indices_ci_dict: 当前CI数据字典，格式为 {0: {"indices": [...], "ci_squared": [...]}}
+        previous_idxs_ci_dict: 历史CI数据字典，格式为 {0: {"idxs": [...], "ci_squared": [...]}}
+        current_idxs_ci_dict: 当前CI数据字典，格式为 {0: {"idxs": [...], "ci_squared": [...]}}
         logger: 日志记录器
 
     Returns:
@@ -651,25 +651,25 @@ def merge_historical_ci_data(
     """
 
     # 获取历史数据和当前数据
-    previous_indices = np.array(previous_indices_ci_dict[0]["indices"])
-    previous_ci_squared = np.array(previous_indices_ci_dict[0]["ci_squared"])
+    previous_idxs = np.array(previous_idxs_ci_dict[0]["idxs"])
+    previous_ci_squared = np.array(previous_idxs_ci_dict[0]["ci_squared"])
 
-    current_indices = np.array(current_indices_ci_dict[0]["indices"])
-    current_ci_squared = np.array(current_indices_ci_dict[0]["ci_squared"])
+    current_idxs = np.array(current_idxs_ci_dict[0]["idxs"])
+    current_ci_squared = np.array(current_idxs_ci_dict[0]["ci_squared"])
 
     # 创建索引到CI系数的映射
-    previous_dict = dict(zip(previous_indices, previous_ci_squared))
-    current_dict = dict(zip(current_indices, current_ci_squared))
+    previous_dict = dict(zip(previous_idxs, previous_ci_squared))
+    current_dict = dict(zip(current_idxs, current_ci_squared))
 
     # 获取索引的并集
-    all_indices = set(previous_indices) | set(current_indices)
+    all_idxs = set(previous_idxs) | set(current_idxs)
 
     # 合并CI系数：对于交集索引，取较大值
-    merged_indices = []
+    merged_idxs = []
     merged_ci_squared = []
 
-    for idx in sorted(all_indices):
-        merged_indices.append(idx)
+    for idx in sorted(all_idxs):
+        merged_idxs.append(idx)
 
         # 如果索引在两个字典中都存在，取较大的CI系数
         if idx in previous_dict and idx in current_dict:
@@ -682,17 +682,17 @@ def merge_historical_ci_data(
         else:  # idx in current_dict
             merged_ci_squared.append(current_dict[idx])
 
-    merged_indices = np.array(merged_indices)
+    merged_idxs = np.array(merged_idxs)
     merged_ci_squared = np.array(merged_ci_squared)
 
     logger.info(f"历史数据合并统计:")
-    logger.info(f"历史数据CSFs数量: {len(previous_indices)}")
-    logger.info(f"当前数据CSFs数量: {len(current_indices)}")
-    logger.info(f"合并后CSFs数量: {len(merged_indices)}")
-    logger.info(f"新增CSFs数量: {len(all_indices - set(previous_indices))}")
-    logger.info(f"重复CSFs数量: {len(set(previous_indices) & set(current_indices))}")
+    logger.info(f"历史数据CSFs数量: {len(previous_idxs)}")
+    logger.info(f"当前数据CSFs数量: {len(current_idxs)}")
+    logger.info(f"合并后CSFs数量: {len(merged_idxs)}")
+    logger.info(f"新增CSFs数量: {len(all_idxs - set(previous_idxs))}")
+    logger.info(f"重复CSFs数量: {len(set(previous_idxs) & set(current_idxs))}")
 
-    return merged_indices, merged_ci_squared
+    return merged_idxs, merged_ci_squared
 
 
 def generate_train_csfs_descriptors(
@@ -717,45 +717,45 @@ def generate_train_csfs_descriptors(
     logger.info("加载当前轮次保存的CSF索引和CI系数数据")
 
     # 加载当前轮次选择的CSF索引
-    current_indices_ci_path = (
+    current_idxs_ci_path = (
         config.cal_path.results_path
         / f"{config.cal_path.loop_file_name}_ci_squared.pkl"
     )
-    if not current_indices_ci_path.exists():
-        raise FileNotFoundError(f"当前轮次CSF索引文件不存在: {current_indices_ci_path}")
+    if not current_idxs_ci_path.exists():
+        raise FileNotFoundError(f"当前轮次CSF索引文件不存在: {current_idxs_ci_path}")
 
-    current_indices_ci_dict = pkl_loader(current_indices_ci_path)
+    current_idxs_ci_dict = pkl_loader(current_idxs_ci_path)
     try:
-        assert 0 in current_indices_ci_dict, "缺少主键 0"
-        assert "indices" in current_indices_ci_dict[0], "缺少子键 indices"
-        assert "ci_squared" in current_indices_ci_dict[0], "缺少子键 ci_squared"
-        assert current_indices_ci_dict[0]["indices"] is not None, "indices 值为空"
-        assert current_indices_ci_dict[0]["ci_squared"] is not None, "ci_squared 值为空"
+        assert 0 in current_idxs_ci_dict, "缺少主键 0"
+        assert "idxs" in current_idxs_ci_dict[0], "缺少子键 idxs"
+        assert "ci_squared" in current_idxs_ci_dict[0], "缺少子键 ci_squared"
+        assert current_idxs_ci_dict[0]["idxs"] is not None, "idxs 值为空"
+        assert current_idxs_ci_dict[0]["ci_squared"] is not None, "ci_squared 值为空"
         
         logger.info("所有键值验证通过")
 
     except AssertionError as e:
         logger.error(f"验证失败: {e}")
 
-    current_sampled_indices = np.array(current_indices_ci_dict[0]["indices"])
+    current_sampled_idxs = np.array(current_idxs_ci_dict[0]["idxs"])
 
     if config.cal_settings.cal_loop_num > 1:
         # 读取历次迭代保存的CI系数数据
-        previous_indices_ci_path = (
+        previous_idxs_ci_path = (
             config.cal_settings.root_path / "results" / f"{config.target.conf}_previous_ci_squared.pkl"
         )
-        if not previous_indices_ci_path.exists():
+        if not previous_idxs_ci_path.exists():
             raise FileNotFoundError(
-                f"当前轮次CSF索引文件不存在: {previous_indices_ci_path}"
+                f"当前轮次CSF索引文件不存在: {previous_idxs_ci_path}"
             )
 
-        previous_indices_ci_dict = pkl_loader(previous_indices_ci_path)
+        previous_idxs_ci_dict = pkl_loader(previous_idxs_ci_path)
         try:
-            assert 0 in previous_indices_ci_dict, "缺少主键 0"
-            assert "indices" in previous_indices_ci_dict[0], "缺少子键 indices"
-            assert "ci_squared" in previous_indices_ci_dict[0], "缺少子键 ci_squared"
-            assert previous_indices_ci_dict[0]["indices"] is not None, "indices 值为空"
-            assert previous_indices_ci_dict[0]["ci_squared"] is not None, (
+            assert 0 in previous_idxs_ci_dict, "缺少主键 0"
+            assert "idxs" in previous_idxs_ci_dict[0], "缺少子键 idxs"
+            assert "ci_squared" in previous_idxs_ci_dict[0], "缺少子键 ci_squared"
+            assert previous_idxs_ci_dict[0]["idxs"] is not None, "idxs 值为空"
+            assert previous_idxs_ci_dict[0]["ci_squared"] is not None, (
                 "ci_squared 值为空"
             )
 
@@ -764,20 +764,20 @@ def generate_train_csfs_descriptors(
         except AssertionError as e:
             logger.error(f"验证失败: {e}")
 
-        accumulated_indices, accumulated_ci_squared = merge_historical_ci_data(
-            previous_indices_ci_dict, current_indices_ci_dict, logger
+        accumulated_idxs, accumulated_ci_squared = merge_historical_ci_data(
+            previous_idxs_ci_dict, current_idxs_ci_dict, logger
         )
 
         logger.info(f"训练数据")
-        logger.info(f"CSF总数: {len(accumulated_indices)}")
-        logger.info(f"当前轮次CSF数: {len(current_sampled_indices)}")
+        logger.info(f"CSF总数: {len(accumulated_idxs)}")
+        logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
 
     elif config.cal_settings.cal_loop_num == 1:
-        accumulated_indices = current_indices_ci_dict[0]["indices"]
-        accumulated_ci_squared = current_indices_ci_dict[0]["ci_squared"]
+        accumulated_idxs = current_idxs_ci_dict[0]["idxs"]
+        accumulated_ci_squared = current_idxs_ci_dict[0]["ci_squared"]
         logger.info(f"训练数据")
-        logger.info(f"CSF总数: {len(accumulated_indices)}")
-        logger.info(f"当前轮次CSF数: {len(current_sampled_indices)}")
+        logger.info(f"CSF总数: {len(accumulated_idxs)}")
+        logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
     else:
         logger.error(f"{config.cal_settings.cal_loop_num=} error")
         raise ValueError(f"Invalid cal_loop_num: {config.cal_settings.cal_loop_num}")
@@ -785,7 +785,7 @@ def generate_train_csfs_descriptors(
     # 初始化变量
     cutoff_value = np.float64(config.cal_settings.cutoff_value)
 
-    sampled_csfs_descriptors = raw_csfs_descriptors[accumulated_indices]
+    sampled_csfs_descriptors = raw_csfs_descriptors[accumulated_idxs]
     important_csfs_mask = accumulated_ci_squared >= cutoff_value
 
     logger.info(f"生成完整训练数据: {sampled_csfs_descriptors.shape[0]} 个CSF")
@@ -800,7 +800,7 @@ def generate_train_csfs_descriptors(
 
     accumulated_ci_data = {
         0: {
-            "indices": accumulated_indices,  # CSF索引（对应总池）
+            "idxs": accumulated_idxs,  # CSF索引（对应总池）
             "ci_squared": accumulated_ci_squared,  # 对应的CI系数平方（正确能级 × 当前计算CSF）
         }
     }
@@ -810,7 +810,7 @@ def generate_train_csfs_descriptors(
     )
     pkl_storage(accumulated_ci_data, accumulated_ci_path)
     logger.info(
-        f"保存累积CI系数数据: {accumulated_ci_path} (包含{len(accumulated_indices)}个CSFs)"
+        f"保存累积CI系数数据: {accumulated_ci_path} (包含{len(accumulated_idxs)}个CSFs)"
     )
 
     # 保存描述符文件
@@ -838,34 +838,34 @@ def generate_train_csfs_descriptors(
 
 def get_stay_descriptors(
             raw_csfs_descriptors: np.ndarray, 
-            sampled_csfs_indices_dict: Dict[int, List[int]]
+            sampled_csfs_idxs_dict: Dict[int, List[int]]
         ) -> np.ndarray:
     """
-    找出不在sampled_csfs_indices_dict索引中的描述符
+    找出不在sampled_csfs_idxs_dict索引中的描述符
 
     Args:
         raw_csfs_descriptors: 原始CSFs描述符数组
-        sampled_csfs_indices_dict: 已选择的CSFs索引字典，格式为{block_index: [indices]}
+        sampled_csfs_idxs_dict: 已选择的CSFs索引字典，格式为{block_idx: [idxs]}
 
     Returns:
-        np.ndarray: 不在sampled_csfs_indices_dict中的描述符数组
+        np.ndarray: 不在sampled_csfs_idxs_dict中的描述符数组
     """
     # 验证字典并安全获取所有已选择的索引
-    if not sampled_csfs_indices_dict:
-        raise ValueError("sampled_csfs_indices_dict为空，无法获取选中的CSFs索引")
+    if not sampled_csfs_idxs_dict:
+        raise ValueError("sampled_csfs_idxs_dict为空，无法获取选中的CSFs索引")
 
-    if 0 not in sampled_csfs_indices_dict:
+    if 0 not in sampled_csfs_idxs_dict:
         raise KeyError(
-            f"sampled_csfs_indices_dict中缺少键0，可用键: {list(sampled_csfs_indices_dict.keys())}"
+            f"sampled_csfs_idxs_dict中缺少键0，可用键: {list(sampled_csfs_idxs_dict.keys())}"
         )
 
-    sampled_indices = set(sampled_csfs_indices_dict[0])
+    sampled_idxs = set(sampled_csfs_idxs_dict[0])
 
     # 获取所有可能的索引
-    all_indices = set(range(len(raw_csfs_descriptors)))
+    all_idxs = set(range(len(raw_csfs_descriptors)))
 
-    # 找出不在sampled_indices中的索引
-    stay_indices = list(all_indices - sampled_indices)
+    # 找出不在sampled_idxs中的索引
+    stay_idxs = list(all_idxs - sampled_idxs)
 
     # 返回对应的描述符
-    return raw_csfs_descriptors[stay_indices]
+    return raw_csfs_descriptors[stay_idxs]

@@ -225,8 +225,8 @@ class ANNClassifier:
         permutation = torch.randperm(X_train.size(0))
         
         for i in range(0, X_train.size(0), batch_size):
-            indices = permutation[i:i + batch_size]
-            batch_X, batch_y = X_train[indices], y_train[indices]
+            idxs = permutation[i:i + batch_size]
+            batch_X, batch_y = X_train[idxs], y_train[idxs]
 
             self.optimizer.zero_grad()
             outputs = self.model(batch_X)

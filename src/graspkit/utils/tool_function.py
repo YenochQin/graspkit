@@ -31,15 +31,15 @@ Rydberg constant is  {Rydberg}
     )
 
 
-def level_J_value(j_index: int) -> str:
+def level_J_value(j_idx: int) -> str:
     j_value_list = ['0', '1/2', '1', '3/2', '2', '5/2', '3', '7/2', '4', '9/2', '5', '11/2', '6', '13/2', '7', '15/2', '8', '17/2', '9', '19/2', '10', '21/2', '11', '23/2', '12', '25/2', '13', '27/2', '14', '29/2', '15', '31/2', '16', '33/2', '17', '35/2', '18', '37/2', '19', '39/2', '20', '41/2', '21', '43/2', '22']
 
-    return j_value_list[j_index-1]
+    return j_value_list[j_idx-1]
 
-def level_parity(parity_index: int) -> str:
+def level_parity(parity_idx: int) -> str:
     parity_list = ['+', '-']
 
-    return parity_list[parity_index-1]
+    return parity_list[parity_idx-1]
 
 def energy_au_cm(energy_au: float, Rydberg = 109737.31568508) -> float:
 
@@ -141,21 +141,21 @@ def lsj_transition_data_level_location(transition_data_df : pd.DataFrame, level_
     
     level_conf_column = f"Configuration_{level_paramenter}{level_as}raw"
     
-    def get_level_index(level_J : str, level_conf : str, level_df : pd.DataFrame) -> int:
+    def get_level_idx(level_J : str, level_conf : str, level_df : pd.DataFrame) -> int:
         
-        level_index = level_df[(level_df['J'] == level_J) & (level_df[f'{level_conf_column}'] == level_conf)].index.values[0]
+        level_idx = level_df[(level_df['J'] == level_J) & (level_df[f'{level_conf_column}'] == level_conf)].idx.values[0]
         
-        return level_index
+        return level_idx
 
-    for index, row in transition_data_df.iterrows():
+    for i, (_, row) in enumerate(transition_data_df.iterrows()):
         print(row["Upper_J"], row["Upper_configuration"])
-        temp_upper_index = get_level_index(row['Upper_J'], row['Upper_configuration'], level_df)
-        
-        print(row['Lower_J'], row["Lower_configuration"])
-        temp_lower_index = get_level_index(row['Lower_J'], row['Lower_configuration'], level_df)
+        temp_upper_idx = get_level_idx(row['Upper_J'], row['Upper_configuration'], level_df)
 
-        transition_data_df.at[index, 'Upper_level_location'] = temp_upper_index + 1
-        transition_data_df.at[index, 'Lower_level_location'] = temp_lower_index + 1
+        print(row['Lower_J'], row["Lower_configuration"])
+        temp_lower_idx = get_level_idx(row['Lower_J'], row['Lower_configuration'], level_df)
+
+        transition_data_df.iloc[i, list(transition_data_df.columns).index('Upper_level_location')] = temp_upper_idx + 1
+        transition_data_df.iloc[i, list(transition_data_df.columns).index('Lower_level_location')] = temp_lower_idx + 1
     return transition_data_df
 
 
@@ -168,14 +168,14 @@ def transition_data_level_location(transition_data_df : pd.DataFrame, level_df :
     transition_data_df['Lower_level_location'] = 0
     transition_data_df['Lower_level_location'] = transition_data_df['Lower_level_location'].astype('int')
 
-    for index, row in wrap_iterator(transition_data_df.iterrows(), desc="处理跃迁数据"):
+    for i, (_, row) in enumerate(wrap_iterator(transition_data_df.iterrows(), desc="处理跃迁数据")):
 
         # print(row["Upper_loc"], row["Upper_J"], row["Upper_parity"])
-        temp_upper_index = level_df[(level_df["Pos"] == row["Upper_loc"]) & (level_df["J"] == row["Upper_J"]) & (level_df["Parity"] == row["Upper_parity"])].index.values[0]
+        temp_upper_idx = level_df[(level_df["Pos"] == row["Upper_loc"]) & (level_df["J"] == row["Upper_J"]) & (level_df["Parity"] == row["Upper_parity"])].idx.values[0]
         # print(row["Lower_loc"], row["Lower_J"], row["Lower_parity"])
-        temp_lower_index = level_df[(level_df["Pos"] == row["Lower_loc"]) & (level_df["J"] == row["Lower_J"]) & (level_df["Parity"] == row["Lower_parity"])].index.values[0]
-        transition_data_df.at[index, 'Upper_level_location'] = temp_upper_index + 1
-        transition_data_df.at[index, 'Lower_level_location'] = temp_lower_index + 1
+        temp_lower_idx = level_df[(level_df["Pos"] == row["Lower_loc"]) & (level_df["J"] == row["Lower_J"]) & (level_df["Parity"] == row["Lower_parity"])].idx.values[0]
+        transition_data_df.iloc[i, list(transition_data_df.columns).index('Upper_level_location')] = temp_upper_idx + 1
+        transition_data_df.iloc[i, list(transition_data_df.columns).index('Lower_level_location')] = temp_lower_idx + 1
 
     return transition_data_df
 

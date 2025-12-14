@@ -57,12 +57,12 @@ def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
 #######################################################################
 
 
-def pkl_loader(load_csfs_index_file_path) -> Dict:
+def pkl_loader(load_csfs_idx_file_path) -> Dict:
     """
     加载CSF索引文件（pickle格式）。
 
     Args:
-        load_csfs_index_file_path: 索引文件路径
+        load_csfs_idx_file_path: 索引文件路径
 
     Returns:
         Dict: 块索引到CSF索引列表/数组的映射
@@ -72,7 +72,7 @@ def pkl_loader(load_csfs_index_file_path) -> Dict:
         FileNotFoundError: 如果文件不存在
     """
 
-    file_path = Path(load_csfs_index_file_path)
+    file_path = Path(load_csfs_idx_file_path)
 
     # 自动添加.pkl扩展名（如果没有）
     if not file_path.suffix:
@@ -83,13 +83,13 @@ def pkl_loader(load_csfs_index_file_path) -> Dict:
 
     # 直接加载pickle文件
     with open(file_path, "rb") as f:
-        blocks_csfs_index = pickle.load(f)
+        blocks_csfs_idx = pickle.load(f)
 
     # 类型检查和转换
-    if not isinstance(blocks_csfs_index, dict):
-        raise TypeError(f"Expected dict, got {type(blocks_csfs_index)}")
+    if not isinstance(blocks_csfs_idx, dict):
+        raise TypeError(f"Expected dict, got {type(blocks_csfs_idx)}")
 
-    return blocks_csfs_index
+    return blocks_csfs_idx
 
 
 #######################################################################
@@ -367,9 +367,9 @@ def load_descriptors_with_multi_block(
         Optional[Tuple[np.ndarray, np.ndarray]]: (描述符数组, 标签数组)，加载失败返回None
 
     Example:
-        >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features')
-        >>> descriptors, labels = load_descriptors_with_block_indices(Path('ml_data/features'))
-        >>> descriptors, labels = load_descriptors_with_block_indices('ml_data/features', use_cpp=True)
+        >>> descriptors, labels = load_descriptors_with_block_idxs('ml_data/features')
+        >>> descriptors, labels = load_descriptors_with_block_idxs(Path('ml_data/features'))
+        >>> descriptors, labels = load_descriptors_with_block_idxs('ml_data/features', use_cpp=True)
     """
 
     # 转换为Path对象
@@ -417,15 +417,15 @@ def load_descriptors_with_multi_block(
     # 原有的文件格式支持
     if file_format is None:
         if (
-            load_path.parent / f"{load_path.name}_descriptors_block_indices.csv"
+            load_path.parent / f"{load_path.name}_descriptors_block_idxs.csv"
         ).exists():
             file_format = "csv"
         elif (load_path.parent / f"{load_path.name}_descriptors.npy").exists() and (
-            load_path.parent / f"{load_path.name}_descriptors_block_indices.npy"
+            load_path.parent / f"{load_path.name}_descriptors_block_idxs.npy"
         ).exists():
             file_format = "npy"
         elif (
-            load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl"
+            load_path.parent / f"{load_path.name}_descriptors_block_idxs.pkl"
         ).exists():
             file_format = "pkl"
         else:
@@ -435,7 +435,7 @@ def load_descriptors_with_multi_block(
     try:
         if file_format.lower() == "csv":
             file_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_indices.csv"
+                load_path.parent / f"{load_path.name}_descriptors_block_idxs.csv"
             )
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")
@@ -451,7 +451,7 @@ def load_descriptors_with_multi_block(
         elif file_format.lower() == "npy":
             data_path = load_path.parent / f"{load_path.name}_descriptors.npy"
             labels_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_indices.npy"
+                load_path.parent / f"{load_path.name}_descriptors_block_idxs.npy"
             )
 
             if not data_path.exists():
@@ -469,7 +469,7 @@ def load_descriptors_with_multi_block(
 
         elif file_format.lower() == "pkl":
             file_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_indices.pkl"
+                load_path.parent / f"{load_path.name}_descriptors_block_idxs.pkl"
             )
             if not file_path.exists():
                 print(f"Error: File not found: {file_path}")

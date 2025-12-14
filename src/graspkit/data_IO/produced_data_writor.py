@@ -53,8 +53,8 @@ def write_sorted_CSFs_to_cfile(
             file.write(line)
 
         file.write("CSF(s):\n")
-        for index, block in enumerate(sorted_CSFs_data_list):
-            if index != blocks_num - 1:
+        for idx, block in enumerate(sorted_CSFs_data_list):
+            if idx != blocks_num - 1:
                 for csf in block:
                     for line in csf:
                         file.write(line)
@@ -150,11 +150,11 @@ def update_config(config_path: str | Path, updates: Dict[str, Any]):
 
 #######################################################################
 
-def pkl_storage(blocks_csfs_index: Dict, save_file_path):
+def pkl_storage(blocks_csfs_idx: Dict, save_file_path):
     """
     将CSFs索引存储到指定的文件中。
     Args:
-        blocks_csfs_index (Dict): 包含CSFs索引的字典。
+        blocks_csfs_idx (Dict): 包含CSFs索引的字典。
         save_file_path: 存储文件的路径（字符串或Path对象）。
     """
     # 转换为Path对象并检查是否有扩展名
@@ -163,9 +163,9 @@ def pkl_storage(blocks_csfs_index: Dict, save_file_path):
         file_path = file_path.with_suffix(".pkl")
 
     with open(file_path, "wb") as f:
-        pickle.dump(blocks_csfs_index, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(blocks_csfs_idx, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    return f"CSFs index has been stored to {file_path}"
+    return f"CSFs idx has been stored to {file_path}"
 
 #######################################################################
 
@@ -176,7 +176,7 @@ def precompute_large_hash(
     预计算 large_data 的哈希映射（双层字典结构）
 
     返回:
-        {block_idx: {csf_str: csf_index}}
+        {block_idx: {csf_str: csf_idx}}
     """
     # 转换为Path对象
     save_path = Path(save_path)
@@ -277,9 +277,9 @@ def save_descriptors_with_multi_block(
         file_format (str): 保存格式 ('csv', 'npy', 'pkl')
 
     Example:
-        >>> X, y = batch_process_csfs_with_block_indices(csfs_data)
-        >>> save_descriptors_with_block_indices(X, y, 'ml_data/features', 'csv')
-        >>> save_descriptors_with_block_indices(X, y, Path('ml_data/features'), 'npy')
+        >>> X, y = batch_process_csfs_with_block_idxs(csfs_data)
+        >>> save_descriptors_with_block_idxs(X, y, 'ml_data/features', 'csv')
+        >>> save_descriptors_with_block_idxs(X, y, Path('ml_data/features'), 'npy')
     """
 
     # 转换为Path对象
@@ -287,7 +287,7 @@ def save_descriptors_with_multi_block(
 
     if file_format.lower() == "csv":
         # CSV格式：将标签作为最后一列
-        file_path = save_path.parent / f"{save_path.name}_descriptors_block_indices.csv"
+        file_path = save_path.parent / f"{save_path.name}_descriptors_block_idxs.csv"
         df = pd.DataFrame(descriptors)
         df["label"] = labels
         df.to_csv(file_path, index=False)
@@ -297,7 +297,7 @@ def save_descriptors_with_multi_block(
         # NPY格式：分别保存数据和标签
         data_path = save_path.parent / f"{save_path.name}_descriptors.npy"
         labels_path = (
-            save_path.parent / f"{save_path.name}_descriptors_block_indices.npy"
+            save_path.parent / f"{save_path.name}_descriptors_block_idxs.npy"
         )
         np.save(data_path, descriptors)
         np.save(labels_path, labels)
@@ -306,7 +306,7 @@ def save_descriptors_with_multi_block(
 
     elif file_format.lower() == "pkl":
         # PKL格式：保存为字典
-        file_path = save_path.parent / f"{save_path.name}_descriptors_block_indices.pkl"
+        file_path = save_path.parent / f"{save_path.name}_descriptors_block_idxs.pkl"
         data_dict = {"descriptors": descriptors, "labels": labels}
         with open(file_path, "wb") as f:
             pickle.dump(data_dict, f)
