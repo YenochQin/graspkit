@@ -291,7 +291,7 @@ def get_CSFs_file_info(csfs_file_data: List) -> Dict:
         Dictionary containing:
         - subshell_info_raw: Original header lines
         - parsed subshell parameters (n, orbitals, etc.)
-        - star_indices: Positions of CSF separators
+        - star_idxs: Positions of CSF separators
         - CSFs_j_value: Collected J-values from CSFs
     """
     # Extract first 4 lines containing subshell information
@@ -307,28 +307,28 @@ def get_CSFs_file_info(csfs_file_data: List) -> Dict:
         CSFs_file_info[key] = value
 
     # Find all CSF separators ('*') in the data
-    star_indices = []
-    for index, value in enumerate(csfs_file_data):
+    star_idxs = []
+    for idx, value in enumerate(csfs_file_data):
         if "*" in value:
-            star_indices.append(index)
-    CSFs_file_info["star_indices"] = star_indices
+            star_idxs.append(idx)
+    CSFs_file_info["star_idxs"] = star_idxs
 
     # Collect J-values preceding each separator and the final value
     CSFs_j_value = []
     CSFs_block_parity = []
-    prev_index = 5
+    prev_idx = 5
     CSFs_file_info["CSFs_block_data"] = []  # 初始化 CSFs_block_data 列表
 
-    for index in star_indices:
-        temp_j_value, temp_parity = csf_J(csfs_file_data[index - 1])
+    for idx in star_idxs:
+        temp_j_value, temp_parity = csf_J(csfs_file_data[idx - 1])
         CSFs_j_value.append(temp_j_value)
         CSFs_block_parity.append(temp_parity)
         # 处理每个块的数据，而不是一次性存储所有块
-        block_data = csfs_file_data[prev_index:index]
+        block_data = csfs_file_data[prev_idx:idx]
         if len(block_data) % 3 != 0:
             raise ValueError("CSFs_list length must be a multiple of 3")
         CSFs_file_info["CSFs_block_data"].append(block_data)  # 添加当前块的数据
-        prev_index = index + 1
+        prev_idx = idx + 1
 
     temp_j_value, temp_parity = csf_J(csfs_file_data[-1])
     CSFs_j_value.append(temp_j_value)
@@ -340,7 +340,7 @@ def get_CSFs_file_info(csfs_file_data: List) -> Dict:
         CSFs_file_info["parity"] = list(CSFs_parity)[0]
 
     # 处理最后一个块的数据
-    last_block_data = csfs_file_data[prev_index:]
+    last_block_data = csfs_file_data[prev_idx:]
     if len(last_block_data) % 3 != 0:
         raise ValueError("CSFs_list length must be a multiple of 3")
     CSFs_file_info["CSFs_block_data"].append(last_block_data)  # 添加最后一个块的数据
@@ -452,7 +452,7 @@ def parse_csf_2_descriptor(
 
     # 第四步：初始化描述符数组和已占用轨道索引列表
     csf_descriptor = np.zeros(3 * len(peel_subshells_List), dtype=np.float32)
-    orbs_occupied_indices = []  # 记录哪些轨道被占用
+    orbs_occupied_idxs = []  # 记录哪些轨道被占用
 
     # 第五步：遍历每个子壳层块，提取和处理信息
     for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
@@ -484,30 +484,30 @@ def parse_csf_2_descriptor(
 
         # 第六步：在轨道列表中查找当前子壳层的索引
         try:
-            orbs_index = peel_subshells_List.index(subshell)
-            descriptor_index = orbs_index * 3  # 每个轨道占用3个位置
+            orbs_idx = peel_subshells_List.index(subshell)
+            descriptor_idx = orbs_idx * 3  # 每个轨道占用3个位置
         except ValueError:
             print(f"Warning: {subshell} not found in orbs list")
             continue
 
         # 第七步：记录已占用轨道并填充描述符数组
-        orbs_occupied_indices.append(orbs_index)
-        csf_descriptor[descriptor_index : descriptor_index + 3] = [
+        orbs_occupied_idxs.append(orbs_idx)
+        csf_descriptor[descriptor_idx : descriptor_idx + 3] = [
             subshell_electron_num,  # 电子数
             temp_middle_item,  # 中间J值
             temp_coupling_item,  # 耦合J值
         ]
 
     # 第八步：处理未占用的轨道（使用集合运算找到差集）
-    all_orbs_indices = set(range(len(peel_subshells_List)))  # 所有轨道索引
-    occupied_orbs_indices = set(orbs_occupied_indices)  # 已占用轨道索引
-    remaining_orbs_indices = list(
-        all_orbs_indices - occupied_orbs_indices
+    all_orbs_idxs = set(range(len(peel_subshells_List)))  # 所有轨道索引
+    occupied_orbs_idxs = set(orbs_occupied_idxs)  # 已占用轨道索引
+    remaining_orbs_idxs = list(
+        all_orbs_idxs - occupied_orbs_idxs
     )  # 未占用轨道索引
 
     # 第九步：为未占用轨道填充最终J值
-    for index in remaining_orbs_indices:
-        csf_descriptor[index * 3 + 2] = final_double_J  # 只设置耦合J值位置
+    for idx in remaining_orbs_idxs:
+        csf_descriptor[idx * 3 + 2] = final_double_J  # 只设置耦合J值位置
 
     return csf_descriptor
 
@@ -546,7 +546,7 @@ def parse_csf_2_descriptor_with_subshell(
 
     # 初始化描述符数组（每个轨道5个数值）
     csf_descriptor = np.zeros(5 * len(peel_subshells_List), dtype=np.float32)
-    orbs_occupied_indices = []
+    orbs_occupied_idxs = []
 
     # 首先为所有轨道填充子壳层信息（主量子数和kappa值）
     for idx, subshell in enumerate(peel_subshells_List):
@@ -562,9 +562,9 @@ def parse_csf_2_descriptor_with_subshell(
 
         kappa_value = str_subshell_2_kappa(orbital_part)
 
-        descriptor_index = idx * 5
-        csf_descriptor[descriptor_index] = main_quantum_num  # 第1位：主量子数
-        csf_descriptor[descriptor_index + 1] = kappa_value  # 第2位：kappa值
+        descriptor_idx = idx * 5
+        csf_descriptor[descriptor_idx] = main_quantum_num  # 第1位：主量子数
+        csf_descriptor[descriptor_idx + 1] = kappa_value  # 第2位：kappa值
 
     # 处理每个子壳层的电子数和J值信息
     for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
@@ -602,13 +602,13 @@ def parse_csf_2_descriptor_with_subshell(
 
         # 查找轨道索引
         try:
-            orbs_index = peel_subshells_List.index(subshell)
-            descriptor_index = orbs_index * 5
+            orbs_idx = peel_subshells_List.index(subshell)
+            descriptor_idx = orbs_idx * 5
         except ValueError:
             print(f"Warning: {subshell} not found in orbs list")
             continue
 
-        orbs_occupied_indices.append(orbs_index)
+        orbs_occupied_idxs.append(orbs_idx)
 
         # 填满轨道J值设为0
         if is_full:
@@ -616,17 +616,17 @@ def parse_csf_2_descriptor_with_subshell(
             temp_coupling_item = 0
 
         # 填充描述符的第3、4、5位
-        csf_descriptor[descriptor_index + 2] = subshell_electron_num  # 第3位：电子数
-        csf_descriptor[descriptor_index + 3] = temp_middle_item  # 第4位：中间J值
-        csf_descriptor[descriptor_index + 4] = temp_coupling_item  # 第5位：耦合J值
+        csf_descriptor[descriptor_idx + 2] = subshell_electron_num  # 第3位：电子数
+        csf_descriptor[descriptor_idx + 3] = temp_middle_item  # 第4位：中间J值
+        csf_descriptor[descriptor_idx + 4] = temp_coupling_item  # 第5位：耦合J值
 
     # 处理未占用的轨道（第5位填最终J值的二倍）
-    all_orbs_indices = set(range(len(peel_subshells_List)))
-    occupied_orbs_indices = set(orbs_occupied_indices)
-    remaining_orbs_indices = list(all_orbs_indices - occupied_orbs_indices)
+    all_orbs_idxs = set(range(len(peel_subshells_List)))
+    occupied_orbs_idxs = set(orbs_occupied_idxs)
+    remaining_orbs_idxs = list(all_orbs_idxs - occupied_orbs_idxs)
 
-    for index in remaining_orbs_indices:
-        csf_descriptor[index * 5 + 4] = final_double_J * 2  # 第5位：最终J值的二倍
+    for idx in remaining_orbs_idxs:
+        csf_descriptor[idx * 5 + 4] = final_double_J * 2  # 第5位：最终J值的二倍
 
     return csf_descriptor
 
@@ -667,7 +667,7 @@ def batch_process_csfs_to_descriptors(
                 # 检查CSF项是否包含3行
                 if len(csf_item) != 3:
                     print(
-                        f"Warning: CSF item in block {block_idx}, index {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
+                        f"Warning: CSF item in block {block_idx}, idx {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
                     )
                     continue
                 descriptor = parse_csf_2_descriptor_with_subshell(
@@ -691,56 +691,6 @@ def batch_process_csfs_to_descriptors(
     print(f"Number of orbitals: {len(peel_subshells_List)}")
 
     return descriptors_array
-
-
-def create_csf_dataset_for_ml(
-    CSFs_file_data: CSFs, test_size: float = 0.2, random_state: int = 42
-) -> Dict:
-    """
-    创建用于机器学习的CSF数据集，包括训练/测试分割
-
-    Args:
-        CSFs_file_data (CSFs): CSFs文件数据对象
-        test_size (float): 测试集比例
-        random_state (int): 随机种子
-
-    Returns:
-        Dict: 包含训练和测试数据的字典
-
-    Example:
-        >>> dataset = create_csf_dataset_for_ml(csfs_data, test_size=0.3)
-        >>> # 可选择保存数据集
-        >>> save_ml_dataset(dataset, 'ml_data/dataset')
-    """
-    from sklearn.model_selection import train_test_split
-
-    # 获取描述符和标签
-    print("Processing CSFs for machine learning dataset...")
-    X, y = batch_process_csfs_with_multi_block(CSFs_file_data, label_type="block")
-
-    # 分割数据
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
-
-    dataset = {
-        "X_train": X_train,
-        "X_test": X_test,
-        "y_train": y_train,
-        "y_test": y_test,
-        "feature_shape": X.shape[1],
-        "n_classes": len(np.unique(y)),
-        "total_samples": len(X),
-    }
-
-    print(f"Dataset created successfully:")
-    print(f"  Total samples: {dataset['total_samples']}")
-    print(f"  Features: {dataset['feature_shape']}")
-    print(f"  Classes: {dataset['n_classes']}")
-    print(f"  Train samples: {len(X_train)}")
-    print(f"  Test samples: {len(X_test)}")
-
-    return dataset
 
 
 #######################################################################

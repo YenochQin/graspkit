@@ -78,12 +78,12 @@ from .CSFs_processor import (
     block_csfs_coupling_J_chosen,
     union_lists_with_order,
     merge_multiple_dicts_with_ordered_union,
-    merge_csfs_indices_lists_by_block_key,
+    merge_csfs_idxs_lists_by_block_key,
     CSFs_sort_by_mix_coefficient,
     generate_unique_random_numbers,
     radom_choose_csfs,
     process_block,
-    maping_two_csfs_indices,
+    maping_two_csfs_idxs,
     csf_J,
     J_to_doubleJ,
     CSF_info_2_dict,
@@ -92,7 +92,6 @@ from .CSFs_processor import (
     parse_csf_2_descriptor,
     parse_csf_2_descriptor_with_subshell,
     batch_process_csfs_to_descriptors,
-    create_csf_dataset_for_ml,
 )
 
 from .grasp_data_extractor import (
@@ -192,12 +191,12 @@ __all__ = [
     "block_csfs_coupling_J_chosen",
     "union_lists_with_order",
     "merge_multiple_dicts_with_ordered_union",
-    "merge_csfs_indices_lists_by_block_key",
+    "merge_csfs_idxs_lists_by_block_key",
     "CSFs_sort_by_mix_coefficient",
     "generate_unique_random_numbers",
     "radom_choose_csfs",
     "process_block",
-    "maping_two_csfs_indices",
+    "maping_two_csfs_idxs",
     ## CSFs_compress_extract
     "csf_J",
     "J_to_doubleJ",
@@ -207,7 +206,6 @@ __all__ = [
     "parse_csf_2_descriptor",
     "parse_csf_2_descriptor_with_subshell",
     "batch_process_csfs_to_descriptors",
-    "create_csf_dataset_for_ml",
     # grasp_data_extractor
     "ConfigurationFormatter",
     "LevelsEnergyData",

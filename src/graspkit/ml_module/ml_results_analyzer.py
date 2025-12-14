@@ -34,18 +34,18 @@ def validate_csf_descriptors_coverage(
 
     # 确定每个轨道的电子填充位置索引
     values_per_orbital = 3
-    electron_index_in_orbital = 0
+    electron_idx_in_orbital = 0
 
     # 直接通过切片获取每个轨道的电子填充
-    electron_indices = np.arange(
-                            electron_index_in_orbital,
+    electron_idxs = np.arange(
+                            electron_idx_in_orbital,
                             descriptors.shape[1],
                             values_per_orbital,
                             )
 
     # 提取所有CSF的电子数信息
     electron_counts = descriptors[
-                            :, electron_indices
+                            :, electron_idxs
                             ]  # 形状为 (num_csfs, actual_n_orbitals)
 
     # 检查每个轨道是否至少有一个CSF的电子数不为零
@@ -54,11 +54,11 @@ def validate_csf_descriptors_coverage(
                                 )  # 形状为 (actual_n_orbitals,)
 
     # 找出未覆盖的轨道索引
-    uncovered_orbitals_indices = np.where(~has_nonzero_electrons)[0].tolist()
+    uncovered_orbitals_idxs = np.where(~has_nonzero_electrons)[0].tolist()
 
     # 返回验证结果
-    is_covered = len(uncovered_orbitals_indices) == 0
-    return is_covered, uncovered_orbitals_indices
+    is_covered = len(uncovered_orbitals_idxs) == 0
+    return is_covered, uncovered_orbitals_idxs
 
 
 def select_csfs_for_coverage(
@@ -87,19 +87,19 @@ def select_csfs_for_coverage(
 
     # 确定每个轨道的电子填充位置索引
     values_per_orbital = 3
-    electron_index_in_orbital = 0
+    electron_idx_in_orbital = 0
 
     # 获取每个轨道的电子填充位置索引
-    electron_indices = np.arange(
-                                electron_index_in_orbital, 
+    electron_idxs = np.arange(
+                                electron_idx_in_orbital, 
                                 candidate_descriptors.shape[1], 
                                 values_per_orbital
                                 )
 
     # 提取候选描述符中的电子数信息
-    candidate_electron_counts = candidate_descriptors[:, electron_indices]
+    candidate_electron_counts = candidate_descriptors[:, electron_idxs]
 
-    selected_relative_indices = []
+    selected_relative_idxs = []
     remaining_uncovered = set(uncovered_orbitals)
 
     # 按顺序遍历候选描述符
@@ -109,25 +109,25 @@ def select_csfs_for_coverage(
         covers_orbitals = [orb for orb in remaining_uncovered if csf_electrons[orb] > 0]
 
         if covers_orbitals:
-            selected_relative_indices.append(idx)
+            selected_relative_idxs.append(idx)
             remaining_uncovered -= set(covers_orbitals)
 
             # 如果所有轨道都已覆盖，提前退出
             if not remaining_uncovered:
                 break
 
-    if not selected_relative_indices:
+    if not selected_relative_idxs:
         return descriptors, []
 
     # 构建更新后的描述符数组
-    new_descriptors = candidate_descriptors[selected_relative_indices]
+    new_descriptors = candidate_descriptors[selected_relative_idxs]
 
     if descriptors.size == 0:
         updated_descriptors = new_descriptors
     else:
         updated_descriptors = np.vstack([descriptors, new_descriptors])
 
-    return updated_descriptors, selected_relative_indices
+    return updated_descriptors, selected_relative_idxs
 
 
 def save_iteration_results(
@@ -236,7 +236,7 @@ def save_and_plot_results(
         path_cfg,
         correct_levels_ci: np.ndarray,
         asfs_position: List[int],
-        caled_csfs_indices_dict=None,
+        caled_csfs_idxs_dict=None,
         y_current_cal_probability=None,
         save_model: bool = True,
         save_data: bool = True,
@@ -251,7 +251,7 @@ def save_and_plot_results(
         model: 训练好的模型对象
         correct_levels_ci: 混合系数数据Ci用于绘图
         asfs_position: 正确能级位置索引列表
-        caled_csfs_indices_dict: 当前计算的CSF索引字典（用于数据对应检查）
+        caled_csfs_idxs_dict: 当前计算的CSF索引字典（用于数据对应检查）
         y_current_cal_probability: 当前计算CSF的预测概率，与混合系数维度匹配
         save_model: 是否保存模型文件
         save_data: 是否保存预测结果数据
@@ -352,12 +352,12 @@ def save_and_plot_results(
                     y_prob_current_cal = y_prob_current_cal[:min_len]
                     if logger:
                         logger.info(f"已调整为相同长度: {min_len}")
-            elif caled_csfs_indices_dict is not None:
+            elif caled_csfs_idxs_dict is not None:
                 # 回退到原有逻辑（从全局概率中提取对应部分）
-                if 0 not in caled_csfs_indices_dict:
+                if 0 not in caled_csfs_idxs_dict:
                     if logger:
                         logger.warning(
-                            f"caled_csfs_indices_dict中缺少键0，可用键: {list(caled_csfs_indices_dict.keys())}，使用全部概率数据"
+                            f"caled_csfs_idxs_dict中缺少键0，可用键: {list(caled_csfs_idxs_dict.keys())}，使用全部概率数据"
                         )
                     y_prob_current_cal = y_prob_all
                     if logger:
@@ -365,21 +365,21 @@ def save_and_plot_results(
                             f"使用全部概率数据 - 混合系数数量: {len(cal_mix_coeff_list)}, 概率数量: {len(y_prob_current_cal)}"
                         )
                 else:
-                    current_cal_indices = caled_csfs_indices_dict[0]
-                    y_prob_current_cal = y_prob_all[current_cal_indices]
+                    current_cal_idxs = caled_csfs_idxs_dict[0]
+                    y_prob_current_cal = y_prob_all[current_cal_idxs]
                     if logger:
                         logger.info(
                             f"使用索引提取 - 混合系数数量: {len(cal_mix_coeff_list)}, 对应概率数量: {len(y_prob_current_cal)}"
                         )
                         logger.info(
-                            f"当前计算CSF索引范围: {current_cal_indices.min()}-{current_cal_indices.max()}"
+                            f"当前计算CSF索引范围: {current_cal_idxs.min()}-{current_cal_idxs.max()}"
                         )
             else:
                 # 如果没有提供任何信息，使用原有逻辑（可能有问题）
                 y_prob_current_cal = y_prob_all
                 if logger:
                     logger.warning(
-                        "未提供y_current_cal_probability或caled_csfs_indices_dict，第四个子图可能显示不正确"
+                        "未提供y_current_cal_probability或caled_csfs_idxs_dict，第四个子图可能显示不正确"
                     )
 
             # 绘制ROC和PR曲线

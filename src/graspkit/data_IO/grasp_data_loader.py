@@ -203,7 +203,7 @@ class GraspFileLoad:
         )
 
     def mix_coefficient_file_read(self):
-        self.index_block_list = []
+        self.idx_block_list = []
         self.ncfblk_list = []
         self.block_energy_count_list = []
         self.j_value_location_list = []
@@ -250,10 +250,10 @@ class GraspFileLoad:
                 print(
                     f" Block no. = {nb}, 2J+1 = {j_value_location}, Parity = {parity}, No. of eigenvalues = {nevblk}, No. of CSFs = {ncfblk}"
                 )
-                # nb -> index_block, ncfblk -> ncfblk, nevblk -> block_energy_count, j_value_location -> iatjp, parity -> iaspa
-                self.index_block_list.append(
+                # nb -> idx_block, ncfblk -> ncfblk, nevblk -> block_energy_count, j_value_location -> iatjp, parity -> iaspa
+                self.idx_block_list.append(
                     nb - 1
-                )  # use python index method not fortran index method
+                )  # use python idx method not fortran idx method
 
                 self.ncfblk_list.append(ncfblk)
                 self.block_energy_count_list.append(nevblk)
@@ -266,7 +266,7 @@ class GraspFileLoad:
 
                 ivec_array = (
                     np.array(ivec) - 1
-                )  # use python index method not fortran index method
+                )  # use python idx method not fortran idx method
 
                 self.ivec_list.append(ivec_array)
 
@@ -295,7 +295,7 @@ class GraspFileLoad:
 
         return (
             self.num_block,
-            self.index_block_list,
+            self.idx_block_list,
             self.ncfblk_list,
             self.block_energy_count_list,
             self.j_value_location_list,
@@ -319,20 +319,20 @@ class GraspFileLoad:
 
         self.subshell_info_raw = csfs_file_data[0:4]
 
-        star_indices = []
+        star_idxs = []
         CSFs_block_parity = []
 
-        for index, value in enumerate(csfs_file_data):
+        for idx, value in enumerate(csfs_file_data):
             if "*" in value:
-                star_indices.append(index)
+                star_idxs.append(idx)
 
-        prev_index = 5
-        for index in star_indices:
-            temp_j_value, temp_parity = csf_J(csfs_file_data[index - 1])
+        prev_idx = 5
+        for idx in star_idxs:
+            temp_j_value, temp_parity = csf_J(csfs_file_data[idx - 1])
             self.CSFs_block_j_value.append(temp_j_value)
             CSFs_block_parity.append(temp_parity)
             # 处理每个块的数据，而不是一次性存储所有块
-            block_data = csfs_file_data[prev_index:index]
+            block_data = csfs_file_data[prev_idx:idx]
             if len(block_data) % 3 != 0:
                 raise ValueError("CSFs_list length must be a multiple of 3")
 
@@ -340,7 +340,7 @@ class GraspFileLoad:
             block_csfs = [block_data[i : i + 3] for i in range(0, len(block_data), 3)]
             self.CSFs_block_length.append(len(block_csfs))
             self.CSFs_block_data.append(block_csfs)  # 添加当前块的数据
-            prev_index = index + 1
+            prev_idx = idx + 1
 
         temp_j_value, temp_parity = csf_J(csfs_file_data[-1])
         self.CSFs_block_j_value.append(temp_j_value)
@@ -351,7 +351,7 @@ class GraspFileLoad:
             self.parity = list(CSFs_parity)[0]
 
         # 处理最后一个块的数据
-        last_block_data = csfs_file_data[prev_index:]
+        last_block_data = csfs_file_data[prev_idx:]
         if len(last_block_data) % 3 != 0:
             raise ValueError("CSFs_list length must be a multiple of 3")
 
@@ -421,10 +421,10 @@ class GraspFileLoad:
             print(self.data_path_list)
             self.lsj_lbl_data = GraspFileLoad.files_read(self)
 
-            for self.index_num in range(0, len(self.lsj_lbl_data)):
+            for self.idx_num in range(0, len(self.lsj_lbl_data)):
                 # print(lsj_lbl[line])
-                if re.search(r"\d+.\d+%", self.lsj_lbl_data[self.index_num]):
-                    self.level_loc_lbl.append(self.index_num)
+                if re.search(r"\d+.\d+%", self.lsj_lbl_data[self.idx_num]):
+                    self.level_loc_lbl.append(self.idx_num)
             print("data file type: level jj2lsj data")
             return self.lsj_lbl_data, self.level_loc_lbl
 
@@ -472,7 +472,7 @@ class GraspFileLoad:
                     self.plot_data, columns=header_columns
                 )
                 return self.radial_wavefunction_data
-            except (ValueError, IndexError) as e:
+            except ValueError as e:
                 print(f"Warning: Could not create DataFrame from plot data: {e}")
                 return pd.DataFrame()
 
@@ -496,13 +496,13 @@ class GraspFileLoad:
                     return pd.DataFrame()
 
                 rg_list_len = [len(self.rg_list[i]) for i in range(len(self.rg_list))]
-                self.max_rg_index = rg_list_len.index(max(rg_list_len))
+                self.max_rg_idx = rg_list_len.index(max(rg_list_len))
                 pg_aligned_list = align_2d_list_columns(self.pg_list)
                 qg_aligned_list = align_2d_list_columns(self.qg_list)
 
                 # Collect all columns in a dictionary to avoid DataFrame fragmentation
                 columns_data = {
-                    "r(a.u)": self.rg_list[self.max_rg_index]
+                    "r(a.u)": self.rg_list[self.max_rg_idx]
                 }
 
                 for n in range(len(self.nn_list)):
@@ -552,30 +552,30 @@ class GraspFileLoad:
                         + self.block_level_energy_list[jblock - 1][pos - 1]
                     )
 
-            level_index = np.argsort(temp_energy)
+            level_idx = np.argsort(temp_energy)
             level_energy_list = []
 
-            for i in range(len(level_index)):
+            for i in range(len(level_idx)):
                 if i == 0:
                     print(
-                        f"{i + 1:3}{temp_pos[level_index[i]]:3}{temp_J[level_index[i]]:>4}   {temp_parity[level_index[i]]:1}    {temp_energy[level_index[i]]:14.7f}{0.0000000:12.2f}"
+                        f"{i + 1:3}{temp_pos[level_idx[i]]:3}{temp_J[level_idx[i]]:>4}   {temp_parity[level_idx[i]]:1}    {temp_energy[level_idx[i]]:14.7f}{0.0000000:12.2f}"
                     )
-                    level_energy_list.append(temp_energy[level_index[i]])
+                    level_energy_list.append(temp_energy[level_idx[i]])
                 else:
                     print(
-                        f"{i + 1:3}{temp_pos[level_index[i]]:3}{temp_J[level_index[i]]:>4}   {temp_parity[level_index[i]]:1}    {temp_energy[level_index[i]]:14.7f}{energy_au_cm(temp_energy[level_index[i]] - temp_energy[level_index[0]]):12.2f}"
+                        f"{i + 1:3}{temp_pos[level_idx[i]]:3}{temp_J[level_idx[i]]:>4}   {temp_parity[level_idx[i]]:1}    {temp_energy[level_idx[i]]:14.7f}{energy_au_cm(temp_energy[level_idx[i]] - temp_energy[level_idx[0]]):12.2f}"
                     )
-                    level_energy_list.append(temp_energy[level_index[i]])
+                    level_energy_list.append(temp_energy[level_idx[i]])
 
             # set mix file data as a class
             self.mix_file_data = MixCoefficientData(
                 block_num=self.num_block,
-                block_index_List=self.index_block_list,  # 注意大小写和命名一致性
+                block_idx_List=self.idx_block_list,  # 注意大小写和命名一致性
                 block_CSFs_nums=self.ncfblk_list,
                 block_energy_count_List=self.block_energy_count_list,
                 level_J_value_List=temp_J,
                 parity_List=self.parity_list,
-                block_levels_index_List=self.ivec_list,
+                block_levels_idx_List=self.ivec_list,
                 block_energy_List=self.block_energy_list,
                 block_level_energy_List=self.block_level_energy_list,
                 mix_coefficient_List=self.mix_coefficient_list,

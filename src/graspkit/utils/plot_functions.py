@@ -111,11 +111,11 @@ def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None
     normal_mask = ~others_mask
 
     if np.any(normal_mask):
-        normal_indices = np.where(normal_mask)[0]
-        others_indices = np.where(others_mask)[0]
+        normal_idxs = np.where(normal_mask)[0]
+        others_idxs = np.where(others_mask)[0]
 
-        normal_sort_idx = normal_indices[np.argsort(-sum_squared_ci[normal_indices])]
-        final_sort_idx = np.concatenate([normal_sort_idx, others_indices])
+        normal_sort_idx = normal_idxs[np.argsort(-sum_squared_ci[normal_idxs])]
+        final_sort_idx = np.concatenate([normal_sort_idx, others_idxs])
     else:
         final_sort_idx = np.arange(len(categories))
 

@@ -16,12 +16,12 @@ from .CSFs_choosing import (
     block_csfs_coupling_J_chosen,
     union_lists_with_order,
     merge_multiple_dicts_with_ordered_union,
-    merge_csfs_indices_lists_by_block_key,
+    merge_csfs_idxs_lists_by_block_key,
     CSFs_sort_by_mix_coefficient,
     generate_unique_random_numbers,
     radom_choose_csfs,
     process_block,
-    maping_two_csfs_indices,
+    maping_two_csfs_idxs,
 )
 
 from .CSFs_compress_extract import (
@@ -49,12 +49,12 @@ __all__ = [
     "block_csfs_coupling_J_chosen",
     "union_lists_with_order",
     "merge_multiple_dicts_with_ordered_union",
-    "merge_csfs_indices_lists_by_block_key",
+    "merge_csfs_idxs_lists_by_block_key",
     "CSFs_sort_by_mix_coefficient",
     "generate_unique_random_numbers",
     "radom_choose_csfs",
     "process_block",
-    "maping_two_csfs_indices",
+    "maping_two_csfs_idxs",
     # CSFs_compress_extract
     "csf_J",
     "J_to_doubleJ",
