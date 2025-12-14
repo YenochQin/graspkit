@@ -9,7 +9,7 @@
 
 import os
 import sys
-from typing import  Any
+from typing import Any
 
 class EnvironmentConfig:
     """环境配置管理器，用于检测运行环境和设置相应的配置"""

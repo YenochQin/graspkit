@@ -6,8 +6,6 @@
 """
 
 import os
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Union
 import h5py
 import numpy as np
 
@@ -18,7 +16,7 @@ class CSFDescriptorError(Exception):
     pass
 
 
-def load_hdf5_descriptors(hdf5_file: str) -> Dict[str, np.ndarray]:
+def load_hdf5_descriptors(hdf5_file: str) -> dict[str, np.ndarray]:
     """
     Load descriptors from C++ generated HDF5 file.
 
@@ -26,7 +24,7 @@ def load_hdf5_descriptors(hdf5_file: str) -> Dict[str, np.ndarray]:
         hdf5_file: Path to the HDF5 file
 
     Returns:
-        Dictionary with 'descriptors' and 'labels' arrays
+        dictionary with 'descriptors' and 'labels' arrays
 
     Raises:
         CSFDescriptorError: If file cannot be read

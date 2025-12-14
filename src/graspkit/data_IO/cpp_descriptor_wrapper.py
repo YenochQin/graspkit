@@ -14,12 +14,9 @@ and batch processing.
 
 import os
 import subprocess
-import tempfile
 import shutil
-import numpy as np
-import h5py
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Union
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -74,16 +71,16 @@ class CppDescriptorGenerator:
         return None
 
     def generate_descriptors(
-        self,
-        input_file: str,
-        output_file: Optional[str] = None,
-        cpu_threads: int = 0,
-        quiet: bool = True,
-        stream: bool = True,
-        auto_config: bool = True,
-        normalized: bool = True,
-        debug: bool = False,
-    ) -> Dict[str, Union[int, float, str]]:
+            self,
+            input_file: str,
+            output_file: Optional[str] = None,
+            cpu_threads: int = 0,
+            quiet: bool = True,
+            stream: bool = True,
+            auto_config: bool = True,
+            normalized: bool = True,
+            debug: bool = False,
+        ) -> dict[str, int | float | str]:
         """
         Run the CSF descriptor program.
 
@@ -101,7 +98,7 @@ class CppDescriptorGenerator:
             debug: Enable debug mode with detailed error messages
 
         Returns:
-            Dictionary with processing statistics
+            dictionary with processing statistics
 
         Raises:
             CSFDescriptorError: If processing fails
@@ -164,7 +161,7 @@ class CppDescriptorGenerator:
 
     def batch_process_with_multi_block(
         self,
-        input_files: List[str],
+        input_files: list[str],
         output_dir: str,
         cpu_threads: int = 0,
         verbose: bool = True,
@@ -172,12 +169,12 @@ class CppDescriptorGenerator:
         auto_config: bool = True,
         normalized: bool = True,
         debug: bool = False,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Wrapper function compatible with existing Python API
 
         Args:
-            input_files: List of input CSF files
+            input_files: list of input CSF files
             output_dir: Directory to save output files
             cpu_threads: Number of threads to use
             verbose: Whether to print progress
@@ -189,7 +186,7 @@ class CppDescriptorGenerator:
             estimate_time: Estimate processing time before starting
             debug: Enable debug mode with detailed error messages
         Returns:
-            List of processing results for each file
+            list of processing results for each file
         """
 
         os.makedirs(output_dir, exist_ok=True)
@@ -246,15 +243,15 @@ class CppDescriptorGenerator:
 
 # Convenience functions for backward compatibility
 def batch_process_csfs_with_multi_block_cpp(
-    input_files: List[str],
-    output_dir: str,
-    cpu_threads: int = 0,
-    verbose: bool = True,
-    stream: bool = True,
-    auto_config: bool = True,
-    normalized: bool = True,
-    debug: bool = False,
-) -> List[Dict]:
+        input_files: list[str],
+        output_dir: str,
+        cpu_threads: int = 0,
+        verbose: bool = True,
+        stream: bool = True,
+        auto_config: bool = True,
+        normalized: bool = True,
+        debug: bool = False,
+    ) -> list[dict]:
     """
     Drop-in replacement for batch_process_csfs_with_multi_block using C++ backend
     """

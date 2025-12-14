@@ -12,18 +12,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (
-    Dict,
-    Tuple,
-    List,
-    Optional,
-    Union,
-    overload,
-    Literal,
-    TypeVar,
-    cast,
-    Callable,
-)
+from typing import Tuple
 
 from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
 from ..utils.tool_function import LS_shell_full_charged
@@ -40,7 +29,7 @@ class IntraCoupled_LS:
 
     multiplicity: int  # 2S+1 自旋多重度
     L: str  # 轨道角动量字母：S,P,D,F,...
-    intra_J: Optional[int] = None  # 中间耦合J值，可选
+    intra_J: int | None = None  # 中间耦合J值，可选
 
 
 @dataclass(frozen=True)
@@ -62,9 +51,9 @@ class ShellInfo:
 
     n: int  # 主量子数
     shell: str  # 轨道类型：s/p/d/f
-    electrons: Optional[int]  # 轨道中的电子数，来自(e)格式，可能缺省
-    intra_ls: Optional[IntraCoupled_LS]  # 组内LS耦合信息，可能缺省
-    inter_ls: Optional[InterCoupled_LS]  # 组间LS耦合信息，可能缺省
+    electrons: int | None  # 轨道中的电子数，来自(e)格式，可能缺省
+    intra_ls: IntraCoupled_LS | None # 组内LS耦合信息，可能缺省
+    inter_ls: InterCoupled_LS | None # 组间LS耦合信息，可能缺省
 
 
 class ShellFormatter:
@@ -160,7 +149,7 @@ class ShellFormatter:
 
     @staticmethod
     def format_intra_ls(
-                        intra_ls: Optional[IntraCoupled_LS],
+                        intra_ls: IntraCoupled_LS | None,
                         format_to_word_document: bool = False
                     ) -> str:
         """格式化组内LS耦合信息为LaTeX格式
@@ -509,7 +498,7 @@ def ci_energy_data_collection(
 
 
 def level_energy_collector(
-    data_file_path: Union[str, Path],
+    data_file_path: str | Path,
     store_csv_path: str = "",
     show_full_charged_subshell: bool = False,
 ):

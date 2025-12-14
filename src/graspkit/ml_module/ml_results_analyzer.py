@@ -5,10 +5,8 @@
 @author :YenochQin (秦毅)
 """
 
-from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 import csv
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import joblib
@@ -18,7 +16,7 @@ from .neural_network import ANNClassifier
 
 def validate_csf_descriptors_coverage(
         descriptors: np.ndarray
-        ) -> Tuple[bool, List[int]]:
+        ) -> Tuple[bool, list[int]]:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
     对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
@@ -63,9 +61,9 @@ def validate_csf_descriptors_coverage(
 
 def select_csfs_for_coverage(
         descriptors: np.ndarray,
-        uncovered_orbitals: List[int],
+        uncovered_orbitals: list[int],
         candidate_descriptors: np.ndarray,
-        ) -> Tuple[np.ndarray, List[int]]:
+        ) -> Tuple[np.ndarray, list[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
@@ -235,7 +233,7 @@ def save_and_plot_results(
         model,
         path_cfg,
         correct_levels_ci: np.ndarray,
-        asfs_position: List[int],
+        asfs_position: list[int],
         caled_csfs_idxs_dict=None,
         y_current_cal_probability=None,
         save_model: bool = True,

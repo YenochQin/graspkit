@@ -33,7 +33,6 @@ from .CSFs_compress_extract import (
     parse_csf_2_descriptor,
     parse_csf_2_descriptor_with_subshell,
     batch_process_csfs_to_descriptors,
-    create_csf_dataset_for_ml,
 )
 
 
@@ -64,5 +63,4 @@ __all__ = [
     "parse_csf_2_descriptor",
     "parse_csf_2_descriptor_with_subshell",
     "batch_process_csfs_to_descriptors",
-    "create_csf_dataset_for_ml",
 ]
