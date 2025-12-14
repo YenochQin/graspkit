@@ -9,8 +9,7 @@
 
 import os
 import sys
-from typing import Dict, Any, Optional
-from pathlib import Path
+from typing import  Any
 
 class EnvironmentConfig:
     """环境配置管理器，用于检测运行环境和设置相应的配置"""
@@ -68,7 +67,7 @@ class EnvironmentConfig:
         """系统CPU核心数"""
         return self._cpu_count
     
-    def get_environment_info(self) -> Dict[str, Any]:
+    def get_environment_info(self) -> dict[str, Any]:
         """获取环境信息摘要"""
         return {
             'is_slurm': self.is_slurm_environment,
@@ -79,7 +78,7 @@ class EnvironmentConfig:
             'slurm_task_pid': os.environ.get('SLURM_TASK_PID')
         }
     
-    def get_progress_config(self) -> Dict[str, Any]:
+    def get_progress_config(self) -> dict[str, Any]:
         """获取进度条配置"""
         if self.is_production_mode:
             # 生产模式：关闭进度条
@@ -99,7 +98,7 @@ class EnvironmentConfig:
                 'colour': 'green'
             }
     
-    def get_logging_config(self) -> Dict[str, Any]:
+    def get_logging_config(self) -> dict[str, Any]:
         """获取日志配置"""
         if self.is_production_mode:
             # 生产模式：结构化日志，关注关键信息
