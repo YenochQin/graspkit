@@ -17,14 +17,14 @@
 - 共享颜色条和图例
 - 多子图保存优化
 """
+import re
+import warnings
 
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import warnings
 from cycler import cycler
-import numpy as np
-import pandas as pd
-import re
+
 
 def configure_matplotlib_for_publication():
     """

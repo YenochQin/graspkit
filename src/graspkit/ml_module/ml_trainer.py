@@ -9,14 +9,10 @@
 import os
 import shutil
 import time
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Dict, Tuple, List, Optional
 
 # 第三方库导入
 import joblib
 import numpy as np
-import pandas as pd
 import torch
 # from imblearn.over_sampling import SMOTE
 # from imblearn.under_sampling import RandomUnderSampler
@@ -26,14 +22,13 @@ from sklearn.model_selection import train_test_split
 # 本地模块导入
 from .neural_network import ANNClassifier
 from ..data_IO.produced_data_writor import update_config
-from ..utils.data_modules import MixCoefficientData
 
 
 def train_model(
         config,
         caled_csfs_descriptors: np.ndarray,
         correct_levels_ci: np.ndarray,
-        asfs_position: List[int],
+        asfs_position: list[int],
         logger):
     """训练机器学习模型"""
 

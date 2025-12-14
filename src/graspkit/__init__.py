@@ -61,7 +61,8 @@ from .utils import (
     calculate_deformation,
     LS_shell_full_charged,
     inter_coupling_channel_bar,
-    auto_plot_wavefunction_comparison
+    auto_plot_wavefunction_comparison,
+    OperationResult,
 )
 
 from .CSFs_processor import (
@@ -178,6 +179,7 @@ __all__ = [
     "level_data_compare",
     "calculate_deformation",
     "LS_shell_full_charged",
+    "OperationResult",
     ## CSFs_processor
     "batch_asfs_mix_square_above_threshold",
     "asf_mix_square_above_threshold_coupling_info",

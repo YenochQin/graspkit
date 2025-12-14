@@ -6,9 +6,8 @@
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
-from types import SimpleNamespace
-from dataclasses import dataclass
+from typing import Any
+
 import gzip
 import pickle
 import rtoml
@@ -17,24 +16,19 @@ import numpy as np
 import pandas as pd
 
 from ..utils.progress_manager import progress_context
-
-
-from ..utils.tool_function import *
-from ..utils.data_modules import *
-from ..CSFs_processor.CSFs_choosing import *
-from ..CSFs_processor.CSFs_compress_extract import *
+from ..utils.data_modules import CSFs
 
 
 # TODO not good enough
 def write_sorted_CSFs_to_cfile(
-    CSFs_file_info: List, sorted_CSFs_data_list: List, output_file: Union[str, Path]
+    CSFs_file_info: list, sorted_CSFs_data_list: list, output_file: str | Path
 ):
     """
     将排序后的CSFs数据写入到指定的输出文件中。
 
     Args:
-        CSFs_file_info (List): CSFs文件的头部信息(CSF(s):行上面的信息)
-        sorted_CSFs_data (List): 排序后的CSFs数据列表
+        CSFs_file_info (list): CSFs文件的头部信息(CSF(s):行上面的信息)
+        sorted_CSFs_data (list): 排序后的CSFs数据列表
             sorted_CSFs_data[block
                                 [CSFs
                                     [CSFS_1]
@@ -68,7 +62,7 @@ def write_sorted_CSFs_to_cfile(
 #######################################################################
 
 
-def save_csf_metadata(csf_obj: CSFs, filepath: Union[str, Path]):
+def save_csf_metadata(csf_obj: CSFs, filepath: str | Path):
     """保存CSFs元数据（排除CSFs_block_data）到pickle文件"""
     # 转换为Path对象
     filepath = Path(filepath)
@@ -87,7 +81,7 @@ def save_csf_metadata(csf_obj: CSFs, filepath: Union[str, Path]):
 
 #######################################################################
 
-def save_csfs_binary(csf_obj: CSFs, filepath: Union[str, Path]):
+def save_csfs_binary(csf_obj: CSFs, filepath: str | Path):
     filepath = Path(filepath)
     # 元数据存储
     metadata = {
@@ -120,7 +114,7 @@ def continue_calculate(save_path: str | Path, continue_calculate: bool):
 
     return f"Continue calculate is set to {continue_calculate}"
 
-def update_config(config_path: str | Path, updates: Dict[str, Any]):
+def update_config(config_path: str | Path, updates: dict[str, Any]):
     """更新TOML配置文件
 
     Args:
@@ -150,11 +144,11 @@ def update_config(config_path: str | Path, updates: Dict[str, Any]):
 
 #######################################################################
 
-def pkl_storage(blocks_csfs_idx: Dict, save_file_path):
+def pkl_storage(blocks_csfs_idx: dict, save_file_path):
     """
     将CSFs索引存储到指定的文件中。
     Args:
-        blocks_csfs_idx (Dict): 包含CSFs索引的字典。
+        blocks_csfs_idx (dict): 包含CSFs索引的字典。
         save_file_path: 存储文件的路径（字符串或Path对象）。
     """
     # 转换为Path对象并检查是否有扩展名
@@ -170,7 +164,7 @@ def pkl_storage(blocks_csfs_idx: Dict, save_file_path):
 #######################################################################
 
 def precompute_large_hash(
-    large_data: List[List[List[str]]], save_path: Union[str, Path]
+    large_data: list[list[list[str]]], save_path: str | Path
 ):
     """
     预计算 large_data 的哈希映射（双层字典结构）
@@ -221,14 +215,14 @@ def precompute_large_hash(
 
 
 def save_descriptors(
-    descriptors: np.ndarray, save_path: Union[str, Path], file_format: str = "npy"
+    descriptors: np.ndarray, save_path: str | Path, file_format: str = "npy"
 ):
     """
     保存描述符数组
 
     Args:
         descriptors (np.ndarray): 描述符数组
-        save_path (Union[str, Path]): 保存路径（不含扩展名）
+        save_path (str | Path): 保存路径（不含扩展名）
         file_format (str): 保存格式 ('npy', 'csv', 'pkl')
 
     Example:
@@ -264,7 +258,7 @@ def save_descriptors(
 def save_descriptors_with_multi_block(
     descriptors: np.ndarray,
     labels: np.ndarray,
-    save_path: Union[str, Path],
+    save_path: str | Path,
     file_format: str = "npy",
 ):
     """
@@ -273,7 +267,7 @@ def save_descriptors_with_multi_block(
     Args:
         descriptors (np.ndarray): 描述符数组
         labels (np.ndarray): 标签数组
-        save_path (Union[str, Path]): 保存路径（不含扩展名）
+        save_path (str | Path): 保存路径（不含扩展名）
         file_format (str): 保存格式 ('csv', 'npy', 'pkl')
 
     Example:

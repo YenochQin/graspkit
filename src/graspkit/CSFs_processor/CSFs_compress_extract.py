@@ -7,11 +7,10 @@
 
 import random
 import re
-from typing import Dict, Tuple, List, Optional
 import numpy as np
 from ..utils.progress_manager import wrap_iterator
 
-from ..utils.tool_function import *
+from ..utils.tool_function import str_subshell_2_kappa, chunk_string, str_subshell_2_kappa
 from ..utils.data_modules import CSFs
 
 #######################################################################
@@ -19,7 +18,7 @@ from ..utils.data_modules import CSFs
 #######################################################################
 
 
-def subshell_charged_state(subshell_CSF: str) -> Dict[str, str]:
+def subshell_charged_state(subshell_CSF: str) -> dict[str, str]:
     """
     解析轨道电荷状态，返回包含主量子数、轨道名称和电荷数的字典。
     """
@@ -50,38 +49,7 @@ def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> b
     }
     return full_charged.get(subshell_name, 0) == subshell_charged_num
 
-
-# def CSF_subshell_split(CSFs_configuration_raw: str) -> Dict[str, int]:
-
-#     subshells_charged = re.split(r'(\d*\w[\s|-]\(\s\d*\))', CSFs_configuration_raw)
-#     print(subshells_charged)
-
-#     subshells_charged = [item for item in subshells_charged if item.strip()]
-
-#     subshell_unfully_charged = {}
-#     subshell_fully_charged = {}
-
-#     csf_electron_num = 0
-#     for subshell in subshells_charged:
-#         temp_subshell_charged_state = subshell_charged_state(subshell)
-
-#         temp_quantum_num = temp_subshell_charged_state['subshell_main_quantum_num']
-#         temp_subshell = temp_subshell_charged_state['subshell_name']
-#         temp_charged_num = temp_subshell_charged_state['subshell_charged_num']
-#         csf_electron_num += temp_charged_num
-#         if if_subshell_full_charged(temp_subshell, temp_charged_num):
-#             print(f"{temp_quantum_num}{temp_subshell}({temp_charged_num}) is fully charged.")
-#             subshell_fully_charged[temp_quantum_num + temp_subshell] = temp_charged_num
-#         else:
-#             subshell_unfully_charged[temp_quantum_num + temp_subshell] = temp_charged_num
-
-#     return {
-#         'unfully_charged_subshell': subshell_unfully_charged,
-#         'fully_charged_subshell': subshell_fully_charged
-#         }
-
-
-def CSF_subshell_split(CSFs_configuration_raw: str) -> List:
+def CSF_subshell_split(CSFs_configuration_raw: str) -> list:
     # CSFs_configuration_raw need drop '\n' first !!!
 
     subshells_charged = [
@@ -91,15 +59,14 @@ def CSF_subshell_split(CSFs_configuration_raw: str) -> List:
 
     return subshells_charged
 
-
-def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> List:
+def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list:
     """获取CSFs文件中的peel subshells列表
 
     Args:
         CSFs_file_data: CSFs文件数据对象
 
     Returns:
-        List: 清理后的peel subshells列表，每个元素都已去除多余空格
+        list: 清理后的peel subshells列表，每个元素都已去除多余空格
     """
     # 获取原始字符串并去除前后的空白字符(包括换行符)
     peel_subshells = CSFs_file_data.subshell_info_raw[-1].strip()
@@ -107,10 +74,9 @@ def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> List:
     # 分割字符串并过滤掉空字符串，同时对每个子串去除前后空格
     return [s.strip() for s in peel_subshells.split() if s.strip()]
 
-
 def CSF_subshell_transform(
-    subshells_charged: str, CSFs_file_Peel_subshells: List
-) -> List[int]:
+    subshells_charged: str, CSFs_file_Peel_subshells: list
+) -> list[int]:
     ## 暂时用不了
     subshells_charged_list = CSF_subshell_split(subshells_charged)
 
@@ -128,9 +94,7 @@ def CSF_subshell_transform(
 
     return transform_subshells_charged
 
-
 #######################################################################
-
 
 def CSF_subshell_compress(CSF_configuration_raw: str):
     """
@@ -154,8 +118,7 @@ def CSF_subshell_compress(CSF_configuration_raw: str):
 
     return compressed_CSF
 
-
-def CSF_compress(CSF_raw: List) -> str:
+def CSF_compress(CSF_raw: list) -> str:
     """
     compress CSF
     """
@@ -163,7 +126,6 @@ def CSF_compress(CSF_raw: List) -> str:
         raise ValueError("CSF_raw need to be 3 line")
 
     return CSF_subshell_compress(CSF_raw[0]) + "".join(CSF_raw[1:])
-
 
 def CSF_subshell_extract(simplified_str):
     """
@@ -201,9 +163,7 @@ def CSF_subshell_extract(simplified_str):
 
     return "  ".join(restored)
 
-
 #######################################################################
-
 
 def csf_J(csf_3rd_line: str):
     """
@@ -222,7 +182,6 @@ def csf_J(csf_3rd_line: str):
     # 返回J字符串和宇称符号
     return j_str, parity
 
-
 def J_to_doubleJ(J_str: str) -> int:
     """
     将J字符串转换为二倍值(2J)
@@ -240,8 +199,7 @@ def J_to_doubleJ(J_str: str) -> int:
         # 处理整数情况
         return int(J_str) * 2
 
-
-def CSF_info_2_dict(CSF_item_list: List[str]) -> Dict:
+def CSF_info_2_dict(CSF_item_list: list[str]) -> dict:
     # 解析 subshell 信息
     CSF_info_dict = {}  # 初始化为字典而不是调用CSF_subshell_split
     CSF_info_dict["subshells"] = CSF_subshell_split(CSF_item_list[0])
@@ -261,8 +219,7 @@ def CSF_info_2_dict(CSF_item_list: List[str]) -> Dict:
 
     return CSF_info_dict
 
-
-def CSF_item_2_dict(CSF_item_list: List[str]) -> Dict:
+def CSF_item_2_dict(CSF_item_list: list[str]) -> dict:
     CSF_item_dict = {}
 
     CSF_item_dict.update(
@@ -279,8 +236,7 @@ def CSF_item_2_dict(CSF_item_list: List[str]) -> Dict:
 
     return CSF_item_dict
 
-
-def get_CSFs_file_info(csfs_file_data: List) -> Dict:
+def get_CSFs_file_info(csfs_file_data: list) -> dict:
     """
     Process CSF file data and extract structured information.
 
@@ -288,7 +244,7 @@ def get_CSFs_file_info(csfs_file_data: List) -> Dict:
         csfs_file_data: Raw CSF data list containing subshell info and CSFs entries
 
     Returns:
-        Dictionary containing:
+        dictionary containing:
         - subshell_info_raw: Original header lines
         - parsed subshell parameters (n, orbitals, etc.)
         - star_idxs: Positions of CSF separators
@@ -347,9 +303,7 @@ def get_CSFs_file_info(csfs_file_data: List) -> Dict:
 
     return CSFs_file_info
 
-
 #######################################################################
-
 
 def split_by_asterisk(lines):
     """
@@ -374,7 +328,6 @@ def split_by_asterisk(lines):
     result.append(current_chunk)
 
     return result
-
 
 def shuffle_three_line_groups(lst):
     """
@@ -404,22 +357,21 @@ def shuffle_three_line_groups(lst):
 ################### CSFs descriptor      #############################
 #######################################################################
 
-
 def parse_csf_2_descriptor(
-    peel_subshells_List: List[str], csf: List[str]
+    peel_subshells_list: list[str], csf: list[str]
 ) -> np.ndarray:
     """
     将CSF（Configuration State Function）数据解析为描述符数组
 
     Args:
-        peel_subshells_List (List[str]): 剥离子壳层名称列表，如 ['5s', '4d-', '4d', ...]
-        csf (List[str]): CSF数据的三行字符串列表
+        peel_subshells_list (list[str]): 剥离子壳层名称列表，如 ['5s', '4d-', '4d', ...]
+        csf (list[str]): CSF数据的三行字符串列表
             - 第一行：子壳层和电子数信息
             - 第二行：中间J耦合值
             - 第三行：最终耦合和总J值
 
     Returns:
-        np.ndarray: 长度为 3*len(peel_subshells_List) 的浮点数组
+        np.ndarray: 长度为 3*len(peel_subshells_list) 的浮点数组
             每个子壳层对应3个数值：[电子数, 中间J值, 耦合J值]
 
     Example:
@@ -446,22 +398,22 @@ def parse_csf_2_descriptor(
     final_double_J = J_to_doubleJ(final_J)  # 转换为2J的整数表示
 
     # 第三步：将三行数据按每9个字符分块处理
-    subshell_List = chunk_string(subshells_line, 9)  # 子壳层信息块
-    middle_line_List = chunk_string(middle_line, 9)  # 中间耦合信息块
-    coupling_line_List = chunk_string(coupling_line, 9)  # 耦合信息块
+    subshell_list = chunk_string(subshells_line, 9)  # 子壳层信息块
+    middle_line_list = chunk_string(middle_line, 9)  # 中间耦合信息块
+    coupling_line_list = chunk_string(coupling_line, 9)  # 耦合信息块
 
     # 第四步：初始化描述符数组和已占用轨道索引列表
-    csf_descriptor = np.zeros(3 * len(peel_subshells_List), dtype=np.float32)
+    csf_descriptor = np.zeros(3 * len(peel_subshells_list), dtype=np.float32)
     orbs_occupied_idxs = []  # 记录哪些轨道被占用
 
     # 第五步：遍历每个子壳层块，提取和处理信息
     for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
-        zip(subshell_List, middle_line_List, coupling_line_List)
+        zip(subshell_list, middle_line_list, coupling_line_list)
     ):
         # 提取子壳层名称和电子数
         subshell = subshell_charges[:5].strip()  # 前5位是子壳层名称，如 '5s'
         subshell_electron_num = int(subshell_charges[6:8])  # 第6-8位是电子数
-        is_last = i == len(subshell_List) - 1  # 判断是否为最后一个子壳层
+        is_last = i == len(subshell_list) - 1  # 判断是否为最后一个子壳层
 
         # 处理第二行数据（中间J耦合值）
         temp_middle_item = 0
@@ -484,7 +436,7 @@ def parse_csf_2_descriptor(
 
         # 第六步：在轨道列表中查找当前子壳层的索引
         try:
-            orbs_idx = peel_subshells_List.index(subshell)
+            orbs_idx = peel_subshells_list.index(subshell)
             descriptor_idx = orbs_idx * 3  # 每个轨道占用3个位置
         except ValueError:
             print(f"Warning: {subshell} not found in orbs list")
@@ -499,7 +451,7 @@ def parse_csf_2_descriptor(
         ]
 
     # 第八步：处理未占用的轨道（使用集合运算找到差集）
-    all_orbs_idxs = set(range(len(peel_subshells_List)))  # 所有轨道索引
+    all_orbs_idxs = set(range(len(peel_subshells_list)))  # 所有轨道索引
     occupied_orbs_idxs = set(orbs_occupied_idxs)  # 已占用轨道索引
     remaining_orbs_idxs = list(
         all_orbs_idxs - occupied_orbs_idxs
@@ -511,9 +463,8 @@ def parse_csf_2_descriptor(
 
     return csf_descriptor
 
-
 def parse_csf_2_descriptor_with_subshell(
-    peel_subshells_List: List[str], csf: List[str]
+    peel_subshells_list: list[str], csf: list[str]
 ) -> np.ndarray:
     """
     包含子壳层信息的CSF描述符解析函数
@@ -522,11 +473,11 @@ def parse_csf_2_descriptor_with_subshell(
     [主量子数, kappa值, 电子数, 中间J值, 耦合J值]
 
     Args:
-        peel_subshells_List: 剥离子壳层列表，如 ['5s', '4d-', '4d', ...]
+        peel_subshells_list: 剥离子壳层列表，如 ['5s', '4d-', '4d', ...]
         csf: CSF的三行数据
 
     Returns:
-        np.ndarray: 长度为 5*len(peel_subshells_List) 的描述符数组
+        np.ndarray: 长度为 5*len(peel_subshells_list) 的描述符数组
     """
 
     # 预处理CSF数据
@@ -540,16 +491,16 @@ def parse_csf_2_descriptor_with_subshell(
     final_double_J = J_to_doubleJ(final_J)
 
     # 分块处理
-    subshell_List = chunk_string(subshells_line, 9)
-    middle_line_List = chunk_string(middle_line, 9)
-    coupling_line_List = chunk_string(coupling_line, 9)
+    subshell_list = chunk_string(subshells_line, 9)
+    middle_line_list = chunk_string(middle_line, 9)
+    coupling_line_list = chunk_string(coupling_line, 9)
 
     # 初始化描述符数组（每个轨道5个数值）
-    csf_descriptor = np.zeros(5 * len(peel_subshells_List), dtype=np.float32)
+    csf_descriptor = np.zeros(5 * len(peel_subshells_list), dtype=np.float32)
     orbs_occupied_idxs = []
 
     # 首先为所有轨道填充子壳层信息（主量子数和kappa值）
-    for idx, subshell in enumerate(peel_subshells_List):
+    for idx, subshell in enumerate(peel_subshells_list):
         # 直接解析子壳层名称
         # 提取主量子数（数字部分）
         main_quantum_num = int("".join(filter(str.isdigit, subshell)))
@@ -568,11 +519,11 @@ def parse_csf_2_descriptor_with_subshell(
 
     # 处理每个子壳层的电子数和J值信息
     for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
-        zip(subshell_List, middle_line_List, coupling_line_List)
+        zip(subshell_list, middle_line_list, coupling_line_list)
     ):
         subshell = subshell_charges[:5].strip()
         subshell_electron_num = int(subshell_charges[6:8])
-        is_last = i == len(subshell_List) - 1
+        is_last = i == len(subshell_list) - 1
 
         # 判断轨道是否填满
         is_full = if_subshell_full_charged(subshell, subshell_electron_num)
@@ -602,7 +553,7 @@ def parse_csf_2_descriptor_with_subshell(
 
         # 查找轨道索引
         try:
-            orbs_idx = peel_subshells_List.index(subshell)
+            orbs_idx = peel_subshells_list.index(subshell)
             descriptor_idx = orbs_idx * 5
         except ValueError:
             print(f"Warning: {subshell} not found in orbs list")
@@ -621,7 +572,7 @@ def parse_csf_2_descriptor_with_subshell(
         csf_descriptor[descriptor_idx + 4] = temp_coupling_item  # 第5位：耦合J值
 
     # 处理未占用的轨道（第5位填最终J值的二倍）
-    all_orbs_idxs = set(range(len(peel_subshells_List)))
+    all_orbs_idxs = set(range(len(peel_subshells_list)))
     occupied_orbs_idxs = set(orbs_occupied_idxs)
     remaining_orbs_idxs = list(all_orbs_idxs - occupied_orbs_idxs)
 
@@ -630,9 +581,7 @@ def parse_csf_2_descriptor_with_subshell(
 
     return csf_descriptor
 
-
 #######################################################################
-
 
 def batch_process_csfs_to_descriptors(
                                     CSFs_file_data: CSFs
@@ -654,7 +603,7 @@ def batch_process_csfs_to_descriptors(
         >>> save_descriptors(descriptors, 'output/csf_descriptors', 'csv')
     """
     # 获取剥离子壳层列表
-    peel_subshells_List = get_CSFs_peel_subshells(CSFs_file_data)
+    peel_subshells_list = get_CSFs_peel_subshells(CSFs_file_data)
 
     all_descriptors = []
 
@@ -671,7 +620,7 @@ def batch_process_csfs_to_descriptors(
                     )
                     continue
                 descriptor = parse_csf_2_descriptor_with_subshell(
-                        peel_subshells_List, csf_item
+                        peel_subshells_list, csf_item
                     )
                 all_descriptors.append(descriptor)
 
@@ -688,9 +637,8 @@ def batch_process_csfs_to_descriptors(
 
     print(f"Successfully processed {len(descriptors_array)} CSFs")
     print(f"Descriptor array shape: {descriptors_array.shape}")
-    print(f"Number of orbitals: {len(peel_subshells_List)}")
+    print(f"Number of orbitals: {len(peel_subshells_list)}")
 
     return descriptors_array
-
 
 #######################################################################

@@ -8,11 +8,10 @@
 
 所有图表函数都集成了fig_settings.py中的专业发表级图表设置。
 """
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional, List, Union, Tuple
-import warnings
 
 
 from .fig_settings import (

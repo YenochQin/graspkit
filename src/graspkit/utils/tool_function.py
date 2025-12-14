@@ -5,9 +5,9 @@
 @date :2024/05/07 11:11:09
 @author :YenochQin (秦毅)
 '''
-
+from typing import Any
 import numpy as np
-
+from dataclasses import dataclass
 ######################################################################
 
 '''
@@ -199,3 +199,12 @@ def LS_shell_full_charged(shell_name: str, shell_charged_num: int) -> bool:
         "i": 26
     }
     return full_charged.get(shell_name, 0) == shell_charged_num
+
+######################################################################
+
+@dataclass
+class OperationResult:
+    success: bool
+    data: Any | None = None
+    error: str | None = None
+    status_info: dict[str, Any] | None = None

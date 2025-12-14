@@ -6,9 +6,9 @@
 """
 
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Union, Any
+from typing import Tuple, Optional, Any
 from types import SimpleNamespace
-from dataclasses import dataclass
+
 import gzip
 import pickle
 import rtoml
@@ -17,13 +17,10 @@ import numpy as np
 import pandas as pd
 import h5py
 
-from ..utils.tool_function import *
-from ..utils.data_modules import *
-from ..CSFs_processor.CSFs_choosing import *
-from ..CSFs_processor.CSFs_compress_extract import *
+from ..utils.data_modules import CSFs
 
 
-def load_csf_metadata(filepath: Union[str, Path]) -> dict:
+def load_csf_metadata(filepath: str | Path) -> dict:
     # 转换为Path对象
     filepath = Path(filepath)
 
@@ -34,7 +31,7 @@ def load_csf_metadata(filepath: Union[str, Path]) -> dict:
 #######################################################################
 
 
-def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
+def load_csfs_binary(filepath: str | Path) -> CSFs:
     filepath = Path(filepath)
 
     # 检查文件路径是否已经有正确的后缀
@@ -57,7 +54,7 @@ def load_csfs_binary(filepath: Union[str, Path]) -> CSFs:
 #######################################################################
 
 
-def pkl_loader(load_csfs_idx_file_path) -> Dict:
+def pkl_loader(load_csfs_idx_file_path) -> dict:
     """
     加载CSF索引文件（pickle格式）。
 
@@ -65,7 +62,7 @@ def pkl_loader(load_csfs_idx_file_path) -> Dict:
         load_csfs_idx_file_path: 索引文件路径
 
     Returns:
-        Dict: 块索引到CSF索引列表/数组的映射
+        dict: 块索引到CSF索引列表/数组的映射
         读取的pkl文件中可能会有ci系数
     Raises:
         TypeError: 如果加载的数据不是正确格式
@@ -95,7 +92,7 @@ def pkl_loader(load_csfs_idx_file_path) -> Dict:
 #######################################################################
 
 
-def load_large_hash(file_path: Union[str, Path]) -> Dict[int, Dict[str, int]]:
+def load_large_hash(file_path: str | Path) -> dict[int, dict[str, int]]:
     """从文件加载预计算的哈希映射"""
     # 转换为Path对象
     file_path = Path(file_path)
@@ -242,7 +239,7 @@ def _validate_config_data(config: dict[str, Any]) -> None:
 
 
 def load_descriptors(
-    load_path: Union[str, Path],
+    load_path:  str | Path,
     file_format: Optional[str] = None,
     use_cpp: bool = False,
 ) -> Optional[np.ndarray]:
@@ -250,7 +247,7 @@ def load_descriptors(
     加载描述符数组
 
     Args:
-        load_path (Union[str, Path]): 加载路径（可含或不含扩展名）
+        load_path ( str | Path): 加载路径（可含或不含扩展名）
         file_format (Optional[str]): 文件格式，如果为None则自动推断
         use_cpp (bool): 是否使用C++生成的HDF5文件
 
@@ -351,7 +348,7 @@ def load_descriptors(
 
 
 def load_descriptors_with_multi_block(
-    load_path: Union[str, Path],
+    load_path: str | Path,
     file_format: Optional[str] = None,
     use_cpp: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray] | None:
@@ -359,7 +356,7 @@ def load_descriptors_with_multi_block(
     加载带标签的描述符数组
 
     Args:
-        load_path (Union[str, Path]): 加载路径（不含扩展名）
+        load_path (str | Path): 加载路径（不含扩展名）
         file_format (Optional[str]): 文件格式，如果为None则自动推断
         use_cpp (bool): 是否使用C++生成的HDF5文件
 
