@@ -24,7 +24,6 @@ from .tool_function import (
     chunk_string,
     level_data_compare,
     LS_shell_full_charged,
-    OperationResult,
 )
 
 from .environment_config import (
@@ -70,7 +69,6 @@ __all__ = [
     'chunk_string',
     'level_data_compare',
     'LS_shell_full_charged',
-    'OperationResult',
     
     # 环境配置
     'get_environment_config',

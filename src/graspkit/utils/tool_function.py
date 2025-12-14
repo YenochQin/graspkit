@@ -8,12 +8,14 @@
 from typing import Any
 import numpy as np
 from dataclasses import dataclass
+from typing import Optional
 ######################################################################
 
-'''
-print energy levels function
-'''
+
 def level_print_title(Rydberg = 109737.31568508):
+    '''
+    print energy levels function
+    '''
     print(
 f"""
     Energy levels for ...
@@ -201,10 +203,3 @@ def LS_shell_full_charged(shell_name: str, shell_charged_num: int) -> bool:
     return full_charged.get(shell_name, 0) == shell_charged_num
 
 ######################################################################
-
-@dataclass
-class OperationResult:
-    success: bool
-    data: Any | None = None
-    error: str | None = None
-    status_info: dict[str, Any] | None = None
