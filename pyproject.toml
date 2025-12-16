@@ -18,8 +18,8 @@ dependencies = [
     "matplotlib>=3.8.4",
     "tqdm>=4.66.4",
     # 机器学习库
-    "scikit-learn>=1.5.0,<1.6.0", 
-    "imbalanced-learn>=0.13.0", 
+    "scikit-learn>=1.5.0,<1.6.0",
+    "imbalanced-learn>=0.13.0",
     # 注意：PyTorch依赖已移至optional-dependencies
     # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
     # 数据可视化
@@ -34,6 +34,8 @@ dependencies = [
     "rtoml>=0.9.0",
     # HDF5 支持
     "h5py>=3.8.0",
+    "pyarrow>=22.0.0",
+    "polars>=1.36.1",
 ]
 
 # Optional dependencies for different environments
