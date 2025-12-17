@@ -173,31 +173,31 @@ def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
 
     # 写入表头
     headers = [
-            "iteration",
-            "important_count",
-            "ml_predicted_count",
-            "ml_new_count",
-            "total_original_count",
-            "current_calculation_count",
-            "data_retention_rate",
-            "important_retention_rate",
-            "ml_retention_rate",
-            "training_time",
-            "inference_time",
-            "execution_time",
-            "total_time",
-            "test_f1",
-            "test_roc_auc",
-            "test_accuracy",
-            "test_precision",
-            "test_recall",
-            "train_f1",
-            "train_roc_auc",
-            "train_accuracy",
-            "train_precision",
-            "train_recall",
-            "overfitting_gap",
-        ]
+                "cal_loop_num",  # 迭代轮次
+                "important_count",  # 重要组态数量
+                "ml_predicted_count",  # ML预测的高概率组态总数
+                "ml_new_count",  # ML新增的组态数（下次计算用）
+                "total_original_count",  # 原始CSFs总数
+                "current_calculation_count",  # 本轮计算的组态数
+                "data_retention_rate",  # 数据留存率（交集/本轮计算）
+                "important_retention_rate",  # 重要组态占原始比例
+                "ml_retention_rate",  # ML预测组态占原始比例
+                "training_time",
+                "actual_eval_time",  # 推理时间
+                "execution_time",
+                "execution_time",  # 总时间（现在与执行时间相同）
+                "test_f1",
+                "test_roc_auc",
+                "test_accuracy",
+                "test_precision",
+                "test_recall",
+                "train_f1",
+                "train_roc_auc",
+                "train_accuracy",
+                "train_precision",
+                "train_recall",
+                "overfitting_gap",  # 过拟合差距
+            ]
 
     with open(iteration_results_path, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
