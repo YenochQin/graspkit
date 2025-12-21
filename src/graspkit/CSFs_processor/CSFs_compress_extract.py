@@ -8,6 +8,7 @@
 import random
 import re
 import numpy as np
+import polars as pl
 from ..utils.progress_manager import wrap_iterator
 
 from ..utils.tool_function import str_subshell_2_kappa, chunk_string, str_subshell_2_kappa
@@ -640,5 +641,34 @@ def batch_process_csfs_to_descriptors(
     print(f"Number of orbitals: {len(peel_subshells_list)}")
 
     return descriptors_array
+
+def batch_process_csfs_parquet_to_descriptors(
+                                    CSFs_file_header: dict,
+                                    CSFs_file_data: pl.DataFrame
+                                ) -> np.ndarray:
+    """
+    批量处理CSFs文件中的所有CSF数据，转换为描述符数组
+    """
+    # 获取剥离子壳层列表
+    peel_subshells = CSFs_file_header["header_info"]["header_lines"][3]
+    peel_subshells_list = [s.strip() for s in peel_subshells.split() if s.strip()]
+
+    # 【修改点】：将 with_columns 改为 select
+    # 这样返回的 descriptors_df 将只包含 "descriptor" 这一列
+    descriptors_df = CSFs_file_data.select(
+        descriptor = pl.concat_list(["line1", "line2", "line3"])
+            .map_elements(
+                lambda x: parse_csf_2_descriptor_with_subshell(peel_subshells_list, x).tolist(),
+                return_dtype=pl.List(pl.Float64) 
+            )
+    )
+
+    print(f"Successfully processed {CSFs_file_data.shape[0]} CSFs")
+    # 这里的 shape 列数应该是 1
+    print(f"Descriptor df shape: {descriptors_df.shape}") 
+    print(f"Number of orbitals: {len(peel_subshells_list)}")
+
+    numpy_matrix = np.array(descriptors_df["descriptor"].to_list())
+    return numpy_matrix
 
 #######################################################################
