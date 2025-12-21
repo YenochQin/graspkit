@@ -168,12 +168,15 @@ platforms = ["linux-64"]
 
 [tool.pixi.pypi-dependencies]
 grasp-kit = { path = ".", editable = true }
+csfs-loader = { path = "/home/qqqyy/AppFiles/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp314-cp314-manylinux_2_28_x86_64.whl" }
 
 [tool.pixi.environments]
-default = { solve-group = "default" }
+# default = { solve-group = "default" }
+default = { features = ["dev", "gpu"], solve-group = "default" }
 all = { features = ["all"], solve-group = "default" }
 cpu = { features = ["cpu"], solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 gpu = { features = ["gpu"], solve-group = "default" }
+dev-gpu = { features = ["dev", "gpu"], solve-group = "default" }
 
 [tool.pixi.tasks]
