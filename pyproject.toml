@@ -9,7 +9,7 @@ version = '2.9.dev1'
 description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
-requires-python = ">= 3.12.6"
+requires-python = ">= 3.13"
 
 dependencies = [
     # 核心数据处理库
@@ -71,6 +71,7 @@ dev = [
     "wheel>=0.40.0",
     "polars>=1.35.0",
     "pyarrow>=22.0.0",
+    "csfs_loader>=0.1.0"
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
@@ -113,6 +114,7 @@ torchvision = [
     { index = "pytorch-cpu", extra = "cpu" },
     { index = "pytorch-cu128", extra = "gpu" },
 ]
+csfs-loader = { path = "/home/workstation2/AppFiles/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
