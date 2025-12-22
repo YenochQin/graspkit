@@ -75,7 +75,8 @@ def _setup_config_paths(config):
     config.cal_path.full_CSFs_set_path = root_path / config.target.conf
 
     # 设置压缩的CSF二进制文件路径，使用pkl.gz格式
-    config.cal_path.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
+    # config.cal_path.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
+    config.cal_path.full_CSFs_set_parquet_path = root_path / f"{config.target.conf}.parquet"
 
     config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
@@ -221,7 +222,7 @@ def load_data_files(
         use_cpp: 是否使用C++生成的HDF5文件格式
 
     Returns:
-        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_idxs_dict)
+        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_idxs_array)
     """
 
     # 加载能级文件
@@ -278,9 +279,9 @@ def load_data_files(
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_idxs_file_path = (
-        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_sampled_idxs.pkl"
+        paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_sampled_idxs.npy"
     )
-    caled_csfs_idxs_dict = pkl_loader(caled_csfs_idxs_file_path)
+    caled_csfs_idxs_array = np.load(caled_csfs_idxs_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_idxs_file_path}")
 
     return (
@@ -288,7 +289,7 @@ def load_data_files(
         rmix_file_data,
         raw_csfs_descriptors,
         cal_csfs_data,
-        caled_csfs_idxs_dict,
+        caled_csfs_idxs_array,
     )
 
 

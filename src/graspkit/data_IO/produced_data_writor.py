@@ -14,7 +14,7 @@ import rtoml
 
 import numpy as np
 import pandas as pd
-
+import polars as pl
 from ..utils.progress_manager import progress_context
 from ..utils.data_modules import CSFs
 
@@ -57,7 +57,22 @@ def write_sorted_CSFs_to_cfile(
                 for csf in block:
                     for line in csf:
                         file.write(line)
+                        
 
+def write_CSFs_pl_to_cfile(
+    CSFs_file_header: dict, CSFs_data_df: pl.DataFrame, output_file: str | Path
+):
+    CSFs_file_info = CSFs_file_header['header_info']['header_lines']
+    if len(CSFs_file_info) != 5:
+        raise ValueError("CSFs file header info error!")
+
+    with open(output_file, "w") as file:
+        for line in CSFs_file_info:
+            file.write(line+"\n")
+        
+        for row in CSFs_data_df.select(["line1", "line2", "line3"]).iter_rows():
+        # row 类似于 ("text1", "text2", "text3")
+            file.write("\n".join(row)+ "\n")
 
 #######################################################################
 
