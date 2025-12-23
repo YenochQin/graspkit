@@ -18,7 +18,7 @@ dependencies = [
     "matplotlib>=3.8.4",
     "tqdm>=4.66.4",
     # 机器学习库
-    "scikit-learn>=1.5.0,<1.6.0",
+    "scikit-learn>=1.5.0",
     "imbalanced-learn>=0.13.0",
     # 注意：PyTorch依赖已移至optional-dependencies
     # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
@@ -114,7 +114,7 @@ torchvision = [
     { index = "pytorch-cpu", extra = "cpu" },
     { index = "pytorch-cu128", extra = "gpu" },
 ]
-csfs-loader = { path = "/home/workstation2/AppFiles/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl" }
+csfs-loader = { path = "/home/workstation3/AppFiles/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
