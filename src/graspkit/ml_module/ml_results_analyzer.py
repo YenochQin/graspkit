@@ -246,7 +246,8 @@ def save_iteration_results(
     logger.info(
         f"第{cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
     )
-    logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
+    if cal_loop_num > 1:
+        logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
 
 def save_and_plot_results(
