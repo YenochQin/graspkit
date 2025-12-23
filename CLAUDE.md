@@ -43,6 +43,12 @@ uv sync --extra gpu --extra dev     # GPU version with dev tools (NVIDIA CUDA)
 uv pip install -e .
 ```
 
+#### Pixi (Alternative)
+```bash
+pixi install
+pixi shell
+```
+
 #### Traditional pip Installation
 ```bash
 # Create and activate environment
@@ -88,6 +94,11 @@ mypy src/
 python tests/test_coverage_simple.py
 python tests/test_coverage_function.py
 
+# Run example scripts
+python tests/ANN.py                    # ML classifier example
+python tests/rwfn_plotter.py          # Wavefunction plotting
+python tests/Nightingale_rose.py      # Visualization example
+
 # Run notebook examples
 jupyter notebook tests/test.ipynb
 ```
@@ -95,7 +106,7 @@ jupyter notebook tests/test.ipynb
 #### Package Verification
 ```bash
 # Verify installation
-python -c "import graspkit; print('✅ Package OK')"
+python -c "import graspkit; print('Package OK')"
 
 # Check version
 python -c "import graspkit; print(graspkit.__version__)"
@@ -117,54 +128,40 @@ The package exposes all functionality through `src/graspkit/__init__.py` with co
 - **grasp_data_extractor** handles GRASP-specific data formats
 - **utils** provides shared functionality across all modules
 
-#### Version Management
-- Dynamic version from `src/graspkit/version.py` (currently 2.8dev1)
-- Hatchling build backend configured in `pyproject.toml`
-- Cross-platform build scripts available for automation
+#### Environment-Aware Logging
+The codebase includes environment detection for HPC/SLURM environments:
+- `utils/environment_config.py` - Detects SLURM jobs and debug mode
+- `utils/progress_manager.py` - Hides progress bars in SLURM, shows in debug mode
+- Use `log_stage_start()` / `log_stage_end()` functions for structured logging
+
+#### Type Safety
+- Data structures use `@dataclass` (e.g., `MixCoefficientData`, `CSFs` in `utils/data_modules.py`)
+- Type-safe helper methods on `GraspFileLoad` class
+- PyTorch models use type annotations
 
 ### Configuration Management
 
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
 - **uv.lock** - UV lock file for reproducible dependency management
+- **pixi.lock** - Pixi lock file (conda-forge, Linux-64 only)
 - **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
 - **Ruff Configuration** - NumPy 2.0 compatibility rules in pyproject.toml
 
 #### Dependencies Management
 - **CPU Environment** - PyTorch CPU version for general compatibility
-- **GPU Environment** - PyTorch CUDA version for NVIDIA GPUs
+- **GPU Environment** - PyTorch CUDA version (cu128) for NVIDIA GPUs
 - **Development Tools** - pytest, ruff, mypy, black, jupyter ecosystem
 - **Data Processing** - pandas, numpy, matplotlib, h5py, polars, pyarrow
 
 ### Current Repository Status
-- **Version**: 2.8dev1 (development version)
-- **Python Version**: Requires 3.12+
-- **Package Manager**: Hatchling with UV support
+- **Version**: 2.9dev2 (from `src/graspkit/version.py`)
+- **Python Version**: Requires 3.13+ (<3.14)
+- **Package Manager**: Hatchling with UV/Pixi support
 - **Build System**: Modern packaging with optional dependencies
 - **Testing**: Example files in tests/ directory (ANN.py, rwfn_plotter.py, Nightingale_rose.py, test.ipynb)
 
-### Performance Considerations
-- PyTorch environment choice affects computational performance
-- UV provides 10-100x faster dependency resolution than pip
-- Large CSF datasets require careful memory management
-- HDF5 format supported for efficient large dataset handling
-
 ## Common Development Workflows
-
-### Running Examples and Tests
-```bash
-# Activate environment first
-source .venv/bin/activate  # Linux/macOS
-# or .venv\Scripts\activate  # Windows
-
-# Run basic examples
-python tests/ANN.py                    # ML classifier example
-python tests/rwfn_plotter.py          # Wavefunction plotting
-python tests/Nightingale_rose.py      # Visualization example
-
-# Interactive development with Jupyter
-jupyter notebook tests/test.ipynb
-```
 
 ### Data Processing Pipeline
 ```python
@@ -176,7 +173,6 @@ data_loader = gk.GraspFileLoad("path/to/grasp/output")
 energy_data = gk.mcdhf_energy_data_collection(data_loader)
 
 # Process CSFs with ML-driven selection
-csf_processor = gk.CSFs_processor(...)
 selected_csfs = gk.radom_choose_csfs(csf_processor, n_select=1000)
 
 # Train ML model for optimization
