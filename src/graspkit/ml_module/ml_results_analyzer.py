@@ -7,7 +7,7 @@
 
 from typing import Tuple
 import csv
-import pandas as pd
+import polars as pl
 import numpy as np
 import joblib
 
@@ -255,7 +255,7 @@ def save_and_plot_results(
         path_cfg,
         correct_levels_ci: np.ndarray,
         asfs_position: list[int],
-        caled_csfs_idxs_dict=None,
+        caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
         y_current_cal_probability=None,
         save_model: bool = True,
         save_data: bool = True,
@@ -270,7 +270,7 @@ def save_and_plot_results(
         model: 训练好的模型对象
         correct_levels_ci: 混合系数数据Ci用于绘图
         asfs_position: 正确能级位置索引列表
-        caled_csfs_idxs_dict: 当前计算的CSF索引字典（用于数据对应检查）
+        caled_csfs_idxs_array: 当前计算的CSF索引
         y_current_cal_probability: 当前计算CSF的预测概率，与混合系数维度匹配
         save_model: 是否保存模型文件
         save_data: 是否保存预测结果数据
@@ -291,34 +291,34 @@ def save_and_plot_results(
 
         # 保存测试集结果
         test_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
-        pd.DataFrame(
+        pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_test"],
                 "y_prediction": evaluation_results["predictions"]["y_prediction_test"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_test"],
             }
-        ).to_parquet(test_file, index=False)
+        ).write_parquet(test_file)
         saved_files["test_data"] = str(test_file)
 
         # 保存训练集结果到results目录
-        train_file = path_cfg.results_path  / f"{path_cfg.loop_file_name}_train_results.parquet"
-        pd.DataFrame(
+        train_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_train_results.parquet"
+        pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_train"],
                 "y_prediction": evaluation_results["predictions"]["y_prediction_train"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_train"],
             }
-        ).to_parquet(train_file, index=False)
+        ).write_parquet(train_file)
         saved_files["train_data"] = str(train_file)
 
         # 保存其他数据预测结果到results目录
-        other_file = path_cfg.results_path  / f"{path_cfg.loop_file_name}_other_predictions.parquet"
-        pd.DataFrame(
+        other_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_other_predictions.parquet"
+        pl.DataFrame(
             {
                 "y_prediction": evaluation_results["predictions"]["y_prediction_other"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_other"],
             }
-        ).to_parquet(other_file, index=False)
+        ).write_parquet(other_file)
         saved_files["other_predictions"] = str(other_file)
 
         if logger:
@@ -371,28 +371,17 @@ def save_and_plot_results(
                     y_prob_current_cal = y_prob_current_cal[:min_len]
                     if logger:
                         logger.info(f"已调整为相同长度: {min_len}")
-            elif caled_csfs_idxs_dict is not None:
+            elif caled_csfs_idxs_array.size > 0:
                 # 回退到原有逻辑（从全局概率中提取对应部分）
-                if 0 not in caled_csfs_idxs_dict:
-                    if logger:
-                        logger.warning(
-                            f"caled_csfs_idxs_dict中缺少键0，可用键: {list(caled_csfs_idxs_dict.keys())}，使用全部概率数据"
-                        )
-                    y_prob_current_cal = y_prob_all
-                    if logger:
-                        logger.info(
-                            f"使用全部概率数据 - 混合系数数量: {len(cal_mix_coeff_list)}, 概率数量: {len(y_prob_current_cal)}"
-                        )
-                else:
-                    current_cal_idxs = caled_csfs_idxs_dict[0]
-                    y_prob_current_cal = y_prob_all[current_cal_idxs]
-                    if logger:
-                        logger.info(
-                            f"使用索引提取 - 混合系数数量: {len(cal_mix_coeff_list)}, 对应概率数量: {len(y_prob_current_cal)}"
-                        )
-                        logger.info(
-                            f"当前计算CSF索引范围: {current_cal_idxs.min()}-{current_cal_idxs.max()}"
-                        )
+                current_cal_idxs = caled_csfs_idxs_array
+                y_prob_current_cal = y_prob_all[current_cal_idxs]
+                if logger:
+                    logger.info(
+                        f"使用索引提取 - 混合系数数量: {len(cal_mix_coeff_list)}, 对应概率数量: {len(y_prob_current_cal)}"
+                    )
+                    logger.info(
+                        f"当前计算CSF索引范围: {current_cal_idxs.min()}-{current_cal_idxs.max()}"
+                    )
             else:
                 # 如果没有提供任何信息，使用原有逻辑（可能有问题）
                 y_prob_current_cal = y_prob_all
