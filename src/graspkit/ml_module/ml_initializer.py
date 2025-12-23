@@ -70,13 +70,12 @@ def _setup_config_paths(config):
     root_path = Path(config.cal_settings.root_path)
 
     # 设置全量CSF集合文件的完整路径
-    config.cal_path.full_CSFs_set_file_path = root_path / config.target.full_CSFs_set_file
-    # 设置CSF配置文件的路径
-    config.cal_path.full_CSFs_set_path = root_path / config.target.conf
+    full_CSFs_set_path = root_path / config.target.full_CSFs_set_file
+    config.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
+    # 设置CSF二进制和头文件的路径
+    config.cal_path.full_CSFs_set_parquet_path = full_CSFs_set_path.with_stem(full_CSFs_set_path.stem).with_suffix('.parquet')
+    config.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(f"{full_CSFs_set_path.stem}_header").with_suffix('.toml')
 
-    # 设置压缩的CSF二进制文件路径，使用pkl.gz格式
-    # config.cal_path.full_CSFs_set_binary_path = root_path / f"{config.target.conf}.pkl.gz"
-    config.cal_path.full_CSFs_set_parquet_path = root_path / f"{config.target.conf}.parquet"
 
     config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
@@ -245,13 +244,13 @@ def load_data_files(
         raise ValueError(f"不支持的计算方法: {cal_method}")
 
     rmix_file_load = GraspFileLoad.from_filepath(str(rmix_file_path), "mix")
-    rmix_file_data = rmix_file_load.data_file_process()
+    rmix_file_data = rmix_file_load.get_mix_coefficient_data()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
     # 加载初始 CSFs 描述符文件
     if use_cpp_descriptor_generator:
         # 使用C++生成的HDF5文件
-        hdf5_file_path = paths_cfg.full_CSFs_set_path.with_suffix(".h5")
+        hdf5_file_path = paths_cfg.full_CSFs_set_file_path.with_suffix(".h5")
         try:
             hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
             raw_csfs_descriptors = hdf5_data["descriptors"]
@@ -259,22 +258,22 @@ def load_data_files(
         except Exception as e:
             logger.warning(f"C++ HDF5文件加载失败: {e}")
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}"
+                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}"
             )
     else:
         # 使用传统文件格式
-        result = load_descriptors_with_multi_block(paths_cfg.full_CSFs_set_path, "npy")
+        result = load_descriptors_with_multi_block(paths_cfg.full_CSFs_set_file_path, "npy")
         if result is None:
             raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}"
+                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}"
             )
         raw_csfs_descriptors, raw_csfs_idxs = result
-        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_path}")
+        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}")
 
     # 加载本轮计算CSFs文件
     cal_csfs_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.c"
     cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
-    cal_csfs_data = cal_csfs_file_laod.data_file_process()
+    cal_csfs_data = cal_csfs_file_laod.get_csfs_data()
     logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载本轮选择的CSFs的索引文件
@@ -631,10 +630,10 @@ def evaluate_calculation_convergence(
 
 
 def merge_historical_ci_data(
-                    previous_idxs_ci_dict, 
-                    current_idxs_ci_dict, 
-                    logger
-                    ) -> Tuple[np.ndarray, np.ndarray]:
+    previous_idxs_ci_dict, 
+    current_idxs_ci_dict, 
+    logger
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
 
@@ -643,8 +642,8 @@ def merge_historical_ci_data(
     2. 两个字典idxs中的交集对应的ci_squared取较大值
 
     Args:
-        previous_idxs_ci_dict: 历史CI数据字典，格式为 {0: {"idxs": [...], "ci_squared": [...]}}
-        current_idxs_ci_dict: 当前CI数据字典，格式为 {0: {"idxs": [...], "ci_squared": [...]}}
+        previous_idxs_ci_dict: 历史CI数据字典，格式为 {"idxs": [...], "ci_squared": [...]}
+        current_idxs_ci_dict: 当前CI数据字典，格式为 {"idxs": [...], "ci_squared": [...]}
         logger: 日志记录器
 
     Returns:
@@ -652,11 +651,11 @@ def merge_historical_ci_data(
     """
 
     # 获取历史数据和当前数据
-    previous_idxs = np.array(previous_idxs_ci_dict[0]["idxs"])
-    previous_ci_squared = np.array(previous_idxs_ci_dict[0]["ci_squared"])
+    previous_idxs = np.array(previous_idxs_ci_dict["idxs"])
+    previous_ci_squared = np.array(previous_idxs_ci_dict["ci_squared"])
 
-    current_idxs = np.array(current_idxs_ci_dict[0]["idxs"])
-    current_ci_squared = np.array(current_idxs_ci_dict[0]["ci_squared"])
+    current_idxs = np.array(current_idxs_ci_dict["idxs"])
+    current_ci_squared = np.array(current_idxs_ci_dict["ci_squared"])
 
     # 创建索引到CI系数的映射
     previous_dict = dict(zip(previous_idxs, previous_ci_squared))
@@ -697,10 +696,10 @@ def merge_historical_ci_data(
 
 
 def generate_train_csfs_descriptors(
-                    config, 
-                    raw_csfs_descriptors: np.ndarray, 
-                    logger
-                ) -> np.ndarray:
+    config, 
+    raw_csfs_descriptors: np.ndarray, 
+    logger
+) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
     基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
@@ -727,18 +726,17 @@ def generate_train_csfs_descriptors(
 
     current_idxs_ci_dict = pkl_loader(current_idxs_ci_path)
     try:
-        assert 0 in current_idxs_ci_dict, "缺少主键 0"
-        assert "idxs" in current_idxs_ci_dict[0], "缺少子键 idxs"
-        assert "ci_squared" in current_idxs_ci_dict[0], "缺少子键 ci_squared"
-        assert current_idxs_ci_dict[0]["idxs"] is not None, "idxs 值为空"
-        assert current_idxs_ci_dict[0]["ci_squared"] is not None, "ci_squared 值为空"
+        assert "idxs" in current_idxs_ci_dict, "缺少子键 idxs"
+        assert "ci_squared" in current_idxs_ci_dict, "缺少子键 ci_squared"
+        assert current_idxs_ci_dict["idxs"] is not None, "idxs 值为空"
+        assert current_idxs_ci_dict["ci_squared"] is not None, "ci_squared 值为空"
         
         logger.info("所有键值验证通过")
 
     except AssertionError as e:
         logger.error(f"验证失败: {e}")
 
-    current_sampled_idxs = np.array(current_idxs_ci_dict[0]["idxs"])
+    current_sampled_idxs = np.array(current_idxs_ci_dict["idxs"])
 
     if config.cal_settings.cal_loop_num > 1:
         # 读取历次迭代保存的CI系数数据
@@ -752,11 +750,10 @@ def generate_train_csfs_descriptors(
 
         previous_idxs_ci_dict = pkl_loader(previous_idxs_ci_path)
         try:
-            assert 0 in previous_idxs_ci_dict, "缺少主键 0"
-            assert "idxs" in previous_idxs_ci_dict[0], "缺少子键 idxs"
-            assert "ci_squared" in previous_idxs_ci_dict[0], "缺少子键 ci_squared"
-            assert previous_idxs_ci_dict[0]["idxs"] is not None, "idxs 值为空"
-            assert previous_idxs_ci_dict[0]["ci_squared"] is not None, (
+            assert "idxs" in previous_idxs_ci_dict, "缺少子键 idxs"
+            assert "ci_squared" in previous_idxs_ci_dict, "缺少子键 ci_squared"
+            assert previous_idxs_ci_dict["idxs"] is not None, "idxs 值为空"
+            assert previous_idxs_ci_dict["ci_squared"] is not None, (
                 "ci_squared 值为空"
             )
 
@@ -774,9 +771,10 @@ def generate_train_csfs_descriptors(
         logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
 
     elif config.cal_settings.cal_loop_num == 1:
-        accumulated_idxs = current_idxs_ci_dict[0]["idxs"]
-        accumulated_ci_squared = current_idxs_ci_dict[0]["ci_squared"]
+        accumulated_idxs = current_idxs_ci_dict["idxs"]
+        accumulated_ci_squared = current_idxs_ci_dict["ci_squared"]
         logger.info(f"训练数据")
+        print(accumulated_idxs)
         logger.info(f"CSF总数: {len(accumulated_idxs)}")
         logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
     else:
@@ -800,10 +798,8 @@ def generate_train_csfs_descriptors(
     )
 
     accumulated_ci_data = {
-        0: {
             "idxs": accumulated_idxs,  # CSF索引（对应总池）
             "ci_squared": accumulated_ci_squared,  # 对应的CI系数平方（正确能级 × 当前计算CSF）
-        }
     }
 
     accumulated_ci_path = (
@@ -839,34 +835,28 @@ def generate_train_csfs_descriptors(
 
 def get_stay_descriptors(
             raw_csfs_descriptors: np.ndarray, 
-            sampled_csfs_idxs_dict: dict[int, list[int]]
+            sampled_csfs_idxs_array: np.ndarray
         ) -> np.ndarray:
     """
-    找出不在sampled_csfs_idxs_dict索引中的描述符
+    找出不在sampled_csfs_idxs_array索引中的描述符
 
     Args:
         raw_csfs_descriptors: 原始CSFs描述符数组
-        sampled_csfs_idxs_dict: 已选择的CSFs索引字典，格式为{block_idx: [idxs]}
+        sampled_csfs_idxs_array: 已选择的CSFs索引
 
     Returns:
-        np.ndarray: 不在sampled_csfs_idxs_dict中的描述符数组
+        np.ndarray: 不在sampled_csfs_idxs_array中的描述符数组
     """
     # 验证字典并安全获取所有已选择的索引
-    if not sampled_csfs_idxs_dict:
-        raise ValueError("sampled_csfs_idxs_dict为空，无法获取选中的CSFs索引")
+    if sampled_csfs_idxs_array.size == 0:
+        raise ValueError("sampled_csfs_idxs_array为空，无法获取选中的CSFs索引")
+    
+    mask = np.ones(raw_csfs_descriptors.shape[0], dtype=bool)
+    
+    # 2. 把要剔除的行的位置设为 False
+    mask[sampled_csfs_idxs_array] = False
+    
+    # 3. 数组切片：当你对二维数组使用一维布尔掩码时，NumPy 默认就是筛选“行”
+    # 这样会自动保留 mask 为 True 的整行数据
+    return raw_csfs_descriptors[mask]
 
-    if 0 not in sampled_csfs_idxs_dict:
-        raise KeyError(
-            f"sampled_csfs_idxs_dict中缺少键0，可用键: {list(sampled_csfs_idxs_dict.keys())}"
-        )
-
-    sampled_idxs = set(sampled_csfs_idxs_dict[0])
-
-    # 获取所有可能的索引
-    all_idxs = set(range(len(raw_csfs_descriptors)))
-
-    # 找出不在sampled_idxs中的索引
-    stay_idxs = list(all_idxs - sampled_idxs)
-
-    # 返回对应的描述符
-    return raw_csfs_descriptors[stay_idxs]
