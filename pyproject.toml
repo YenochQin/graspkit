@@ -162,7 +162,7 @@ select = ["NPY201"]
 
 
 [project.urls]
-Homepage = "https://github.com/YenochQin/graspkit-tools.git"
+Homepage = "https://github.com/YenochQin/graspkit.git"
 
 [tool.pixi.workspace]
 channels = ["https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"]
