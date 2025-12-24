@@ -128,16 +128,12 @@ def select_csfs_for_coverage(
     return updated_descriptors, selected_relative_idxs
 
 
-def save_iteration_results(
+def save_training_results(
         config,
-        training_time,
-        eval_time,
-        execution_time,
         evaluation_results,
-        selection_results,
         logger,):
     """
-    保存迭代结果到CSV文件
+    保存训练结果到CSV文件
 
     Args:
         config: 配置对象
@@ -152,13 +148,9 @@ def save_iteration_results(
     # 从新的结果结构中提取指标
     test_metrics = evaluation_results["test_metrics"]
     train_metrics = evaluation_results["train_metrics"]
-    metadata = evaluation_results["metadata"]
-
-    # 获取实际的评估时间（如果evaluation_results中有的话）
-    actual_eval_time = metadata.get("eval_time", eval_time)
 
     # 保存到CSV文件
-    results_file = config.cal_path.results_path / "iteration_results.csv"
+    results_file = config.cal_path.training_results
     
     # 检查文件是否存在，如果不存在则写入表头
     if not results_file.exists():
@@ -166,18 +158,6 @@ def save_iteration_results(
             writer = csv.writer(file)
             writer.writerow([
                 "cal_loop_num",  # 迭代轮次
-                "important_count",  # 重要组态数量
-                "ml_predicted_count",  # ML预测的高概率组态总数
-                "ml_new_count",  # ML新增的组态数（下次计算用）
-                "total_original_count",  # 原始CSFs总数
-                "current_calculation_count",  # 本轮计算的组态数
-                "data_retention_rate",  # 数据留存率（交集/本轮计算）
-                "important_retention_rate",  # 重要组态占原始比例
-                "ml_retention_rate",  # ML预测组态占原始比例
-                "training_time",
-                "actual_eval_time",  # 推理时间
-                "execution_time",
-                "execution_time",  # 总时间（现在与执行时间相同）
                 "test_f1",
                 "test_roc_auc",
                 "test_accuracy",
@@ -193,6 +173,64 @@ def save_iteration_results(
 
     # 计算过拟合差距
     overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
+
+    # 安全获取配置参数
+    cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
+
+    with open(results_file, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+
+        writer.writerow(
+            [   
+                cal_loop_num,  # 迭代轮次
+                test_metrics["f1"],
+                test_metrics["roc_auc"],
+                test_metrics["accuracy"],
+                test_metrics["precision"],
+                test_metrics["recall"],
+                train_metrics["f1"],
+                train_metrics["roc_auc"],
+                train_metrics["accuracy"],
+                train_metrics["precision"],
+                train_metrics["recall"],
+                overfitting_gap,  # 过拟合差距
+            ]
+        )
+
+    logger.info(f"迭代结果已保存到: {results_file}")
+
+
+def save_iteration_results(
+        config,
+        selection_results,
+        logger,):
+    """
+    保存迭代结果到CSV文件
+
+    Args:
+        config: 配置对象
+        selection_results: 选择结果字典，包含实际的组态选择信息
+        logger: 日志记录器
+    """
+
+    # 保存到CSV文件
+    results_file = config.cal_path.iteration_results
+    
+    # 检查文件是否存在，如果不存在则写入表头
+    if not results_file.exists():
+        with open(results_file, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                "cal_loop_num",  # 迭代轮次
+                "important_count",  # 重要组态数量
+                "ml_predicted_count",  # ML预测的高概率组态总数
+                "ml_new_count",  # ML新增的组态数（下次计算用）
+                "total_original_count",  # 原始CSFs总数
+                "current_calculation_count",  # 本轮计算的组态数
+                "data_retention_rate",  # 数据留存率（交集/本轮计算）
+                "important_retention_rate",  # 重要组态占原始比例
+                "ml_retention_rate",  # ML预测组态占原始比例
+            ])
 
     # 提取选择结果的实际数据
     important_count = selection_results.get("important_count", 0)
@@ -221,21 +259,6 @@ def save_iteration_results(
                 data_retention_rate,  # 数据留存率（交集/本轮计算）
                 important_retention_rate,  # 重要组态占原始比例
                 ml_retention_rate,  # ML预测组态占原始比例
-                training_time,
-                actual_eval_time,  # 推理时间
-                execution_time,
-                execution_time,  # 总时间（现在与执行时间相同）
-                test_metrics["f1"],
-                test_metrics["roc_auc"],
-                test_metrics["accuracy"],
-                test_metrics["precision"],
-                test_metrics["recall"],
-                train_metrics["f1"],
-                train_metrics["roc_auc"],
-                train_metrics["accuracy"],
-                train_metrics["precision"],
-                train_metrics["recall"],
-                overfitting_gap,  # 过拟合差距
             ]
         )
 
@@ -249,13 +272,11 @@ def save_iteration_results(
     if cal_loop_num > 1:
         logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
-
 def save_and_plot_results(
         evaluation_results,
         model,
         path_cfg,
         correct_levels_ci: np.ndarray,
-        asfs_position: list[int],
         caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
         y_current_cal_probability=None,
         save_model: bool = True,
@@ -270,7 +291,6 @@ def save_and_plot_results(
         evaluation_results: evaluate_model函数返回的结果字典
         model: 训练好的模型对象
         correct_levels_ci: 混合系数数据Ci用于绘图
-        asfs_position: 正确能级位置索引列表
         caled_csfs_idxs_array: 当前计算的CSF索引
         y_current_cal_probability: 当前计算CSF的预测概率，与混合系数维度匹配
         save_model: 是否保存模型文件
@@ -341,7 +361,6 @@ def save_and_plot_results(
                 cal_mix_coeff_list = np.abs(correct_levels_ci)
 
             if logger:
-                logger.info(f"使用正确能级位置的混合系数: {asfs_position}")
                 logger.info(f"混合系数维度: {cal_mix_coeff_list.shape}")
 
             # 使用传入的当前计算CSF预测概率（与ann3_proba.py保持一致的数据处理）

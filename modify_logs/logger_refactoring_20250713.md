@@ -119,11 +119,11 @@ if not validation_result['success']:
     raise FileNotFoundError(validation_result['error'])
 ```
 
-2. **`gk.load_data_files(config)`**
+2. **`gk.training_data_loader(config)`**
 ```python
-# 修改前：data_files_result = gk.load_data_files(config, logger)
+# 修改前：data_files_result = gk.training_data_loader(config, logger)
 # 修改后：
-data_files_result, load_status = gk.load_data_files(config)
+data_files_result, load_status = gk.training_data_loader(config)
 if not load_status['success']:
     logger.error(f"数据文件加载失败: {load_status['error']}")
     if 'failed_files' in load_status:
