@@ -63,6 +63,7 @@ def train_model(
             hidden_size=hidden_size,
             learning_rate=0.001,
             class_weights=class_weights,
+            model_architecture = "tensornet"
         )
         logger.info(f"创建新模型，设置类别权重: 负样本=1.0, 正样本={pos_weight:.1f}")
         logger.info(
@@ -88,6 +89,7 @@ def train_model(
                 hidden_size=hidden_size,
                 learning_rate=0.001,
                 class_weights=class_weights,  # 传入类别权重
+                model_architecture = "tensornet"
             )
 
             logger.info(
