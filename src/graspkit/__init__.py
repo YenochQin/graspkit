@@ -88,7 +88,6 @@ from .CSFs_processor import (
     CSF_item_2_dict,
     get_CSFs_file_info,
     parse_csf_2_descriptor,
-    parse_csf_2_descriptor_with_subshell,
     batch_process_csfs_to_descriptors,
     batch_process_csfs_parquet_to_descriptors
 )
@@ -205,7 +204,6 @@ __all__ = [
     "CSF_item_2_dict",
     "get_CSFs_file_info",
     "parse_csf_2_descriptor",
-    "parse_csf_2_descriptor_with_subshell",
     "batch_process_csfs_to_descriptors",
     "batch_process_csfs_parquet_to_descriptors",
     # grasp_data_extractor
