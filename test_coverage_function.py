@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-测试 validate_csf_descriptors_coverage 函数的正确性
+测试 validate_csf_desc_coverage 函数的正确性
 """
 
 import numpy as np
@@ -19,7 +19,7 @@ except ImportError as e:
 def test_coverage_function():
     """测试覆盖检测函数的正确性"""
 
-    print("=== 测试 validate_csf_descriptors_coverage 函数 ===\n")
+    print("=== 测试 validate_csf_desc_coverage 函数 ===\n")
 
     # 测试场景1: 无子壳层信息（每个轨道3个值：电子数、j值、occupancy）
     print("测试场景1: 无子壳层信息")
@@ -42,7 +42,7 @@ def test_coverage_function():
     print()
 
     # 测试函数
-    is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
+    is_covered, uncovered_orbitals = gk.validate_csf_desc_coverage(
         test_descriptors_no_subshell
     )
 
@@ -72,7 +72,7 @@ def test_coverage_function():
     print()
 
     # 测试函数
-    is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
+    is_covered, uncovered_orbitals = gk.validate_csf_desc_coverage(
         test_descriptors_with_subshell
     )
 
@@ -90,7 +90,7 @@ def test_coverage_function():
         [1, 3, 1,  0, 0, 0],  # 轨道0有1个，轨道1有0个
     ])
 
-    is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
+    is_covered, uncovered_orbitals = gk.validate_csf_desc_coverage(
         fully_covered_descriptors
     )
 
@@ -104,7 +104,7 @@ def test_coverage_function():
     print("测试场景4: 空数据")
     empty_descriptors = np.array([])
 
-    is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
+    is_covered, uncovered_orbitals = gk.validate_csf_desc_coverage(
         empty_descriptors
     )
 

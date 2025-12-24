@@ -9,7 +9,7 @@
 import os
 import shutil
 import time
-
+import math
 # 第三方库导入
 import joblib
 import numpy as np
@@ -111,7 +111,6 @@ def train_model(
 
     # Model training (只训练一次)
     logger.info("             训练模型")
-    start_time = time.time()
 
     # CPU训练优化配置
     if not torch.cuda.is_available():
@@ -374,14 +373,108 @@ def evaluate_model(
             "config_name": getattr(config, "file_name", "unknown"),
         },
     }
-    save_training_results(
-        config,
-        evaluation_results,
-        logger)
+    save_training_results(config, evaluation_results, logger)
 
     # 返回完整的结果字典
     return evaluation_results
 
+def predict_model(
+        model,
+        raw_csfs_descriptors: np.ndarray,
+        caled_csfs_idxs_array: np.ndarray,
+        correct_levels_ci_squared:np.ndarray,
+        config,
+        logger):
+    # 获取未选择的CSF索引
+    total_csfs_count = raw_csfs_descriptors.shape[0]
+    all_csfs_idxs = np.arange(total_csfs_count)
+    current_calc_idxs = caled_csfs_idxs_array
+    unselected_idxs = np.setdiff1d(all_csfs_idxs, current_calc_idxs)
+
+    # 仅对未选择的CSF进行预测
+    X_unselected_for_prediction = raw_csfs_descriptors[unselected_idxs]
+    y_unselected_prediction = model.predict(X_unselected_for_prediction)
+    y_unselected_probability = model.predict_proba(X_unselected_for_prediction)[:, 1]
+
+    logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
+    
+    # 为绘图准备当前计算CSF的预测概率
+    # 对当前计算的CSF也进行预测（用于绘图和分析）
+    X_current_calc = raw_csfs_descriptors[current_calc_idxs]
+    y_current_cal_probability = model.predict_proba(X_current_calc)[:, 1]
+    logger.info(f"当前计算CSF数量: {len(current_calc_idxs)}")
+    logger.info(f"当前计算CSF预测概率维度: {y_current_cal_probability.shape}")
+
+    # 基于混合系数选择重要组态（已验证重要组态）
+    cutoff_value = getattr(config.cal_settings, 'cutoff_value', 1e-10)
+    csfs_above_threshold_idxs = np.where(np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis = 0))[0]
+    verified_important_idxs = caled_csfs_idxs_array[csfs_above_threshold_idxs]
+    logger.info(f"已验证重要组态数: {len(verified_important_idxs)}")
+
+    # 提取已验证重要组态对应的CI系数
+    verified_important_ci_coefficients = correct_levels_ci_squared[:, csfs_above_threshold_idxs]
+    logger.info(f"已提取 {verified_important_ci_coefficients.shape[1]} 个重要组态的CI系数，维度: {verified_important_ci_coefficients.shape}")
+    
+    # ============ 智能动态选择机制 ============
+    logger.info("      组态采样")
+    logger.info("更新重要组态索引")
+    
+    # 计算当前重要组态数量作为基准
+    current_important_count = len(verified_important_idxs)
+    
+    # 获取最小重要组态数量保护
+    min_important_count = max(50, int(total_csfs_count * 0.01))  # 默认1%或50个
+    if current_important_count <= min_important_count:
+        current_important_count = min_important_count
+        logger.info(f"重要组态数目小于等于最小值，调整为{min_important_count}")
+    
+    # 获取扩展比例
+    expansion_ratio = getattr(config.cal_settings, 'expansion_ratio', 2)
+    new_sampling_CSFs_num = math.ceil(expansion_ratio * current_important_count)
+    
+    # 在未选择的CSF中找出被预测为重要的组态
+    ml_predicted_important_mask = y_unselected_prediction == 1
+    ml_predicted_important_local_idxs = np.where(ml_predicted_important_mask)[0]
+    ml_predicted_important_global_idxs = unselected_idxs[ml_predicted_important_local_idxs]
+    
+    logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
+    logger.info(f"ML预测的重要组态数（在未选择中）：{len(ml_predicted_important_global_idxs)}")
+    logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
+    
+    # 设置上限
+    sampling_ratio = getattr(config.cal_settings, 'sampling_ratio', 0.085)
+    max_sampling_CSFs_num = math.ceil(total_csfs_count * sampling_ratio)
+    if new_sampling_CSFs_num + current_important_count > max_sampling_CSFs_num:
+        new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
+        logger.info(f"目标新增组态数超过最大选择数，调整为{new_sampling_CSFs_num}")
+
+    if len(ml_predicted_important_local_idxs) >= new_sampling_CSFs_num:
+        # 情况1：ML预测的重要组态数量充足，按概率排序选择top-k
+        logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
+        
+        # 获取ML预测重要组态的概率
+        ml_predicted_important_probabilities = y_unselected_probability[ml_predicted_important_local_idxs]
+        
+        # 按概率降序排序
+        probability_sorted_idxs = np.argsort(ml_predicted_important_probabilities)[::-1]
+        
+        # 选择前new_sampling_CSFs_num个
+        top_k_local_idxs = ml_predicted_important_local_idxs[probability_sorted_idxs[:new_sampling_CSFs_num]]
+        ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
+        logger.info(f"从{len(ml_predicted_important_local_idxs)}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个")
+    else:
+        # 情况2：ML预测的重要组态数量不足，全部采用
+        logger.info(f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个")
+        ml_sampled_idxs = ml_predicted_important_global_idxs
+    
+    predict_status = {
+        'important_count': verified_important_idxs.shape[0],
+        'ml_predicted_count': ml_predicted_important_global_idxs.shape[0],
+        'ml_new_count': ml_sampled_idxs.shape[0],
+        'total_original_count': total_csfs_count,
+    }
+
+    return ml_sampled_idxs, verified_important_idxs, y_current_cal_probability, predict_status
 
 def handle_calculation_error(config, logger):
     """处理计算错误的情况"""

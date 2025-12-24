@@ -24,10 +24,11 @@ from .ml_trainer import (
     train_model,
     evaluate_model,
     handle_calculation_error,
+    predict_model,
 )
 
 from .ml_results_analyzer import (
-    validate_csf_descriptors_coverage,
+    validate_csf_desc_coverage,
     select_csfs_for_coverage,
     save_iteration_results,
     save_and_plot_results,
@@ -50,9 +51,10 @@ __all__ = [
     # ml_trainer
     "train_model",
     "evaluate_model",
+    "predict_model",
     "handle_calculation_error",
     # ml_results_analyzer
-    "validate_csf_descriptors_coverage",
+    "validate_csf_desc_coverage",
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",
