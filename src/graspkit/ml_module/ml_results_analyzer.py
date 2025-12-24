@@ -14,9 +14,11 @@ import joblib
 from .neural_network import ANNClassifier
 
 
-def validate_csf_descriptors_coverage(
-        descriptors: np.ndarray
-        ) -> Tuple[bool, list[int]]:
+def validate_csf_desc_coverage(
+        final_sampled_idxs: np.ndarray,
+        raw_csfs_descriptors: np.ndarray,
+        logger
+        ) -> np.ndarray:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
     对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
@@ -27,8 +29,12 @@ def validate_csf_descriptors_coverage(
         tuple[bool, list[int]]: (是否满足覆盖条件, 未覆盖的轨道索引列表)
     """
     # 检查输入参数
-    if descriptors.size == 0:
-        return False, []
+    
+    if final_sampled_idxs.size == 0:
+        error_msg = f"final_sampled_idxs 为空，输入错误"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    current_sampled_descriptors = raw_csfs_descriptors[final_sampled_idxs]
 
     # 确定每个轨道的电子填充位置索引
     values_per_orbital = 3
@@ -37,12 +43,12 @@ def validate_csf_descriptors_coverage(
     # 直接通过切片获取每个轨道的电子填充
     electron_idxs = np.arange(
                             electron_idx_in_orbital,
-                            descriptors.shape[1],
+                            current_sampled_descriptors.shape[1],
                             values_per_orbital,
                             )
 
     # 提取所有CSF的电子数信息
-    electron_counts = descriptors[
+    electron_counts = current_sampled_descriptors[
                             :, electron_idxs
                             ]  # 形状为 (num_csfs, actual_n_orbitals)
 
@@ -56,8 +62,24 @@ def validate_csf_descriptors_coverage(
 
     # 返回验证结果
     is_covered = len(uncovered_orbitals_idxs) == 0
-    return is_covered, uncovered_orbitals_idxs
+    if not is_covered:
+        logger.info(f"检测到未覆盖的轨道索引: {uncovered_orbitals_idxs}")
+        logger.info(f"开始补充选择以满足轨道覆盖条件")
+        all_csfs_idxs = np.arange(raw_csfs_descriptors.shape[0])
+        remaining_candidates_idxs = np.setdiff1d(all_csfs_idxs, final_sampled_idxs)
+        remaining_descriptors = raw_csfs_descriptors[remaining_candidates_idxs]
+        # 修复：使用正确的参数顺序调用select_csfs_for_coverage函数
+        _, additional_idxs_relative = select_csfs_for_coverage(
+            current_sampled_descriptors,  # 当前已选择的CSFs描述符
+            uncovered_orbitals_idxs,            # 未覆盖的轨道索引列表
+            remaining_descriptors          # 剩余候选CSFs的描述符
+        )
+        additional_idxs = remaining_candidates_idxs[additional_idxs_relative]
+        additional_idxs_array = np.array(additional_idxs)
+        final_sampled_idxs = np.unique(np.sort(np.concatenate([final_sampled_idxs, additional_idxs_array])))
+        logger.info(f"使用新函数补充选择了 {len(additional_idxs)} 个CSF以满足轨道覆盖条件")
 
+    return final_sampled_idxs
 
 def select_csfs_for_coverage(
         descriptors: np.ndarray,

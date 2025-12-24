@@ -123,12 +123,13 @@ from .ml_module import (
     get_stay_descriptors,
     train_model,
     evaluate_model,
+    predict_model,
     save_iteration_results,
     check_energy_convergence,
     evaluate_calculation_convergence,
     handle_calculation_error,
     save_and_plot_results,
-    validate_csf_descriptors_coverage,
+    validate_csf_desc_coverage,
     select_csfs_for_coverage,
 )
 
@@ -242,9 +243,10 @@ __all__ = [
     # ml_trainer
     "train_model",
     "evaluate_model",
+    "predict_model",
     "handle_calculation_error",
     # ml_results_analyzer
-    "validate_csf_descriptors_coverage",
+    "validate_csf_desc_coverage",
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",

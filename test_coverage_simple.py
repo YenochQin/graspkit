@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-简单测试 validate_csf_descriptors_coverage 函数
+简单测试 validate_csf_desc_coverage 函数
 """
 
 import numpy as np
@@ -19,7 +19,7 @@ except ImportError as e:
 def test_simple_coverage():
     """简单测试覆盖检测函数"""
 
-    print("=== 简单测试 validate_csf_descriptors_coverage 函数 ===\n")
+    print("=== 简单测试 validate_csf_desc_coverage 函数 ===\n")
 
     # 测试无子壳层信息：2个轨道，3个CSF
     # 每个轨道3个值: [电子数, j值, occupancy]
@@ -39,7 +39,7 @@ def test_simple_coverage():
     print()
 
     # 测试无子壳层信息
-    is_covered, uncovered_orbitals = gk.validate_csf_descriptors_coverage(
+    is_covered, uncovered_orbitals = gk.validate_csf_desc_coverage(
         test_descriptors
     )
 
