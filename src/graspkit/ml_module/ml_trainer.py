@@ -21,6 +21,7 @@ from sklearn.model_selection import train_test_split
 
 # 本地模块导入
 from .neural_network import ANNClassifier
+from .ml_results_analyzer import save_training_results
 from ..data_IO.produced_data_writor import update_config
 
 
@@ -28,7 +29,6 @@ def train_model(
         config,
         caled_csfs_descriptors: np.ndarray,
         correct_levels_ci: np.ndarray,
-        asfs_position: list[int],
         logger):
     """训练机器学习模型"""
 
@@ -166,7 +166,6 @@ def train_model(
         batch_size=batch_size_optimized,
         max_epochs=max_epochs_optimized,
     )
-    training_time = time.time() - start_time
 
     # Model evaluation
     logger.info("             预测与评估")
@@ -244,7 +243,6 @@ def train_model(
         f"混合系数平均值:{csf_mix_coeff_squared_sum.mean():.6f}, 零值数量:{np.sum(csf_mix_coeff_squared_sum == 0)}"
     )
     logger.info(f"y_probability_all形状: {y_probability_all.shape}")
-    logger.info(f"正确能级位置: {asfs_position}")
 
     f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
         y_test, y_prediction, y_probability
@@ -267,7 +265,7 @@ def train_model(
         f"AUC:{roc_auc_train}, f1:{f1_train}, accuracy:{accuracy_train}, precision:{precision_train}, recall:{recall_train}"
     )
 
-    return model, X_train, X_test, y_train, y_test, training_time
+    return model, X_train, X_test, y_train, y_test
 
 
 def evaluate_model(
@@ -311,19 +309,34 @@ def evaluate_model(
     y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))[:, 1]
 
     # 评估指标计算
-    f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
+    test_f1, test_roc_auc, test_accuracy, test_precision, test_recall = ANNClassifier.model_evaluation(
         y_test, y_prediction, y_probability
     )
 
     # 训练集评估（过拟合监控）
-    f1_train, roc_auc_train, accuracy_train, precision_train, recall_train = (
+    train_f1, train_roc_auc, train_accuracy, train_precision, train_recall = (
         ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
     )
 
-    logger.info("模型评估完成")
+    logger.info("测试集预测结果:")
+    logger.info(f"AUC: {test_roc_auc:.4f}, F1: {test_f1:.4f}, Accuracy: {test_accuracy:.4f}")
+    logger.info(f"Precision: {test_precision:.4f}, Recall: {test_recall:.4f}")
+    logger.info("训练集预测结果:")
+    logger.info(f"AUC: {train_roc_auc:.4f}, F1: {train_f1:.4f}, Accuracy: {train_accuracy:.4f}")
+    logger.info(f"Precision: {train_precision:.4f}, Recall: {train_recall:.4f}")
+    
+    # 过拟合监控
+    overfitting_check = train_f1 - test_f1
+    logger.info(f'过拟合检查差异(训练-测试): {overfitting_check:.4f}')
+    overfitting_threshold = getattr(config.ml_config, 'overfitting_threshold', 0.1)
+    underfitting_threshold = getattr(config.ml_config, 'underfitting_threshold', -0.05)
+    if overfitting_check > overfitting_threshold:
+        logger.warning("检测到可能的过拟合现象")
+    elif overfitting_check < underfitting_threshold:
+        logger.warning("检测到可能的欠拟合现象")
 
-    # 返回完整的结果字典
-    return {
+    logger.info("模型评估完成")
+    evaluation_results = {
         # 预测结果
         "predictions": {
             "y_prediction_test": y_prediction,
@@ -339,19 +352,19 @@ def evaluate_model(
         "true_labels": {"y_test": y_test, "y_train": y_train},
         # 测试集评估指标
         "test_metrics": {
-            "f1": f1,
-            "roc_auc": roc_auc,
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
+            "f1": test_f1,
+            "roc_auc": test_roc_auc,
+            "accuracy": test_accuracy,
+            "precision": test_precision,
+            "recall": test_recall,
         },
         # 训练集评估指标（过拟合检测）
         "train_metrics": {
-            "f1": f1_train,
-            "roc_auc": roc_auc_train,
-            "accuracy": accuracy_train,
-            "precision": precision_train,
-            "recall": recall_train,
+            "f1": train_f1,
+            "roc_auc": train_roc_auc,
+            "accuracy": train_accuracy,
+            "precision": train_precision,
+            "recall": train_recall,
         },
         # 元数据
         "metadata": {
@@ -361,6 +374,13 @@ def evaluate_model(
             "config_name": getattr(config, "file_name", "unknown"),
         },
     }
+    save_training_results(
+        config,
+        evaluation_results,
+        logger)
+
+    # 返回完整的结果字典
+    return evaluation_results
 
 
 def handle_calculation_error(config, logger):
