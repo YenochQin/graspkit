@@ -271,13 +271,12 @@ def train_model(
 
 
 def evaluate_model(
-        model, 
-        X_train, 
-        X_test, 
-        y_train, 
-        y_test, 
-        X_unselected, 
-        config, 
+        model,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        config,
         logger):
     """
     评估模型性能，返回所有预测结果和评估指标
@@ -285,29 +284,30 @@ def evaluate_model(
     Args:
         model: 训练好的模型
         X_train, X_test, y_train, y_test: 训练和测试数据
-        X_unselected: 其他需要预测的数据
         config: 配置对象
         logger: 日志记录器
 
     Returns:
         dict: 包含所有预测结果、概率、评估指标和元数据的完整结果字典
+
+    Note:
+        仅对训练集和测试集进行评估，不对 X_unselected 进行预测
+        X_unselected 的预测应在推理阶段单独进行（参考旧版 ann3_proba.py）
     """
 
     logger.info("开始预测与评估")
 
-    # 预测
+    # 预测 - 仅对训练集和测试集
     start_time = time.time()
     y_prediction = model.predict(X_test)
-    y_prediction_other = model.predict(X_unselected)
     eval_time = time.time() - start_time
 
     # 预测概率
     y_probability = model.predict_proba(X_test)[:, 1]
     y_prediction_train = model.predict(X_train)
     y_probability_train = model.predict_proba(X_train)[:, 1]
-    y_probability_other = model.predict_proba(X_unselected)[:, 1]
 
-    # 生成完整数据集的概率用于分析
+    # 生成完整训练数据集的概率用于分析
     y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))[:, 1]
 
     # 评估指标计算
@@ -328,13 +328,11 @@ def evaluate_model(
         "predictions": {
             "y_prediction_test": y_prediction,
             "y_prediction_train": y_prediction_train,
-            "y_prediction_other": y_prediction_other,
         },
         # 预测概率
         "probabilities": {
             "y_probability_test": y_probability,
             "y_probability_train": y_probability_train,
-            "y_probability_other": y_probability_other,
             "y_probability_all": y_probability_all,
         },
         # 真实标签
@@ -360,7 +358,6 @@ def evaluate_model(
             "eval_time": eval_time,
             "test_samples": len(y_test),
             "train_samples": len(y_train),
-            "other_samples": len(X_unselected),
             "config_name": getattr(config, "file_name", "unknown"),
         },
     }

@@ -312,15 +312,8 @@ def save_and_plot_results(
         ).write_parquet(train_file)
         saved_files["train_data"] = str(train_file)
 
-        # 保存其他数据预测结果到results目录
-        other_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_other_predictions.parquet"
-        pl.DataFrame(
-            {
-                "y_prediction": evaluation_results["predictions"]["y_prediction_other"],
-                "y_proba": evaluation_results["probabilities"]["y_probability_other"],
-            }
-        ).write_parquet(other_file)
-        saved_files["other_predictions"] = str(other_file)
+        # 注意：不再保存other_predictions，因为evaluate_model不再对X_unselected进行预测
+        # X_unselected的预测应在推理阶段单独进行（参考旧版ann3_proba.py）
 
         if logger:
             logger.info(f"预测数据已保存到: {test_file} 和 {train_file}")
