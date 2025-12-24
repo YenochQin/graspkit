@@ -464,124 +464,6 @@ def parse_csf_2_descriptor(
 
     return csf_descriptor
 
-def parse_csf_2_descriptor_with_subshell(
-    peel_subshells_list: list[str], csf: list[str]
-) -> np.ndarray:
-    """
-    包含子壳层信息的CSF描述符解析函数
-
-    描述符格式（每个轨道5个数值）：
-    [主量子数, kappa值, 电子数, 中间J值, 耦合J值]
-
-    Args:
-        peel_subshells_list: 剥离子壳层列表，如 ['5s', '4d-', '4d', ...]
-        csf: CSF的三行数据
-
-    Returns:
-        np.ndarray: 长度为 5*len(peel_subshells_list) 的描述符数组
-    """
-
-    # 预处理CSF数据
-    subshells_line, middle_line_raw, coupling_line_raw = [line.rstrip() for line in csf]
-    line_length = len(subshells_line)
-    middle_line = middle_line_raw.ljust(line_length)
-    coupling_line = coupling_line_raw[4:-5].ljust(line_length)
-
-    # 提取最终J值
-    final_J = coupling_line_raw[-5:-1]
-    final_double_J = J_to_doubleJ(final_J)
-
-    # 分块处理
-    subshell_list = chunk_string(subshells_line, 9)
-    middle_line_list = chunk_string(middle_line, 9)
-    coupling_line_list = chunk_string(coupling_line, 9)
-
-    # 初始化描述符数组（每个轨道5个数值）
-    csf_descriptor = np.zeros(5 * len(peel_subshells_list), dtype=np.float32)
-    orbs_occupied_idxs = []
-
-    # 首先为所有轨道填充子壳层信息（主量子数和kappa值）
-    for idx, subshell in enumerate(peel_subshells_list):
-        # 直接解析子壳层名称
-        # 提取主量子数（数字部分）
-        main_quantum_num = int("".join(filter(str.isdigit, subshell)))
-
-        # 提取轨道类型（字母部分，包括可能的'-'）
-        orbital_part = "".join(filter(lambda x: not x.isdigit(), subshell))
-        # 确保格式正确（如 's ', 'd-', 'f '等）
-        if not orbital_part.endswith(" ") and not orbital_part.endswith("-"):
-            orbital_part += " "
-
-        kappa_value = str_subshell_2_kappa(orbital_part)
-
-        descriptor_idx = idx * 5
-        csf_descriptor[descriptor_idx] = main_quantum_num  # 第1位：主量子数
-        csf_descriptor[descriptor_idx + 1] = kappa_value  # 第2位：kappa值
-
-    # 处理每个子壳层的电子数和J值信息
-    for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
-        zip(subshell_list, middle_line_list, coupling_line_list)
-    ):
-        subshell = subshell_charges[:5].strip()
-        subshell_electron_num = int(subshell_charges[6:8])
-        is_last = i == len(subshell_list) - 1
-
-        # 判断轨道是否填满
-        is_full = if_subshell_full_charged(subshell, subshell_electron_num)
-
-        # 处理中间J值
-        temp_middle_item = 0
-        if not middle_line_item.isspace():
-            temp_middle_item = middle_line_item.split(";")[-1].strip()
-            temp_middle_item = J_to_doubleJ(temp_middle_item)
-            # 未填满轨道J值乘以2增强特征
-            if not is_full:
-                temp_middle_item *= 2
-
-        # 处理耦合J值
-        temp_coupling_item = 0
-        if not coupling_line_item.isspace():
-            temp_coupling_item = coupling_line_item.strip()
-            temp_coupling_item = J_to_doubleJ(temp_coupling_item)
-            if not is_full:
-                temp_coupling_item *= 2
-        elif not middle_line_item.isspace():
-            temp_coupling_item = temp_middle_item
-
-        # 最后一个子壳层使用最终J值
-        if is_last:
-            temp_coupling_item = final_double_J * (2 if not is_full else 1)
-
-        # 查找轨道索引
-        try:
-            orbs_idx = peel_subshells_list.index(subshell)
-            descriptor_idx = orbs_idx * 5
-        except ValueError:
-            print(f"Warning: {subshell} not found in orbs list")
-            continue
-
-        orbs_occupied_idxs.append(orbs_idx)
-
-        # 填满轨道J值设为0
-        if is_full:
-            temp_middle_item = 0
-            temp_coupling_item = 0
-
-        # 填充描述符的第3、4、5位
-        csf_descriptor[descriptor_idx + 2] = subshell_electron_num  # 第3位：电子数
-        csf_descriptor[descriptor_idx + 3] = temp_middle_item  # 第4位：中间J值
-        csf_descriptor[descriptor_idx + 4] = temp_coupling_item  # 第5位：耦合J值
-
-    # 处理未占用的轨道（第5位填最终J值的二倍）
-    all_orbs_idxs = set(range(len(peel_subshells_list)))
-    occupied_orbs_idxs = set(orbs_occupied_idxs)
-    remaining_orbs_idxs = list(all_orbs_idxs - occupied_orbs_idxs)
-
-    for idx in remaining_orbs_idxs:
-        csf_descriptor[idx * 5 + 4] = final_double_J * 2  # 第5位：最终J值的二倍
-
-    return csf_descriptor
-
 #######################################################################
 
 def batch_process_csfs_to_descriptors(
@@ -620,7 +502,7 @@ def batch_process_csfs_to_descriptors(
                         f"Warning: CSF item in block {block_idx}, idx {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
                     )
                     continue
-                descriptor = parse_csf_2_descriptor_with_subshell(
+                descriptor = parse_csf_2_descriptor(
                         peel_subshells_list, csf_item
                     )
                 all_descriptors.append(descriptor)
@@ -658,7 +540,7 @@ def batch_process_csfs_parquet_to_descriptors(
     descriptors_df = CSFs_file_data.select(
         descriptor = pl.concat_list(["line1", "line2", "line3"])
             .map_elements(
-                lambda x: parse_csf_2_descriptor_with_subshell(peel_subshells_list, x).tolist(),
+                lambda x: parse_csf_2_descriptor(peel_subshells_list, x).tolist(),
                 return_dtype=pl.List(pl.Float64) 
             )
     )
