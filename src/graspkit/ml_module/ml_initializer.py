@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Tuple
 
 import csv
+from collections import Counter
 import numpy as np
 import pandas as pd
 import rtoml
@@ -319,67 +320,73 @@ def training_data_loader(
 
 def check_configuration_coupling(
         paths_cfg,
-        energy_level_data_pd: pd.DataFrame, 
+        energy_level_data_pd: pd.DataFrame,
         rmix_file_data: MixCoefficientData,
         spectral_term: list,
         cal_loop_num: int,
         logger
     ):
-    """检查组态耦合是否正确"""
+    """检查组态耦合是否正确
+
+    优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
+    """
     cal_configuration_list = energy_level_data_pd["configuration"].tolist()
 
-    # 统计spectral_term中每个谱项的出现次数
-    spectral_term_counts = {}
-    for term in spectral_term:
-        spectral_term_counts[term] = spectral_term_counts.get(term, 0) + 1
+    # 优化1: 一次遍历同时构建计数和位置映射
+    term_positions = {}
+    actual_counts = Counter()
 
-    # 检查每个光谱项的出现次数是否与配置中的要求一致，并记录位置
+    for idx, term in enumerate(cal_configuration_list):
+        if term in spectral_term:
+            actual_counts[term] += 1
+            term_positions.setdefault(term, []).append(idx)
+
+    # 优化2: 使用Counter构建期望计数
+    expected_counts = Counter(spectral_term)
+
+    # 检查并收集位置
     spectral_term_positions = []
-    all_found_correctly = True
+    errors = []
 
-    for term in set(spectral_term):  # 使用set去重，避免重复检查
-        expected_count = spectral_term_counts[term]
-        actual_count = cal_configuration_list.count(term)
+    for term in expected_counts:
+        expected = expected_counts[term]
+        actual = actual_counts.get(term, 0)
+        positions = term_positions.get(term, [])
 
-        if actual_count == expected_count:
-            # 找到所有出现位置
-            positions = [i for i, x in enumerate(cal_configuration_list) if x == term]
+        if actual == expected:
             spectral_term_positions.extend(positions)
-            if expected_count == 1:
+            if expected == 1:
                 logger.info(f"光谱项 '{term}' 在位置 {positions[0]} 找到")
             else:
                 logger.info(
-                    f"光谱项 '{term}' 在位置 {positions} 找到（期望 {expected_count} 次，实际 {actual_count} 次）"
+                    f"光谱项 '{term}' 在位置 {positions} 找到（期望{expected}次，实际{actual}次）"
                 )
-        elif actual_count == 0:
-            logger.error(f"光谱项 '{term}' 未找到")
-            all_found_correctly = False
+        elif actual == 0:
+            errors.append(f"光谱项 '{term}' 未找到")
         else:
-            logger.error(
-                f"光谱项 '{term}' 出现 {actual_count} 次，期望 {expected_count} 次"
-            )
-            all_found_correctly = False
+            errors.append(f"光谱项 '{term}' 出现{actual}次，期望{expected}次")
 
-    if all_found_correctly:
-        # 按位置排序，保持一致的输出顺序
-        spectral_term_positions.sort()
-        logger.info(
-            f"cal_loop {cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
-        )
-        # 选择spectral_term_positions索引对应的行
-        selected_energy_data = energy_level_data_pd.iloc[spectral_term_positions]
-        # 选择spectral_term_positions索引在rmix文件中对应的ci系数
-        correct_levels_ci = rmix_file_data.mix_coefficient_list[0][spectral_term_positions]
-        # 保存正确的能级数据为CSV
-        correct_levels_csv_path = paths_cfg.cal_loop_path / f'{paths_cfg.loop_file_name}_correct_levels.csv'
-        selected_energy_data.to_csv(correct_levels_csv_path, index=False)
-        logger.info(f"正确的能级数据已保存到: {correct_levels_csv_path}")
-
-        return True, selected_energy_data, correct_levels_ci
-    else:
+    # 优化3: 提前返回模式，减少嵌套
+    if errors:
+        for err in errors:
+            logger.error(err)
         error_msg = f"cal_loop {cal_loop_num} 组态耦合错误"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
+
+    # 成功路径
+    spectral_term_positions.sort()
+    logger.info(
+        f"cal_loop {cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
+    )
+
+    selected_energy_data = energy_level_data_pd.iloc[spectral_term_positions]
+    correct_levels_ci = rmix_file_data.mix_coefficient_list[0][spectral_term_positions]
+    correct_levels_csv_path = paths_cfg.cal_loop_path / f'{paths_cfg.loop_file_name}_correct_levels.csv'
+    selected_energy_data.to_csv(correct_levels_csv_path, index=False)
+    logger.info(f"正确的能级数据已保存到: {correct_levels_csv_path}")
+
+    return True, selected_energy_data, correct_levels_ci
 
 
 def check_energy_convergence(
@@ -457,7 +464,7 @@ def check_energy_convergence(
 def evaluate_calculation_convergence(
         config, 
         logger, 
-        cal_loop_csfs_count=None
+        cal_loop_csfs_count: int
     ):
     """
     检查GRASP计算的收敛性
@@ -470,202 +477,135 @@ def evaluate_calculation_convergence(
     Args:
         config: 配置对象
         logger: 日志记录器
-        cal_loop_csfs_count: 当前轮的CSFs数量（可选，如果提供则不从文件读取）
+        cal_loop_csfs_count: 当前轮的CSFs数量
 
     Returns:
-        bool: True表示继续计算，False表示已收敛停止计算
+        bool: True表示继续计算, False表示已收敛停止计算
     """
-    try:
-        # 读取最近3次计算的能级数据
-        energy_data_list = []
 
-        for i in range(3):
-            loop_num = config.cal_settings.cal_loop_num - 2 + i  # 前3次：当前-2, 当前-1, 当前
-            csv_path = (
-                config.cal_settings.root_path
-                / f"{config.target.conf}_{loop_num}"
-                / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+    # 读取最近3次计算的能级数据
+    energy_data_list = []
+
+    for i in range(3):
+        loop_num = config.cal_settings.cal_loop_num - 2 + i  # 前3次：当前-2, 当前-1, 当前
+        csv_path = (
+            config.cal_settings.root_path
+            / f"{config.target.conf}_{loop_num}"
+            / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+        )
+
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            energy_data_list.append(df)
+            logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
+        else:
+            logger.warning(f"未找到第{loop_num}轮能级数据文件: {csv_path}")
+            return True  # 文件不存在，继续计算
+
+    if len(energy_data_list) < 3:
+        logger.warning("无法读取完整的3轮能级数据，继续计算")
+        return True
+
+    # 读取组态数量数据
+    csfs_num = []  # 存储每轮的组态数量
+    iteration_df = pd.read_csv(config.cal_path.iteration_results)
+    # 获取前两轮的组态数量
+    for i in range(2):  # 只读取前两轮
+        loop_num = config.cal_settings.cal_loop_num - 2 + i
+        # 查找对应轮次的数据
+        loop_data = iteration_df[iteration_df["iteration"] == loop_num]
+        if not loop_data.empty:
+            current_count = loop_data["current_calculation_count"].iloc[0]
+            csfs_num.append(current_count)
+            logger.info(f"读取第{loop_num}轮组态数量: {current_count}")
+        else:
+            logger.warning(f"在iteration_results.csv中未找到第{loop_num}轮的数据")
+            return True  # 数据不完整，继续计算
+    # 添加当前轮的CSFs数量
+    csfs_num.append(cal_loop_csfs_count)
+    logger.info(f"读取第{config.cal_settings.cal_loop_num}轮组态数量: {cal_loop_csfs_count}")
+    # === 1. 能级标准差计算 ===
+    # 获取所有configuration
+    configurations = energy_data_list[0]["configuration"].tolist()
+
+    # 存储每个能级的标准差
+    std_deviations = []
+
+    for level_cfg in configurations:
+        # 获取该configuration在3轮计算中的能级值
+        energy_values = []
+        for df in energy_data_list:
+            if level_cfg in df["configuration"].values:
+                energy = df[df["configuration"] == level_cfg]["EnergyTotal"].iloc[0]
+                energy_values.append(energy)
+            else:
+                logger.warning(
+                    f"在第{len(energy_values) + 1}轮数据中未找到configuration: {level_cfg}"
+                )
+                return True  # 数据不完整，继续计算
+
+        if len(energy_values) == 3:
+            # 计算标准差
+            energy_std = np.std(energy_values)
+            std_deviations.append(energy_std)
+
+            logger.info(
+                f"Configuration {level_cfg}: "
+                f"能级值={energy_values}, "
+                f"标准差={energy_std:.5e}"
             )
 
-            if csv_path.exists():
-                df = pd.read_csv(csv_path)
-                energy_data_list.append(df)
-                logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
-            else:
-                logger.warning(f"未找到第{loop_num}轮能级数据文件: {csv_path}")
-                return True  # 文件不存在，继续计算
+    # 计算所有能级的平均标准差
+    avg_energy_std = np.mean(std_deviations)
 
-        if len(energy_data_list) < 3:
-            logger.warning("无法读取完整的3轮能级数据，继续计算")
-            return True
+    # === 2. 组态数量相对标准差计算 ===
+    # 计算组态数量的标准差和相对标准差
+    csfs_num_std = np.std(csfs_num)
+    csfs_num_mean = np.mean(csfs_num)
 
-        # 读取组态数量数据
-        iteration_results_path = config.cal_settings.root_path / "results" / "iteration_results.csv"
-        csfs_num = []  # 存储每轮的组态数量
+    if csfs_num_mean > 0:
+        csfs_num_relative_std = csfs_num_std / csfs_num_mean
+    else:
+        csfs_num_relative_std = csfs_num_std  # 如果平均值为零，直接使用标准差
 
-        # 如果提供了当前轮的CSFs数量，则优先使用
-        if cal_loop_csfs_count is not None:
-            # 从iteration_results.csv读取前两轮的数据，使用传入的当前轮数据
-            if iteration_results_path.exists():
-                try:
-                    iteration_df = pd.read_csv(iteration_results_path)
-                    # 获取前两轮的组态数量
-                    for i in range(2):  # 只读取前两轮
-                        loop_num = config.cal_settings.cal_loop_num - 2 + i
-                        # 查找对应轮次的数据
-                        loop_data = iteration_df[iteration_df["iteration"] == loop_num]
-                        if not loop_data.empty:
-                            current_count = loop_data["current_calculation_count"].iloc[
-                                0
-                            ]
-                            csfs_num.append(current_count)
-                            logger.info(f"读取第{loop_num}轮组态数量: {current_count}")
-                        else:
-                            logger.warning(
-                                f"在iteration_results.csv中未找到第{loop_num}轮的数据"
-                            )
-                            return True  # 数据不完整，继续计算
+    # 从配置文件读取收敛阈值（如果没有设置则使用默认值）
+    energy_std_threshold = getattr(
+        config.cal_settings, "energy_std_threshold", 1e-5
+    )  # 能级标准差阈值
+    csfs_num_relative_std_threshold = getattr(
+        config.cal_settings, "csfs_num_relative_std_threshold", 1e-3
+    )  # 组态数量相对标准差阈值（5%）
 
-                    # 添加当前轮的CSFs数量
-                    csfs_num.append(cal_loop_csfs_count)
-                    logger.info(
-                        f"读取第{config.cal_settings.cal_loop_num}轮组态数量: {cal_loop_csfs_count}"
-                    )
+    logger.info(f"收敛性统计:")
+    logger.info(f"  最近3轮组态数量: {csfs_num}")
+    logger.info(f"  组态数量平均值: {csfs_num_mean:.1f}")
+    logger.info(f"  组态数量标准差: {csfs_num_std:.2f}")
+    logger.info(
+        f"  组态数量相对标准差: {csfs_num_relative_std:.4f} (阈值: {csfs_num_relative_std_threshold:.4f})"
+    )
+    logger.info(
+        f"  能级平均标准差: {avg_energy_std:.5e} (阈值: {energy_std_threshold:.5e})"
+    )
+    logger.info(f"  能级标准差收敛: {avg_energy_std < energy_std_threshold}")
+    logger.info(
+        f"  组态数量相对标准差收敛: {csfs_num_relative_std < csfs_num_relative_std_threshold}"
+    )
 
-                    if len(csfs_num) < 3:
-                        logger.warning("无法读取完整的3轮组态数量数据，继续计算")
-                        return True
+    # 判断收敛性：两个条件都满足才算收敛
+    energy_converged = avg_energy_std < energy_std_threshold
+    csfs_num_converged = csfs_num_relative_std < csfs_num_relative_std_threshold
+    is_converged = energy_converged and csfs_num_converged
 
-                except Exception as e:
-                    logger.warning(f"读取iteration_results.csv文件出错: {e}")
-                    return True
-            else:
-                logger.warning(
-                    f"未找到iteration_results.csv文件: {iteration_results_path}"
-                )
-                return True
-        else:
-            # 原有逻辑：从iteration_results.csv读取所有3轮数据
-            if iteration_results_path.exists():
-                try:
-                    iteration_df = pd.read_csv(iteration_results_path)
-                    # 获取最近3轮的组态数量
-                    for i in range(3):
-                        loop_num = config.cal_settings.cal_loop_num - 2 + i
-                        # 查找对应轮次的数据
-                        loop_data = iteration_df[iteration_df["iteration"] == loop_num]
-                        if not loop_data.empty:
-                            current_count = loop_data["current_calculation_count"].iloc[
-                                0
-                            ]
-                            csfs_num.append(current_count)
-                            logger.info(f"读取第{loop_num}轮组态数量: {current_count}")
-                        else:
-                            logger.warning(
-                                f"在iteration_results.csv中未找到第{loop_num}轮的数据"
-                            )
-                            return True  # 数据不完整，继续计算
+    if is_converged:
+        logger.info("能级和组态数量都已收敛，停止计算")
+        return False
+    else:
+        if not energy_converged:
+            logger.info("能级未完全收敛，继续计算")
+        if not csfs_num_converged:
+            logger.info("组态数量未稳定收敛，继续计算")
+        return True
 
-                    if len(csfs_num) < 3:
-                        logger.warning("无法读取完整的3轮组态数量数据，继续计算")
-                        return True
-
-                except Exception as e:
-                    logger.warning(f"读取iteration_results.csv文件出错: {e}")
-                    return True
-            else:
-                logger.warning(
-                    f"未找到iteration_results.csv文件: {iteration_results_path}"
-                )
-                return True
-
-        # === 1. 能级标准差计算 ===
-        # 获取所有configuration
-        configurations = energy_data_list[0]["configuration"].tolist()
-
-        # 存储每个能级的标准差
-        std_deviations = []
-
-        for config_name in configurations:
-            # 获取该configuration在3轮计算中的能级值
-            energy_values = []
-            for df in energy_data_list:
-                if config_name in df["configuration"].values:
-                    energy = df[df["configuration"] == config_name]["EnergyTotal"].iloc[
-                        0
-                    ]
-                    energy_values.append(energy)
-                else:
-                    logger.warning(
-                        f"在第{len(energy_values) + 1}轮数据中未找到configuration: {config_name}"
-                    )
-                    return True  # 数据不完整，继续计算
-
-            if len(energy_values) == 3:
-                # 计算标准差
-                energy_std = np.std(energy_values)
-                std_deviations.append(energy_std)
-
-                logger.debug(
-                    f"Configuration {config_name}: "
-                    f"能级值={energy_values}, "
-                    f"标准差={energy_std:.5e}"
-                )
-
-        # 计算所有能级的平均标准差
-        avg_energy_std = np.mean(std_deviations)
-
-        # === 2. 组态数量相对标准差计算 ===
-        # 计算组态数量的标准差和相对标准差
-        csfs_num_std = np.std(csfs_num)
-        csfs_num_mean = np.mean(csfs_num)
-
-        if csfs_num_mean > 0:
-            csfs_num_relative_std = csfs_num_std / csfs_num_mean
-        else:
-            csfs_num_relative_std = csfs_num_std  # 如果平均值为零，直接使用标准差
-
-        # 从配置文件读取收敛阈值（如果没有设置则使用默认值）
-        energy_std_threshold = getattr(
-            config, "energy_std_threshold", 1e-5
-        )  # 能级标准差阈值
-        csfs_num_relative_std_threshold = getattr(
-            config, "csfs_num_relative_std_threshold", 1e-3
-        )  # 组态数量相对标准差阈值（5%）
-
-        logger.info(f"收敛性统计:")
-        logger.info(f"  最近3轮组态数量: {csfs_num}")
-        logger.info(f"  组态数量平均值: {csfs_num_mean:.1f}")
-        logger.info(f"  组态数量标准差: {csfs_num_std:.2f}")
-        logger.info(
-            f"  组态数量相对标准差: {csfs_num_relative_std:.4f} (阈值: {csfs_num_relative_std_threshold:.4f})"
-        )
-        logger.info(
-            f"  能级平均标准差: {avg_energy_std:.5e} (阈值: {energy_std_threshold:.5e})"
-        )
-        logger.info(f"  能级标准差收敛: {avg_energy_std < energy_std_threshold}")
-        logger.info(
-            f"  组态数量相对标准差收敛: {csfs_num_relative_std < csfs_num_relative_std_threshold}"
-        )
-
-        # 判断收敛性：两个条件都满足才算收敛
-        energy_converged = avg_energy_std < energy_std_threshold
-        csfs_num_converged = csfs_num_relative_std < csfs_num_relative_std_threshold
-        is_converged = energy_converged and csfs_num_converged
-
-        if is_converged:
-            logger.info("能级和组态数量都已收敛，停止计算")
-            return False
-        else:
-            if not energy_converged:
-                logger.info("能级未完全收敛，继续计算")
-            if not csfs_num_converged:
-                logger.info("组态数量未稳定收敛，继续计算")
-            return True
-
-    except Exception as e:
-        logger.error(f"收敛检查过程中出错: {e}")
-        return True  # 出错时继续计算
 
 
 def merge_historical_ci_data(

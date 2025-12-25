@@ -32,6 +32,7 @@ from .ml_results_analyzer import (
     select_csfs_for_coverage,
     save_iteration_results,
     save_and_plot_results,
+    ml_results_statistics
 )
 
 __all__ = [
@@ -58,4 +59,5 @@ __all__ = [
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",
+    "ml_results_statistics"
 ]

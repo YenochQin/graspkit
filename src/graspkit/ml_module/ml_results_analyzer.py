@@ -12,7 +12,7 @@ import numpy as np
 import joblib
 
 from .neural_network import ANNClassifier
-
+from ..utils.data_modules import MLDataCounts
 
 def validate_csf_desc_coverage(
         final_sampled_idxs: np.ndarray,
@@ -427,7 +427,7 @@ def save_and_plot_results(
 
             # 绘制ROC和PR曲线
             plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_roc_pr_curves.png"
-            roc_auc, pr_auc = ANNClassifier.plot_curve(
+            ANNClassifier.plot_curve(
                 cal_mix_coeff_list,
                 y_prob_current_cal,  # 使用对应的概率数据
                 evaluation_results["true_labels"]["y_test"],
@@ -450,3 +450,61 @@ def save_and_plot_results(
 
     return saved_files
 
+def ml_results_statistics(
+        train_data_counts: MLDataCounts,
+        logger
+    ) -> dict:
+    """
+    统计ML结果并返回完整的selection_results字典
+
+    Returns:
+        dict: 包含selection_results所需的所有字段
+    """
+    total = train_data_counts.total_csfs_count
+
+    # 除零保护
+    if total <= 0:
+        logger.error(f"原始CSFs总数无效: {total}")
+        return {}
+
+    logger.info(f"统计信息:")
+    logger.info(f"- 原始CSFs总数: {total}")
+
+    # 定义统计项配置：(字段名, 显示标签, 比率键名)
+    stats_config = [
+        ("import_csfs_count", "重要CSFs", "important_retention_rate"),
+        ("ml_sampled_count", "ML新增CSFs", "ml_retention_rate"),
+        ("final_sampled_count", "最终选择CSFs", "final_retention_rate"),
+    ]
+
+    rates = {}
+
+    for field, label, rate_key in stats_config:
+        count = getattr(train_data_counts, field, None)
+        if count is not None:
+            rate = count / total
+            rates[rate_key] = rate
+            logger.info(f"- {label}数量: {count} (占原始: {rate:.4%})")
+
+    # 计算data_retention_rate (cal_csfs_count / total_csfs_count)
+    data_retention_rate = train_data_counts.cal_csfs_count / total
+    rates["data_retention_rate"] = data_retention_rate
+    logger.info(f"- 本轮计算CSFs数量: {train_data_counts.cal_csfs_count} (占原始: {data_retention_rate:.4%})")
+
+    # 计算ML扩展比例
+    if "ml_retention_rate" in rates and "important_retention_rate" in rates:
+        ml_improvement_ratio = rates["ml_retention_rate"] / rates["important_retention_rate"]
+    else:
+        ml_improvement_ratio = 0.0
+
+    logger.info(f"- ML扩展比例: {ml_improvement_ratio:.2f} (ML新增/重要组态)")
+
+    # 返回完整的selection_results字典
+    return {
+        'ml_new_count': train_data_counts.ml_new_count,
+        'final_sampled_count': train_data_counts.final_sampled_count,
+        'total_original_count': total,
+        'current_calculation_count': train_data_counts.cal_csfs_count,
+        **rates,
+        'ml_improvement_ratio': ml_improvement_ratio,
+    }

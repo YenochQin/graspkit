@@ -38,6 +38,7 @@ from .data_IO import (
 from .utils import (
     MixCoefficientData,
     CSFs,
+    MLDataCounts,
     level_print_title,
     level_J_value,
     level_parity,
@@ -131,6 +132,7 @@ from .ml_module import (
     save_and_plot_results,
     validate_csf_desc_coverage,
     select_csfs_for_coverage,
+    ml_results_statistics
 )
 
 __all__ = [
@@ -166,6 +168,7 @@ __all__ = [
     # utils
     "MixCoefficientData",
     "CSFs",
+    "MLDataCounts",
     # 工具函数
     "level_print_title",
     "level_J_value",
@@ -250,6 +253,8 @@ __all__ = [
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",
+    "ml_results_statistics",
+
     # 环境配置和进度管理
     "get_environment_config",
     "is_slurm_environment",

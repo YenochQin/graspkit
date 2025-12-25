@@ -7,6 +7,7 @@
 '''
 import numpy as np
 from dataclasses import dataclass
+from typing import Optional
 from numpy.typing import NDArray
 
 @dataclass(frozen=True)
@@ -45,3 +46,15 @@ class CSFs:
                 else data.get('CSFs_block_length', np.array([])),
             block_num=data.get('block_num', 0)
         )
+
+@dataclass
+class MLDataCounts:
+    total_csfs_count: int
+    cal_csfs_count: int
+
+    import_csfs_count: Optional[int] = None
+    ml_sampled_count: Optional[int] = None
+    ml_new_count: Optional[int] = None
+    ml_predicted_count: Optional[int] = None
+    final_sampled_count: Optional[int] = None
+
