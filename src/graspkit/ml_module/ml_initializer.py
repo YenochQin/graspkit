@@ -12,7 +12,7 @@ from typing import Tuple
 import csv
 import numpy as np
 import pandas as pd
-
+import rtoml
 
 from ..data_IO import (
     GraspFileLoad,
@@ -212,11 +212,11 @@ def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
 
 
 def training_data_loader(
-                    paths_cfg, 
-                    cal_method: str, 
-                    use_cpp_descriptor_generator: bool, 
-                    logger
-                    ) -> tuple:
+        paths_cfg, 
+        cal_method: str, 
+        use_cpp_descriptor_generator: bool, 
+        logger
+    ) -> tuple:
     """加载数据文件
 
     Args:
@@ -225,8 +225,41 @@ def training_data_loader(
         use_cpp: 是否使用C++生成的HDF5文件格式
 
     Returns:
-        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, cal_csfs_data, caled_csfs_idxs_array)
+        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, total_csfs_count, cal_csfs_data, caled_csfs_idxs_array)
     """
+
+    # 加载初始 CSFs 描述符文件
+    if use_cpp_descriptor_generator:
+        # 使用C++生成的HDF5文件
+        hdf5_file_path = paths_cfg.full_CSFs_set_file_path.with_suffix(".h5")
+
+        hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
+        raw_csfs_descriptors = hdf5_data["descriptors"]
+        logger.info(f"使用C++ HDF5文件加载初始 CSFs 描述符: {hdf5_file_path}")
+    else:
+        # 使用传统文件格式
+        result = load_descriptors_with_multi_block(paths_cfg.full_CSFs_set_file_path, "npy")
+        if result is None:
+            raise FileNotFoundError(
+                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}"
+            )
+        raw_csfs_descriptors, raw_csfs_idxs = result
+        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}")
+
+    raw_csfs_header_file = paths_cfg.full_CSFs_set_header_path 
+    csfs_header = rtoml.load(raw_csfs_header_file)
+    raw_csfs_num = csfs_header.get('conversion_stats', {}).get('csf_count', 0)
+    raw_csfs_desc_count = raw_csfs_descriptors.shape[0]
+    if raw_csfs_num == 0:
+        error_msg = f"raw_csfs_header_file: {str(raw_csfs_header_file)} 中没有'csf_count'数据请重新运行initial_csfs.py"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    elif raw_csfs_desc_count != raw_csfs_num:
+        error_msg = f"raw_csfs_header_file: {str(raw_csfs_header_file)} 中'csf_count'数值与描述符文件长度不一致"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    else:
+        total_csfs_count = raw_csfs_desc_count
 
     # 加载能级文件
     energy_level_file_path = (
@@ -237,6 +270,12 @@ def training_data_loader(
     ) ## !TODO 存在严重问题
     energy_level_data_pd = energy_level_file_load.energy_level_2_pd()
     logger.info(f"加载能级数据: {energy_level_file_path}")
+
+    # 加载本轮计算CSFs文件
+    cal_csfs_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.c"
+    cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
+    cal_csfs_data = cal_csfs_file_laod.get_csfs_data()
+    logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
 
     # 加载rmix文件
     # 根据计算轮次确定文件后缀
@@ -251,42 +290,9 @@ def training_data_loader(
     rmix_file_data = rmix_file_load.get_mix_coefficient_data()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
-    # 加载初始 CSFs 描述符文件
-    if use_cpp_descriptor_generator:
-        # 使用C++生成的HDF5文件
-        hdf5_file_path = paths_cfg.full_CSFs_set_file_path.with_suffix(".h5")
-        try:
-            hdf5_data = load_hdf5_descriptors(str(hdf5_file_path))
-            raw_csfs_descriptors = hdf5_data["descriptors"]
-            logger.info(f"使用C++ HDF5文件加载初始 CSFs 描述符: {hdf5_file_path}")
-        except Exception as e:
-            logger.warning(f"C++ HDF5文件加载失败: {e}")
-            raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}"
-            )
-    else:
-        # 使用传统文件格式
-        result = load_descriptors_with_multi_block(paths_cfg.full_CSFs_set_file_path, "npy")
-        if result is None:
-            raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}"
-            )
-        raw_csfs_descriptors, raw_csfs_idxs = result
-        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_file_path}")
-
-    # 加载本轮计算CSFs文件
-    cal_csfs_file_path = paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.c"
-    cal_csfs_file_laod = GraspFileLoad.from_filepath(str(cal_csfs_file_path), "CSFs")
-    cal_csfs_data = cal_csfs_file_laod.get_csfs_data()
-    logger.info(f"加载本轮计算 CSFs 文件: {cal_csfs_file_path}")
-
     # 数据一致性检查：确保CSFs数量的两个来源一致
     csfs_count_from_cfile = cal_csfs_data.CSFs_block_length[0]
     csfs_count_from_rmix = rmix_file_data.block_CSFs_nums[0]
-    
-    if csfs_count_from_cfile != csfs_count_from_rmix:
-        logger.error(f"CSFs数量不一致: cal_csfs_data.CSFs_block_length[0]={csfs_count_from_cfile}, rmix_file_data.block_CSFs_nums[0]={csfs_count_from_rmix}")
-        raise ValueError("本轮计算的CSFs数量数据不一致，请检查数据文件")
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_idxs_file_path = (
@@ -295,12 +301,19 @@ def training_data_loader(
     caled_csfs_idxs_array = np.load(caled_csfs_idxs_file_path)
     logger.info(f"加载本轮选择的 CSFs 的索引文件: {caled_csfs_idxs_file_path}")
 
+    if csfs_count_from_cfile != csfs_count_from_rmix and caled_csfs_idxs_array.shape[0] != csfs_count_from_rmix:
+        logger.error(f"本轮计算CSFs数量不一致: cal_csfs_data.CSFs_block_length[0]={csfs_count_from_cfile}, rmix_file_data.block_CSFs_nums[0]={csfs_count_from_rmix}, {caled_csfs_idxs_array.shape[0]=}")
+        raise ValueError("本轮计算的CSFs数量数据不一致，请检查数据文件")
+    cal_csfs_count = csfs_count_from_rmix
+
     return (
+        raw_csfs_descriptors,
+        total_csfs_count,
         energy_level_data_pd,
         rmix_file_data,
-        raw_csfs_descriptors,
         cal_csfs_data,
         caled_csfs_idxs_array,
+        cal_csfs_count
     )
 
 
