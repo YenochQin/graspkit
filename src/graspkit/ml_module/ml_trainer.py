@@ -23,6 +23,7 @@ from sklearn.model_selection import train_test_split
 from .neural_network import ANNClassifier
 from .ml_results_analyzer import save_training_results
 from ..data_IO.produced_data_writor import update_config
+from ..utils.data_modules import MLDataCounts
 
 
 def train_model(
@@ -384,6 +385,7 @@ def predict_model(
         caled_csfs_idxs_array: np.ndarray,
         correct_levels_ci_squared:np.ndarray,
         config,
+        train_data_counts: MLDataCounts,
         logger):
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
@@ -466,15 +468,13 @@ def predict_model(
         # 情况2：ML预测的重要组态数量不足，全部采用
         logger.info(f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个")
         ml_sampled_idxs = ml_predicted_important_global_idxs
-    
-    predict_status = {
-        'important_count': verified_important_idxs.shape[0],
-        'ml_predicted_count': ml_predicted_important_global_idxs.shape[0],
-        'ml_new_count': ml_sampled_idxs.shape[0],
-        'total_original_count': total_csfs_count,
-    }
 
-    return ml_sampled_idxs, verified_important_idxs, y_current_cal_probability, predict_status
+    train_data_counts.import_csfs_count = verified_important_idxs.shape[0]
+    train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
+    train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
+
+
+    return ml_sampled_idxs, verified_important_idxs, y_current_cal_probability, train_data_counts
 
 def handle_calculation_error(config, logger):
     """处理计算错误的情况"""
