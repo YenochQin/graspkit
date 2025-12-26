@@ -71,60 +71,42 @@ dev = [
     "wheel>=0.40.0",
     "polars>=1.35.0",
     "pyarrow>=22.0.0",
-    "csfs_loader>=0.1.0"
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
-    "torch>=2.9.0",
-    "torchvision>=0.24.0",
-    "pytest>=9.0.2",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
-    "black>=25.12.0",
-    # Jupyter notebook support
-    "jupyter>=1.0.0",
-    "jupyterlab>=4.0.0",
-    "ipython>=9.8.0",
-    "ipykernel>=7.1.0",
-    "notebook>=7.0.0",
+    'grasp-kit[cpu]',
+    'grasp-kit[dev]'
     # Install with: uv sync --all-extras
 ]
 
-[tool.uv]
-index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-extra-index-url = ["https://pypi.org/simple"]
-required-environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
-]
-
-conflicts = [
-    [
-        { extra = "cpu" },
-        { extra = "gpu" },
-    ],
-]
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", extra = "cpu" },
-    { index = "pytorch-cu128", extra = "gpu" },
+    # 2. 语法修正：用 marker = "extra == '...'" 来区分
+    { index = "pytorch-cpu", marker = "extra == 'cpu'" },
+    { index = "pytorch-cu128", marker = "extra != 'cpu' and extra == 'gpu'" },
 ]
 torchvision = [
-    { index = "pytorch-cpu", extra = "cpu" },
-    { index = "pytorch-cu128", extra = "gpu" },
+    { index = "pytorch-cpu", marker = "extra == 'cpu'" },
+    { index = "pytorch-cu128", marker = "extra != 'cpu' and extra == 'gpu'" },
 ]
-csfs-loader = { path = "/home/workstation3/AppFiles/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl" }
+
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
-explicit = true
+
 
 [tool.hatch.version]
 path = "src/graspkit/version.py"
@@ -132,7 +114,7 @@ path = "src/graspkit/version.py"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-  { name="Yi(Yenoch) Qin", email="yenochqin@hotmail.com" }
+    { name="Yi(Yenoch) Qin", email="yenochqin@hotmail.com" }
 ]
 
 classifiers = [
@@ -142,10 +124,10 @@ classifiers = [
     # "Development Status :: 5 - Production/Stable",
     "Development Status :: 4 - Beta",
 
-     # Specify the Python versions you support here.
+    # Specify the Python versions you support here.
     "Programming Language :: Python :: 3",
 
-     # Topic classification
+    # Topic classification
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Intended Audience :: Science/Research",
@@ -166,11 +148,10 @@ Homepage = "https://github.com/YenochQin/graspkit.git"
 
 [tool.pixi.workspace]
 channels = ["https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 grasp-kit = { path = ".", editable = true }
-csfs-loader = { path = "/home/qqqyy/project_files/CSFs_loader/target/wheels/csfs_loader-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl" }
 
 [tool.pixi.environments]
 # default = { solve-group = "default" }
