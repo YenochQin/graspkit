@@ -77,9 +77,6 @@ def _setup_config_paths(config):
     # 设置CSF二进制和头文件的路径
     config.cal_path.full_CSFs_set_parquet_path = full_CSFs_set_path.with_stem(full_CSFs_set_path.stem).with_suffix('.parquet')
     config.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(f"{full_CSFs_set_path.stem}_header").with_suffix('.toml')
-    config.cal_path.iteration_results = config.cal_path.results_path / "iteration_results.csv"
-    config.cal_path.training_results = config.cal_path.results_path / "training_results.csv"
-
 
     config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
 
@@ -92,6 +89,9 @@ def _setup_config_paths(config):
     config.cal_path.models_path = root_path / "models"
     config.cal_path.roc_curves_path = root_path / "roc_curves"
     config.cal_path.log_dir = root_path / "logs"
+
+    config.cal_path.iteration_results = config.cal_path.results_path / "iteration_results.csv"
+    config.cal_path.training_results = config.cal_path.results_path / "training_results.csv"
 
     # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
     if config.cal_settings.cal_loop_num > 1:
