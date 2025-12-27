@@ -21,11 +21,12 @@ from .CSFs_compress_extract import CSF_item_2_dict
 """
     csfs data dictionary:
     {
-        'CSFs_block_data': list[
-                                blocks[
-                                       block_csfs[CSF_item[csf_1], CSF_item[csf_2], ...]]
-                                       ]
-                                ],
+        'CSFs_block_data': 
+        list[
+            blocks[
+                    block_csfs[CSF_item[csf_1], CSF_item[csf_2], ...]]
+                    ]
+            ],
         'CSFs_block_j_value',
         'CSFs_block_length': list[length of each block],
         'parity',
