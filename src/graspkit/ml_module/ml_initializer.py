@@ -73,9 +73,11 @@ def _setup_config_paths(config):
 
     # 设置全量CSF集合文件的完整路径
     full_CSFs_set_path = root_path / config.target.full_CSFs_set_file
+    full_CSFs_path = full_CSFs_set_path.with_suffix('')
     config.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
     # 设置CSF二进制和头文件的路径
-    config.cal_path.full_CSFs_set_parquet_path = full_CSFs_set_path.with_stem(full_CSFs_set_path.stem).with_suffix('.parquet')
+    config.cal_path.full_CSFs_set_parquet_path = full_CSFs_path.with_suffix('.parquet')
+    config.cal_path.full_CSFs_set_desc_path = root_path / f"{config.target.conf}_desc"
     config.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(f"{full_CSFs_set_path.stem}_header").with_suffix('.toml')
 
     config.cal_path.loop_file_name = f'{config.target.conf}_{config.cal_settings.cal_loop_num}'
