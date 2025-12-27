@@ -42,7 +42,7 @@ dependencies = [
 # Use with: uv sync --extra cpu or uv sync --extra gpu
 [project.optional-dependencies]
 
-# CPU-optimized installation  
+# CPU-optimized installation
 cpu = [
     "torch>=2.9.0",
     "torchvision>=0.24.0",
@@ -50,7 +50,7 @@ cpu = [
 
 # GPU-optimized installation (for NVIDIA GPUs with CUDA)
 gpu = [
-    "torch>=2.9.0", 
+    "torch>=2.9.0",
     "torchvision>=0.24.0",
 ]
 dev = [
@@ -152,6 +152,7 @@ platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 grasp-kit = { path = ".", editable = true }
+rcsfs = { path = "/home/qqqyy/project_files/rCSFs/dist/rcsfs-0.1.0-cp313-cp313-manylinux_2_28_x86_64.whl" }
 
 [tool.pixi.environments]
 # default = { solve-group = "default" }
