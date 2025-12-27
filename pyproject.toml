@@ -44,14 +44,14 @@ dependencies = [
 
 # CPU-optimized installation
 cpu = [
-    "torch>=2.9.0",
-    "torchvision>=0.24.0",
+    "torch==2.9.1",
+    "torchvision==0.24.1",
 ]
 
 # GPU-optimized installation (for NVIDIA GPUs with CUDA)
 gpu = [
-    "torch>=2.9.0",
-    "torchvision>=0.24.0",
+    "torch==2.9.1",
+    "torchvision==0.24.1",
 ]
 dev = [
     # 开发工具依赖（不包含PyTorch，需要额外指定 --extra cpu 或 --extra gpu）
@@ -74,22 +74,14 @@ dev = [
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
+    'grasp-kit[dev]',
     'grasp-kit[cpu]',
-    'grasp-kit[dev]'
     # Install with: uv sync --all-extras
 ]
 
 
-[tool.uv.sources]
-torch = [
-    # 2. 语法修正：用 marker = "extra == '...'" 来区分
-    { index = "pytorch-cpu", marker = "extra == 'cpu'" },
-    { index = "pytorch-cu128", marker = "extra != 'cpu' and extra == 'gpu'" },
-]
-torchvision = [
-    { index = "pytorch-cpu", marker = "extra == 'cpu'" },
-    { index = "pytorch-cu128", marker = "extra != 'cpu' and extra == 'gpu'" },
-]
+# Removed custom PyTorch sources - using PyPI directly for torch
+# PyPI provides platform-specific wheels automatically
 
 [[tool.uv.index]]
 name = "tuna"
@@ -98,15 +90,6 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 [[tool.uv.index]]
 name = "aliyun"
 url = "https://mirrors.aliyun.com/pypi/simple/"
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-
 
 [tool.hatch.version]
 path = "src/graspkit/version.py"
