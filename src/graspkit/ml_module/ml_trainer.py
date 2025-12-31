@@ -6,38 +6,39 @@
 """
 
 # 标准库导入
+import math
 import os
 import shutil
 import time
-import math
+
 # 第三方库导入
 import joblib
 import numpy as np
 import torch
+
 # from imblearn.over_sampling import SMOTE
 # from imblearn.under_sampling import RandomUnderSampler
 # from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-# 本地模块导入
-from .neural_network import ANNClassifier
-from .ml_results_analyzer import save_training_results
 from ..data_IO.produced_data_writor import update_config
 from ..utils.data_modules import MLDataCounts
+from .ml_results_analyzer import save_training_results
+
+# 本地模块导入
+from .neural_network import ANNClassifier
 
 
 def train_model(
-        config,
-        caled_csfs_descriptors: np.ndarray,
-        correct_levels_ci: np.ndarray,
-        logger):
+    config, caled_csfs_descriptors: np.ndarray, correct_levels_ci: np.ndarray, logger
+):
     """训练机器学习模型"""
 
     X = caled_csfs_descriptors[:, :-1]
     y = caled_csfs_descriptors[:, -1]
     X_train, X_test, y_train, y_test = train_test_split(
-                                X, y, test_size=0.2, random_state=42
-                            )
+        X, y, test_size=0.2, random_state=42
+    )
 
     # 初始化或加载模型
     config.cal_path.models_path.mkdir(exist_ok=True)
@@ -49,6 +50,7 @@ def train_model(
     logger.info(
         f"训练集 - 正样本:{positive_count}, 负样本:{negative_count}, 比例:{original_ratio:.4f}"
     )
+    logger.info(f"描述符长度{X_train.shape[1]}")
 
     # 模型初始化
     if config.cal_settings.cal_loop_num == 1:
@@ -64,7 +66,7 @@ def train_model(
             hidden_size=hidden_size,
             learning_rate=0.001,
             class_weights=class_weights,
-            model_architecture = "tensornet"
+            model_architecture="tensornet",
         )
         logger.info(f"创建新模型，设置类别权重: 负样本=1.0, 正样本={pos_weight:.1f}")
         logger.info(
@@ -72,7 +74,10 @@ def train_model(
         )
     else:
         # 后续轮次：尝试加载之前的模型
-        model_path = config.cal_path.models_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
+        model_path = (
+            config.cal_path.models_path
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
+        )
         if model_path.exists():
             model = joblib.load(model_path)
             logger.info(f"加载已有模型: {model_path}")
@@ -90,7 +95,7 @@ def train_model(
                 hidden_size=hidden_size,
                 learning_rate=0.001,
                 class_weights=class_weights,  # 传入类别权重
-                model_architecture = "tensornet"
+                model_architecture="tensornet",
             )
 
             logger.info(
@@ -231,9 +236,7 @@ def train_model(
 
     # 修复：使用正确能级位置的混合系数进行绘图
     # 获取所有CSFs在正确能级位置的混合系数平方和
-    csf_mix_coeff_squared_sum = np.sum(
-        correct_levels_ci ** 2, axis=0
-    )
+    csf_mix_coeff_squared_sum = np.sum(correct_levels_ci**2, axis=0)
 
     # 诊断混合系数的信息
     logger.info(
@@ -253,13 +256,9 @@ def train_model(
     )
 
     # Overfitting and underfitting monitoring
-    (f1_train, 
-     roc_auc_train, 
-     accuracy_train, 
-     precision_train, 
-     recall_train) = (
-                    ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
-                    )
+    (f1_train, roc_auc_train, accuracy_train, precision_train, recall_train) = (
+        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
+    )
     logger.info(f"训练集预测结果:")
     logger.info(
         f"AUC:{roc_auc_train}, f1:{f1_train}, accuracy:{accuracy_train}, precision:{precision_train}, recall:{recall_train}"
@@ -268,14 +267,7 @@ def train_model(
     return model, X_train, X_test, y_train, y_test
 
 
-def evaluate_model(
-        model,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        config,
-        logger):
+def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -309,8 +301,8 @@ def evaluate_model(
     y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))[:, 1]
 
     # 评估指标计算
-    test_f1, test_roc_auc, test_accuracy, test_precision, test_recall = ANNClassifier.model_evaluation(
-        y_test, y_prediction, y_probability
+    test_f1, test_roc_auc, test_accuracy, test_precision, test_recall = (
+        ANNClassifier.model_evaluation(y_test, y_prediction, y_probability)
     )
 
     # 训练集评估（过拟合监控）
@@ -319,17 +311,21 @@ def evaluate_model(
     )
 
     logger.info("测试集预测结果:")
-    logger.info(f"AUC: {test_roc_auc:.4f}, F1: {test_f1:.4f}, Accuracy: {test_accuracy:.4f}")
+    logger.info(
+        f"AUC: {test_roc_auc:.4f}, F1: {test_f1:.4f}, Accuracy: {test_accuracy:.4f}"
+    )
     logger.info(f"Precision: {test_precision:.4f}, Recall: {test_recall:.4f}")
     logger.info("训练集预测结果:")
-    logger.info(f"AUC: {train_roc_auc:.4f}, F1: {train_f1:.4f}, Accuracy: {train_accuracy:.4f}")
+    logger.info(
+        f"AUC: {train_roc_auc:.4f}, F1: {train_f1:.4f}, Accuracy: {train_accuracy:.4f}"
+    )
     logger.info(f"Precision: {train_precision:.4f}, Recall: {train_recall:.4f}")
-    
+
     # 过拟合监控
     overfitting_check = train_f1 - test_f1
-    logger.info(f'过拟合检查差异(训练-测试): {overfitting_check:.4f}')
-    overfitting_threshold = getattr(config.ml_config, 'overfitting_threshold', 0.1)
-    underfitting_threshold = getattr(config.ml_config, 'underfitting_threshold', -0.05)
+    logger.info(f"过拟合检查差异(训练-测试): {overfitting_check:.4f}")
+    overfitting_threshold = getattr(config.ml_config, "overfitting_threshold", 0.1)
+    underfitting_threshold = getattr(config.ml_config, "underfitting_threshold", -0.05)
     if overfitting_check > overfitting_threshold:
         logger.warning("检测到可能的过拟合现象")
     elif overfitting_check < underfitting_threshold:
@@ -379,27 +375,45 @@ def evaluate_model(
     # 返回完整的结果字典
     return evaluation_results
 
+
 def predict_model(
-        model,
-        raw_csfs_descriptors: np.ndarray,
-        caled_csfs_idxs_array: np.ndarray,
-        correct_levels_ci_squared:np.ndarray,
-        config,
-        train_data_counts: MLDataCounts,
-        logger):
+    model,
+    raw_csfs_descriptors: np.ndarray,
+    caled_csfs_idxs_array: np.ndarray,
+    correct_levels_ci_squared: np.ndarray,
+    config,
+    train_data_counts: MLDataCounts,
+    logger,
+):
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
     all_csfs_idxs = np.arange(total_csfs_count)
     current_calc_idxs = caled_csfs_idxs_array
+
+    # 调试：检查输入数组维度
+    logger.info(
+        f"caled_csfs_idxs_array shape: {caled_csfs_idxs_array.shape}, ndim: {caled_csfs_idxs_array.ndim}"
+    )
+
     unselected_idxs = np.setdiff1d(all_csfs_idxs, current_calc_idxs)
 
-    # 仅对未选择的CSF进行预测
+    # 调试：检查unselected_idxs维度
+    logger.info(
+        f"unselected_idxs shape: {unselected_idxs.shape}, ndim: {unselected_idxs.ndim}"
+    )
+
+    # 仅对未选择的CSF进行预测（使用分批处理避免内存溢出）
     X_unselected_for_prediction = raw_csfs_descriptors[unselected_idxs]
-    y_unselected_prediction = model.predict(X_unselected_for_prediction)
-    y_unselected_probability = model.predict_proba(X_unselected_for_prediction)[:, 1]
+    y_unselected_probability = model.predict_proba_batch(
+        X_unselected_for_prediction,
+        batch_size=10_000_000,  # 可根据内存调整
+    )
+    # 修复：使用正类概率（第1列）进行预测，而不是整个概率矩阵
+    y_unselected_prediction = (y_unselected_probability[:, 1] > 0.5).astype(int)
 
     logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
-    
+    logger.info(f" {y_unselected_prediction.shape=} ")
+
     # 为绘图准备当前计算CSF的预测概率
     # 对当前计算的CSF也进行预测（用于绘图和分析）
     X_current_calc = raw_csfs_descriptors[current_calc_idxs]
@@ -408,43 +422,60 @@ def predict_model(
     logger.info(f"当前计算CSF预测概率维度: {y_current_cal_probability.shape}")
 
     # 基于混合系数选择重要组态（已验证重要组态）
-    cutoff_value = getattr(config.cal_settings, 'cutoff_value', 1e-10)
-    csfs_above_threshold_idxs = np.where(np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis = 0))[0]
+    cutoff_value = getattr(config.cal_settings, "cutoff_value", 1e-10)
+    csfs_above_threshold_idxs = np.where(
+        np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis=0)
+    )[0]
     verified_important_idxs = caled_csfs_idxs_array[csfs_above_threshold_idxs]
     logger.info(f"已验证重要组态数: {len(verified_important_idxs)}")
 
     # 提取已验证重要组态对应的CI系数
-    verified_important_ci_coefficients = correct_levels_ci_squared[:, csfs_above_threshold_idxs]
-    logger.info(f"已提取 {verified_important_ci_coefficients.shape[1]} 个重要组态的CI系数，维度: {verified_important_ci_coefficients.shape}")
-    
+    verified_important_ci_coefficients = correct_levels_ci_squared[
+        :, csfs_above_threshold_idxs
+    ]
+    logger.info(
+        f"已提取 {verified_important_ci_coefficients.shape[1]} 个重要组态的CI系数，维度: {verified_important_ci_coefficients.shape}"
+    )
+
     # ============ 智能动态选择机制 ============
     logger.info("      组态采样")
     logger.info("更新重要组态索引")
-    
+
     # 计算当前重要组态数量作为基准
     current_important_count = len(verified_important_idxs)
-    
+
     # 获取最小重要组态数量保护
-    min_important_count = max(50, int(total_csfs_count * 0.01))  # 默认1%或50个
+    min_important_count = min(50, int(total_csfs_count * 0.01))  # 默认1%或50个
     if current_important_count <= min_important_count:
         current_important_count = min_important_count
         logger.info(f"重要组态数目小于等于最小值，调整为{min_important_count}")
-    
+
     # 获取扩展比例
-    expansion_ratio = getattr(config.cal_settings, 'expansion_ratio', 2)
+    expansion_ratio = getattr(config.cal_settings, "expansion_ratio", 2)
     new_sampling_CSFs_num = math.ceil(expansion_ratio * current_important_count)
-    
+
     # 在未选择的CSF中找出被预测为重要的组态
     ml_predicted_important_mask = y_unselected_prediction == 1
     ml_predicted_important_local_idxs = np.where(ml_predicted_important_mask)[0]
-    ml_predicted_important_global_idxs = unselected_idxs[ml_predicted_important_local_idxs]
-    
+
+    # 调试：检查索引数组维度
+    logger.info(f"ml_predicted_important_local_idxs shape: {ml_predicted_important_local_idxs.shape}, ndim: {ml_predicted_important_local_idxs.ndim}")
+
+    ml_predicted_important_global_idxs = unselected_idxs[
+        ml_predicted_important_local_idxs
+    ]
+
+    # 调试：检查global_idxs维度
+    logger.info(f"ml_predicted_important_global_idxs shape: {ml_predicted_important_global_idxs.shape}, ndim: {ml_predicted_important_global_idxs.ndim}")
+
     logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
-    logger.info(f"ML预测的重要组态数（在未选择中）：{len(ml_predicted_important_global_idxs)}")
+    logger.info(
+        f"ML预测的重要组态数（在未选择中）：{ml_predicted_important_global_idxs.shape}"
+    )
     logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
-    
+
     # 设置上限
-    sampling_ratio = getattr(config.cal_settings, 'sampling_ratio', 0.085)
+    sampling_ratio = getattr(config.cal_settings, "sampling_ratio", 0.085)
     max_sampling_CSFs_num = math.ceil(total_csfs_count * sampling_ratio)
     if new_sampling_CSFs_num + current_important_count > max_sampling_CSFs_num:
         new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
@@ -453,43 +484,80 @@ def predict_model(
     if len(ml_predicted_important_local_idxs) >= new_sampling_CSFs_num:
         # 情况1：ML预测的重要组态数量充足，按概率排序选择top-k
         logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
-        
-        # 获取ML预测重要组态的概率
-        ml_predicted_important_probabilities = y_unselected_probability[ml_predicted_important_local_idxs]
-        
+
+        # 获取ML预测重要组态的正类概率（只取第1列）
+        ml_predicted_important_probabilities = y_unselected_probability[
+            ml_predicted_important_local_idxs, 1
+        ]
+
         # 按概率降序排序
         probability_sorted_idxs = np.argsort(ml_predicted_important_probabilities)[::-1]
-        
+
         # 选择前new_sampling_CSFs_num个
-        top_k_local_idxs = ml_predicted_important_local_idxs[probability_sorted_idxs[:new_sampling_CSFs_num]]
+        top_k_local_idxs = ml_predicted_important_local_idxs[
+            probability_sorted_idxs[:new_sampling_CSFs_num]
+        ]
+
         ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
-        logger.info(f"从{len(ml_predicted_important_local_idxs)}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个")
+        logger.info(
+            f"从{len(ml_predicted_important_local_idxs)}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个"
+        )
     else:
         # 情况2：ML预测的重要组态数量不足，全部采用
-        logger.info(f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个")
+        logger.info(
+            f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个"
+        )
         ml_sampled_idxs = ml_predicted_important_global_idxs
+
+        logger.info(f"情况2：直接使用ml_predicted_important_global_idxs，shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}")
+
+    # 调试：检查ml_sampled_idxs维度
+    logger.info(
+        f"ml_sampled_idxs after assignment: shape={ml_sampled_idxs.shape}, ndim={ml_sampled_idxs.ndim}"
+    )
+    if ml_sampled_idxs.ndim > 1:
+        logger.info(f"ml_sampled_idxs前3个值: {ml_sampled_idxs[:3]}")
 
     train_data_counts.import_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
     train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
 
+    # 调试信息：检查数组维度
+    logger.info(
+        f"verified_important_idxs shape: {verified_important_idxs.shape}, ndim: {verified_important_idxs.ndim}"
+    )
+    logger.info(
+        f"ml_sampled_idxs shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}"
+    )
 
-    return ml_sampled_idxs, verified_important_idxs, y_current_cal_probability, train_data_counts
+    return (
+        ml_sampled_idxs,
+        verified_important_idxs,
+        y_current_cal_probability,
+        train_data_counts,
+    )
+
 
 def handle_calculation_error(config, logger):
     """处理计算错误的情况"""
     config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:
         # 更新配置文件
-        update_config(config_file_path, {
-            'cal_settings': {
-                "cal_error_num": config.cal_settings.cal_error_num + 1,
-                "continue_cal": True
-            }
-        })
+        update_config(
+            config_file_path,
+            {
+                "cal_settings": {
+                    "cal_error_num": config.cal_settings.cal_error_num + 1,
+                    "continue_cal": True,
+                }
+            },
+        )
 
         # 重命名结果目录
-        original_cal_path = config.cal_settings.root_path / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
+        original_cal_path = (
+            config.cal_settings.root_path
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
+        )
         new_cal_path = (
             config.cal_settings.root_path
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_err_{config.cal_settings.cal_error_num + 1}"
@@ -504,8 +572,4 @@ def handle_calculation_error(config, logger):
 
     else:
         logger.info("连续三次波函数未改进，迭代收敛，退出筛选程序")
-        update_config(config_file_path, {
-            'cal_settings': {
-                "continue_cal": True
-            }
-        })
+        update_config(config_file_path, {"cal_settings": {"continue_cal": True}})
