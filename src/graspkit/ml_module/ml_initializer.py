@@ -542,7 +542,7 @@ def evaluate_calculation_convergence(config, logger, cal_loop_csfs_count: int):
     for i in range(2):  # 只读取前两轮
         loop_num = config.cal_settings.cal_loop_num - 2 + i
         # 查找对应轮次的数据
-        loop_data = iteration_df[iteration_df["iteration"] == loop_num]
+        loop_data = iteration_df[iteration_df["cal_loop_num"] == loop_num]
         if not loop_data.empty:
             current_count = loop_data["current_calculation_count"].iloc[0]
             csfs_num.append(current_count)
