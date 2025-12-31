@@ -104,7 +104,7 @@ class EnvironmentConfig:
             # 生产模式：结构化日志，关注关键信息
             return {
                 'level': 'INFO',
-                'format': '%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
+                'format': '%(asctime)s [%(levelname)s] %(module)s:%(lineno)d - %(message)s',
                 'show_progress_logs': False,
                 'highlight_stages': True
             }

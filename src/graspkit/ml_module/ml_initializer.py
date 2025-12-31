@@ -123,6 +123,15 @@ def _setup_config_paths(config):
 
     return config
 
+def setup_directories(root_path: Path):
+    """创建必要的目录结构"""
+
+    directories = ["models", "roc_curves", "results"]
+
+    for dir in directories:
+        (root_path / dir).mkdir(parents=True, exist_ok=True)
+
+    return "目录创建成功"
 
 def setup_logging(log_dir: Path):
     """配置日志系统，支持环境感知"""
@@ -147,6 +156,7 @@ def setup_logging(log_dir: Path):
     logging.basicConfig(
         level=log_level,
         format=log_config["format"],
+        datefmt='%m-%d %H:%M:%S',
         handlers=handlers,
         force=True,  # 强制重新配置
     )
@@ -164,19 +174,10 @@ def setup_logging(log_dir: Path):
 
     return logger
 
-
-def setup_directories(root_path: Path):
-    """创建必要的目录结构"""
-
-    directories = ["models", "roc_curves", "results"]
-
-    for dir in directories:
-        (root_path / dir).mkdir(parents=True, exist_ok=True)
-
-    return "目录创建成功"
-
-
-def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
+def initialize_iteration_results_csv(
+        iteration_results_path: Path, 
+        logger: logging.Logger
+    ):
     """
     初始化迭代结果CSV文件的表头
 
@@ -187,8 +188,7 @@ def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
 
     # 如果文件已存在，不重新创建表头
     if iteration_results_path.exists():
-        if logger:
-            logger.info(f"迭代结果文件已存在: {iteration_results_path}")
+        logger.info(f"迭代结果文件已存在: {iteration_results_path}")
         return
 
     # 创建目录
@@ -226,16 +226,15 @@ def initialize_iteration_results_csv(iteration_results_path: Path, logger=None):
         writer = csv.writer(file)
         writer.writerow(headers)
 
-    if logger:
-        logger.info(f"初始化迭代结果CSV文件: {iteration_results_path}")
+    logger.info(f"初始化迭代结果CSV文件: {iteration_results_path}")
 
 
 def training_data_loader(
-    paths_cfg,
-    cal_method: str,
-    descriptor_file_type: Literal["h5", "parquet"] = "parquet",
-    logger=None,
-) -> tuple:
+        paths_cfg,
+        cal_method: str,
+        logger: logging.Logger,
+        descriptor_file_type: Literal["h5", "parquet"] = "parquet"
+    ) -> tuple:
     """加载数据文件
 
     Args:
@@ -247,7 +246,14 @@ def training_data_loader(
         logger: 日志记录器
 
     Returns:
-        tuple: (energy_level_data_pd, rmix_file_data, raw_csfs_descriptors, total_csfs_count, cal_csfs_data, caled_csfs_idxs_array)
+        tuple: (
+                energy_level_data_pd, 
+                rmix_file_data, 
+                raw_csfs_descriptors, 
+                total_csfs_count, 
+                cal_csfs_data, 
+                caled_csfs_idxs_array
+                )
     """
 
     # 加载初始 CSFs 描述符文件
@@ -353,7 +359,7 @@ def check_configuration_coupling(
     rmix_file_data: MixCoefficientData,
     spectral_term: list,
     cal_loop_num: int,
-    logger,
+    logger: logging.Logger,
 ):
     """检查组态耦合是否正确
 
@@ -422,7 +428,7 @@ def check_configuration_coupling(
 
 def check_energy_convergence(
     config,
-    logger,
+    logger: logging.Logger,
     current_energy_data: pd.DataFrame,
     convergence_threshold: float = 0.001,
 ) -> bool:
@@ -492,7 +498,11 @@ def check_energy_convergence(
         return True  # 发生错误时继续计算，避免阻塞
 
 
-def evaluate_calculation_convergence(config, logger, cal_loop_csfs_count: int):
+def evaluate_calculation_convergence(
+        config, 
+        logger: logging.Logger, 
+        cal_loop_csfs_count: int
+    ):
     """
     检查GRASP计算的收敛性
 
@@ -639,8 +649,10 @@ def evaluate_calculation_convergence(config, logger, cal_loop_csfs_count: int):
 
 
 def merge_historical_ci_data(
-    previous_idxs_ci_dict, current_idxs_ci_dict, logger
-) -> Tuple[np.ndarray, np.ndarray]:
+        previous_idxs_ci_dict, 
+        current_idxs_ci_dict, 
+        logger: logging.Logger
+    ) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
 
@@ -705,8 +717,10 @@ def merge_historical_ci_data(
 
 
 def generate_train_csfs_descriptors(
-    config, raw_csfs_descriptors: np.ndarray, logger
-) -> np.ndarray:
+        config, 
+        raw_csfs_descriptors: np.ndarray, 
+        logger: logging.Logger
+    ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
     基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
@@ -839,8 +853,9 @@ def generate_train_csfs_descriptors(
 
 
 def get_stay_descriptors(
-    raw_csfs_descriptors: np.ndarray, sampled_csfs_idxs_array: np.ndarray
-) -> np.ndarray:
+        raw_csfs_descriptors: np.ndarray, 
+        sampled_csfs_idxs_array: np.ndarray
+    ) -> np.ndarray:
     """
     找出不在sampled_csfs_idxs_array索引中的描述符
 

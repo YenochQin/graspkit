@@ -10,6 +10,7 @@ import math
 import os
 import shutil
 import time
+import logging
 
 # 第三方库导入
 import joblib
@@ -30,8 +31,11 @@ from .neural_network import ANNClassifier
 
 
 def train_model(
-    config, caled_csfs_descriptors: np.ndarray, correct_levels_ci: np.ndarray, logger
-):
+        config, 
+        caled_csfs_descriptors: np.ndarray, 
+        correct_levels_ci: np.ndarray, 
+        logger: logging.Logger
+    ):
     """训练机器学习模型"""
 
     X = caled_csfs_descriptors[:, :-1]
@@ -267,7 +271,15 @@ def train_model(
     return model, X_train, X_test, y_train, y_test
 
 
-def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
+def evaluate_model(
+        model, 
+        X_train, 
+        X_test, 
+        y_train, 
+        y_test, 
+        config, 
+        logger
+    ):
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -383,7 +395,7 @@ def predict_model(
     correct_levels_ci_squared: np.ndarray,
     config,
     train_data_counts: MLDataCounts,
-    logger,
+    logger: logging.Logger,
 ):
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
@@ -538,7 +550,7 @@ def predict_model(
     )
 
 
-def handle_calculation_error(config, logger):
+def handle_calculation_error(config, logger: logging.Logger):
     """处理计算错误的情况"""
     config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:

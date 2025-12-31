@@ -5,6 +5,7 @@
 @author :YenochQin (秦毅)
 """
 
+import logging
 from typing import Tuple
 import csv
 import polars as pl
@@ -17,7 +18,7 @@ from ..utils.data_modules import MLDataCounts
 def validate_csf_desc_coverage(
         final_sampled_idxs: np.ndarray,
         raw_csfs_descriptors: np.ndarray,
-        logger
+        logger: logging.Logger
         ) -> np.ndarray:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
@@ -85,7 +86,7 @@ def select_csfs_for_coverage(
         descriptors: np.ndarray,
         uncovered_orbitals: list[int],
         candidate_descriptors: np.ndarray,
-        ) -> Tuple[np.ndarray, list[int]]:
+    ) -> Tuple[np.ndarray, list[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
@@ -111,10 +112,10 @@ def select_csfs_for_coverage(
 
     # 获取每个轨道的电子填充位置索引
     electron_idxs = np.arange(
-                                electron_idx_in_orbital, 
-                                candidate_descriptors.shape[1], 
-                                values_per_orbital
-                                )
+                        electron_idx_in_orbital, 
+                        candidate_descriptors.shape[1], 
+                        values_per_orbital
+                    )
 
     # 提取候选描述符中的电子数信息
     candidate_electron_counts = candidate_descriptors[:, electron_idxs]
@@ -152,8 +153,9 @@ def select_csfs_for_coverage(
 
 def save_training_results(
         config,
-        evaluation_results,
-        logger,):
+        evaluation_results: dict,
+        logger: logging.Logger
+    ):
     """
     保存训练结果到CSV文件
 
@@ -224,8 +226,9 @@ def save_training_results(
 
 def save_iteration_results(
         config,
-        selection_results,
-        logger,):
+        selection_results: dict,
+        logger: logging.Logger
+    ):
     """
     保存迭代结果到CSV文件
 
@@ -295,6 +298,7 @@ def save_iteration_results(
         logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
 def save_and_plot_results(
+        logger: logging.Logger,
         evaluation_results,
         model,
         path_cfg,
@@ -303,8 +307,8 @@ def save_and_plot_results(
         y_current_cal_probability=None,
         save_model: bool = True,
         save_data: bool = True,
-        plot_curves: bool = True,
-        logger=None,):
+        plot_curves: bool = True
+    ):
     """
     保存模型预测结果、模型文件和绘制性能曲线
     使用setup_directories创建的标准目录结构
@@ -452,7 +456,7 @@ def save_and_plot_results(
 
 def ml_results_statistics(
         train_data_counts: MLDataCounts,
-        logger
+        logger: logging.Logger
     ) -> dict:
     """
     统计ML结果并返回完整的selection_results字典
