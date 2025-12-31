@@ -28,6 +28,7 @@ from .processing_data_loader import (
     load_config,
     load_descriptors,
     load_descriptors_with_multi_block,
+    scan_descriptors_polars
 )
 
 from .cpp_descriptor_wrapper import (
@@ -62,6 +63,7 @@ __all__ = [
     "load_config",
     "load_descriptors",
     "load_descriptors_with_multi_block",
+    "scan_descriptors_polars",
     # cpp_descriptor_wrapper
     "CppDescriptorGenerator",
     "batch_process_csfs_with_multi_block_cpp",

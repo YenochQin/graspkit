@@ -6,7 +6,7 @@
 """
 
 from pathlib import Path
-from typing import Tuple, Optional, Any
+from typing import Optional, Any
 from types import SimpleNamespace
 
 import gzip
@@ -15,6 +15,7 @@ import rtoml
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import h5py
 
 from ..utils.data_modules import CSFs
@@ -351,7 +352,7 @@ def load_descriptors_with_multi_block(
     load_path: str | Path,
     file_format: Optional[str] = None,
     use_cpp: bool = False,
-) -> Tuple[np.ndarray, np.ndarray] | None:
+) -> tuple[np.ndarray, np.ndarray] | None:
     """
     加载带标签的描述符数组
 
@@ -361,7 +362,7 @@ def load_descriptors_with_multi_block(
         use_cpp (bool): 是否使用C++生成的HDF5文件
 
     Returns:
-        Optional[Tuple[np.ndarray, np.ndarray]]: (描述符数组, 标签数组)，加载失败返回None
+        Optional[tuple[np.ndarray, np.ndarray]]: (描述符数组, 标签数组)，加载失败返回None
 
     Example:
         >>> descriptors, labels = load_descriptors_with_block_idxs('ml_data/features')
@@ -491,3 +492,128 @@ def load_descriptors_with_multi_block(
     except Exception as e:
         print(f"Error loading descriptors with labels: {str(e)}")
         return None
+
+
+#######################################################################
+# Rust Parquet 描述符加载器 - 惰性加载版本（使用 scan + 按索引提取）
+#######################################################################
+
+def load_descriptors_by_scan(
+    scan_parquet: pl.LazyFrame,
+    idxs: np.ndarray,
+    batch_size: int = 3_000_000,
+) -> np.ndarray:
+    """
+    使用 Polars scan 模式按索引批量加载描述符（惰性加载，仅加载指定索引的数据）
+
+    适用于大规模描述符文件（上亿级），通过 scan + slice 只提取需要的索引段，
+    避免一次性加载全部数据到内存。
+
+    Args:
+        parquet_path: parquet 文件路径
+        idxs: 需要加载的 CSF 索引数组
+        batch_size: 每批处理的索引数量（默认3000万，适合训练数据规模）
+
+    Returns:
+        np.ndarray: 加载的描述符数组，形状为 (len(idxs), n_features)
+
+    Example:
+        >>> # 只加载索引为 [0, 100, 1000, ..., 100000] 的描述符
+        >>> idxs = np.array([0, 100, 1000, 100000])
+        >>> descriptors = load_descriptors_by_scan("data.parquet", idxs)
+        >>> print(descriptors.shape)  # (4, n_features)
+    """
+
+    if len(idxs) == 0:
+        raise ValueError("索引数组不能为空")
+
+    # 对索引排序，便于使用连续的 slice 读取
+    sorted_idxs = np.sort(idxs)
+
+    # 记录原始索引用于恢复顺序
+    original_order = np.argsort(np.argsort(idxs))
+
+    result = []
+    total_batches = (len(sorted_idxs) + batch_size - 1) // batch_size
+
+    for i in range(0, len(sorted_idxs), batch_size):
+        batch_idxs = sorted_idxs[i:i + batch_size]
+
+        # scan + slice：只读取需要的数据段
+        start = batch_idxs[0]
+        end = batch_idxs[-1]
+        length = end - start + 1
+
+        # 惰性扫描 + 切片收集
+        batch_df = scan_parquet.slice(start, length).collect()
+        batch_array = batch_df.to_numpy()
+
+        # 从 batch_array 中提取实际需要的索引
+        # batch_idxs 是相对于整个文件的索引，需要转换为相对于 start 的索引
+        relative_idxs = batch_idxs - start
+        extracted = batch_array[relative_idxs]
+
+        result.append(extracted)
+
+        if (i // batch_size + 1) % 10 == 0 or (i // batch_size + 1) == total_batches:
+            print(f"已加载 {i // batch_size + 1}/{total_batches} 批")
+
+    # 合并所有批次并恢复原始顺序
+    merged = np.vstack(result)[original_order]
+
+    print(f"加载完成: {len(idxs)} 个描述符, 形状: {merged.shape}")
+    return merged
+
+
+def scan_descriptors_polars(
+    parquet_path: str | Path
+) -> tuple[pl.LazyFrame, dict]:
+    """
+    使用 Polars 加载 parquet 描述符文件
+
+    Args:
+        parquet_path: parquet 文件路径
+
+    Returns:
+        pl.LazyFrame : 完整的描述符数组
+        dict: parquet 文件元数据
+
+    Example:
+        >>> descriptors, meta = load_descriptors_polars("descriptors.parquet")
+    """
+    parquet_path = Path(parquet_path)
+    if not parquet_path.exists():
+        raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+
+    df = pl.scan_parquet(parquet_path)
+
+    meta = _get_parquet_metadata(df)
+
+    return df, meta
+
+
+def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict:
+    """
+    获取 parquet 文件的元数据（无需加载全部数据）
+
+    Args:
+        scan_parquet: polars scan_parquet 对象
+
+    Returns:
+        dict: 包含 n_rows, n_columns, columns, dtypes 等信息
+
+    """
+
+    # 获取总行数
+    n_rows = scan_parquet.select(pl.len()).collect().item()
+
+    # 获取列信息（不读取数据）
+    schema = scan_parquet.collect_schema()
+
+    return {
+        "n_rows": n_rows,
+        "n_columns": len(schema),
+        "columns": list(schema.names()),
+        "dtypes": {name: str(dtype) for name, dtype in schema.items()},
+    }
+

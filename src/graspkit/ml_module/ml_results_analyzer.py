@@ -219,7 +219,7 @@ def save_training_results(
             ]
         )
 
-    logger.info(f"迭代结果已保存到: {results_file}")
+    logger.info(f"训练结果已保存到: {results_file}")
 
 
 def save_iteration_results(
