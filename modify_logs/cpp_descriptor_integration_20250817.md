@@ -51,8 +51,7 @@ else:
 [ml_config]
 use_cpp_descriptor_generator = true    # 使用C++版本
 cpp_threads = null                     # 自动检测CPU核心数
-descriptors_with_subshell_info = false # 基本格式(3值/轨道)
-# descriptors_with_subshell_info = true # 扩展格式(5值/轨道)
+descriptors_with_subshell_info = false # 基本格式(3值/轨道) #!TODO remove
 ```
 
 ### Python API使用
@@ -63,7 +62,6 @@ import graspkit as gk
 X, y = gk.batch_process_csfs_with_multi_block_cpp(
     csfs_data,
     label_type='sequential',
-    with_subshell_info=True,    # 控制描述符格式
     num_threads=8               # 控制并行线程
 )
 
@@ -71,7 +69,6 @@ X, y = gk.batch_process_csfs_with_multi_block_cpp(
 generator = gk.CppDescriptorGenerator()
 descriptors, labels = generator.generate_descriptors(
     csf_file_path="target_pool.c",
-    with_subshell_info=False,   # 基本格式
     num_threads=16              # 并行处理
 )
 ```

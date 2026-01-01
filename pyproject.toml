@@ -4,39 +4,92 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-# version = '2.6.dev1'
-version = '2.6.1'
-description = "Grasp toolkit package"
+# version = '2.9.dev1'
+version = '2.9.1'
+description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
+keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
-requires-python = ">= 3.12"
+requires-python = ">= 3.13,<3.14"
 
 dependencies = [
-  # 核心数据处理库
-  "numpy>=2.0.0",
-  "pandas>=2.2.2", 
-  "matplotlib>=3.8.4",
-  "tqdm>=4.66.4",
-  
-  # 机器学习库
-  "torch>=2.0.0",
-  "scikit-learn>=1.3.0",
-  "imbalanced-learn>=0.11.0",
-  
-  # 数据可视化
-  "seaborn>=0.11.0",
-  
-  # 模型序列化和工具
-  "joblib>=1.1.0",
-  
-  # 表格格式化
-  "tabulate>=0.8.9",
-  
-  # 位数组处理 (可选)
-  "bitarray>=2.0.0",
-  
-  # 配置文件处理
-  "rtoml>=0.9.0",
+    # 核心数据处理库
+    "numpy>=2.0.0",
+    "pandas>=2.2.2",
+    "matplotlib>=3.8.4",
+    "tqdm>=4.66.4",
+    # 机器学习库
+    "scikit-learn>=1.5.0",
+    "imbalanced-learn>=0.13.0",
+    # 注意：PyTorch依赖已移至optional-dependencies
+    # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
+    # 数据可视化
+    "seaborn>=0.11.0",
+    # 模型序列化和工具
+    "joblib>=1.1.0",
+    # 表格格式化
+    "tabulate>=0.8.9",
+    # 位数组处理 (可选)
+    "bitarray>=3.8.0",
+    # 配置文件处理
+    "rtoml>=0.9.0",
+    # HDF5 支持
+    "h5py>=3.8.0",
+    "pyarrow>=22.0.0",
+    "polars>=1.36.1",
 ]
+
+# Optional dependencies for different environments
+# Use with: uv sync --extra cpu or uv sync --extra gpu
+[project.optional-dependencies]
+
+# CPU-optimized installation
+cpu = [
+    "torch==2.9.1",
+    "torchvision==0.24.1",
+]
+
+# GPU-optimized installation (for NVIDIA GPUs with CUDA)
+gpu = [
+    "torch==2.9.1",
+    "torchvision==0.24.1",
+]
+dev = [
+    # 开发工具依赖（不包含PyTorch，需要额外指定 --extra cpu 或 --extra gpu）
+    "pytest>=9.0.2",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "black>=25.12.0",
+    # Jupyter notebook support
+    "jupyter>=1.0.0",
+    "jupyterlab>=4.0.0",
+    "ipython>=9.8.0",
+    "ipykernel>=7.1.0",
+    "notebook>=7.0.0",
+    # Build and packaging tools
+    "build>=1.3.0",
+    "twine>=6.2.0",
+    "wheel>=0.40.0",
+    "polars>=1.35.0",
+    "pyarrow>=22.0.0",
+    # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
+]
+all = [
+    'grasp-kit[dev]',
+    'grasp-kit[cpu]',
+    # Install with: uv sync --all-extras
+]
+
+
+# Removed custom PyTorch sources - using PyPI directly for torch
+# PyPI provides platform-specific wheels automatically
+
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [tool.hatch.version]
 path = "src/graspkit/version.py"
@@ -44,18 +97,26 @@ path = "src/graspkit/version.py"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-  { name="Yi(Yenoch) Qin", email="yenochqin@hotmail.com" }
+    { name="Yi(Yenoch) Qin", email="yenochqin@hotmail.com" }
 ]
 
 classifiers = [
-  # How mature is this project? Common values are
-  #   3 - Alpha
-  #   4 - Beta
-  "Development Status :: 5 - Production/Stable",
-  # "Development Status :: 4 - Beta",
+    # How mature is this project? Common values are
+    #   3 - Alpha
+    #   4 - Beta
+    # "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
 
-  # Specify the Python versions you support here.
-  "Programming Language :: Python",
+    # Specify the Python versions you support here.
+    "Programming Language :: Python :: 3",
+
+    # Topic classification
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Science/Research",
+
+    # Environment
+    "Environment :: Console",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -64,5 +125,25 @@ packages = ["src/graspkit"]
 [tool.ruff.lint]
 select = ["NPY201"]
 
+
 [project.urls]
-Homepage = "https://github.com/YenochQin/graspkit-tools.git"
+Homepage = "https://github.com/YenochQin/graspkit.git"
+
+[tool.pixi.workspace]
+channels = ["https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+grasp-kit = { path = ".", editable = true }
+rcsfs = { path = "/home/qqqyy/project_files/rCSFs/dist/rcsfs-0.1.0-cp313-cp313-manylinux_2_28_x86_64.whl" }
+
+[tool.pixi.environments]
+# default = { solve-group = "default" }
+default = { features = ["dev", "gpu"], solve-group = "default" }
+all = { features = ["all"], solve-group = "default" }
+cpu = { features = ["cpu"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+gpu = { features = ["gpu"], solve-group = "default" }
+dev-gpu = { features = ["dev", "gpu"], solve-group = "default" }
+
+[tool.pixi.tasks]

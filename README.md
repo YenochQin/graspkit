@@ -1,41 +1,121 @@
-# Grasp tookit
+# GraspKit
 
-A simple data collection & processing tool for grasp2018.
+A Python package for data collection and processing of results from GRASP (General-purpose Relativistic Atomic Structure Package). This tool enhances GRASP's built-in data handling capabilities with more flexible Python-based processing, machine learning optimization, and automated workflow management.
 
-Coding in python3.12 Numpy, Pandas and Matplotlib are needed.
+## Features
 
-Although GRASP has some original tools to handle the data, the programs written in fortran are less convenient to operate and the operations are fixed, which is not conducive to subsequent processing.
+- **ML-driven CSF Selection Pipeline** - Uses machine learning to optimize Configuration State Function selection for quantum mechanical calculations
+- **GRASP Integration** - Automated workflow management for GRASP2018 calculations via shell scripts
+- **Data Processing** - Comprehensive tools for atomic physics data analysis and visualization
+- **Multi-format Support** - Handle various GRASP output formats with specialized loaders
 
----
+## Requirements
 
-Examples given in test folder. The only thing need to do is change the data file location, data file parameters and `calculation_parameters'.
-
----
+- **Python**: 3.12+
+- **Operating System**: Linux, Windows 10+, macOS 10.15+
+- **Memory**: 4GB RAM (recommended 8GB+)
 
 ## Installation
 
-### 🚀 快速安装
+### 🚀 Method 1: UV (Recommended)
+
+UV is an ultra-fast Python package and project manager that provides extremely fast dependency resolution and installation.
 
 ```bash
-# 根据您的环境选择：
-pip install -r requirements-cpu.txt    # CPU环境
-pip install -r requirements-gpu.txt    # GPU环境
+# Install UV (if not already installed)
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone the repository
+git clone https://github.com/YenochQin/graspkit-tools.git
+cd graspkit-tools
+
+# Create virtual environment
+uv venv
+
+# Activate environment
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+
+# Install dependencies - Must choose CPU or GPU version
+# Note: Tsinghua mirror is automatically configured in pyproject.toml for faster downloads
+
+# CPU version (recommended for compatibility)
+uv sync --extra cpu
+
+# GPU version (if you have NVIDIA GPU with CUDA)
+uv sync --extra gpu
+
+# Development environment with CPU version (recommended)
+uv sync --extra dev --extra cpu
+
+# Development environment with GPU version
+uv sync --extra dev --extra gpu
 ```
 
-📖 **详细安装指南**: 请查看 [INSTALL.md](INSTALL.md) 了解不同环境的安装选项和故障排除。
+**UV Environment Features**:
+- Ultra-fast dependency resolution (10-100x faster than pip)
+- Automatic Python version management (>=3.12)
+- Support for CPU and GPU environment configurations
+- Cross-platform support (Linux, Windows, macOS)
+- Modern lock file mechanism (uv.lock)
+- Isolated development environment
+- Fully compatible with pip
 
-🔍 **验证安装**: 运行 `python check_installation.py` 检查所有依赖是否正确安装。
-
-### 手动安装
+### 📦 Method 2: Traditional pip Installation
 
 ```bash
-# 1. 安装依赖
-pip install -r requirements-cpu[gpu].txt  # 或选择对应环境的依赖文件
+# Clone the repository
+git clone https://github.com/YenochQin/graspkit-tools.git
+cd graspkit-tools
 
-# 2. 构建包
-python -m build
+# Create virtual environment
+python -m venv grasp_env
 
-# 3. 安装
-pip install dist/grasp_data_processing-*.whl
+# Activate environment
+# Windows
+grasp_env\Scripts\activate
+# macOS/Linux
+source grasp_env/bin/activate
+
+# Choose your environment:
+pip install -r requirements-cpu.txt    # CPU environment
+pip install -r requirements-gpu.txt    # GPU environment (requires CUDA)
+
+# Install the package
+pip install -e .
 ```
 
+### 🔍 Verification
+
+```bash
+# Verify installation
+python -c "import graspkit; print('✅ Package OK')"
+
+# Check version
+python -c "import graspkit; print(graspkit.__version__)"
+```
+
+📖 **For detailed installation instructions and troubleshooting**, see [INSTALL.md](INSTALL.md).
+
+## Usage
+
+Examples are provided in the test folder. Simply modify the data file locations, parameters, and `calculation_parameters` to suit your needs.
+
+## Development
+
+### Linting
+
+```bash
+# Run Ruff linting
+ruff check .
+
+# Auto-fix linting issues
+ruff check . --fix
+```
+
+For more detailed development instructions, see [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md).
