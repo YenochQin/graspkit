@@ -17,48 +17,11 @@ GraspKit provides a comprehensive toolkit for atomic physics researchers working
 - **GPU Acceleration** - CUDA support for PyTorch models with automatic device selection
 - **C++ Integration** - Fast descriptor generation via C++ extensions
 
-## Package Architecture
-
-```
-graspkit/
-+-- CSFs_processor/          # CSF selection and processing algorithms
-|   +-- CSFs_choosing.py     # Random/threshold-based CSF selection
-|   +-- CSFs_compress_extract.py  # Descriptor generation from CSFs
-|
-+-- data_IO/                 # Data input/output handling
-|   +-- GraspFileLoad        # Main loader for GRASP output files
-|   +-- EnergyFile2csv       # Energy file conversion
-|   +-- data_writer.py       # Save processed data (pickle/parquet/HDF5)
-|   +-- data_loader.py       # Load processed data
-|
-+-- grasp_data_extractor/    # Physical quantity extraction
-|   +-- ASF_data_collection.py      # Energy levels, ASF composition
-|   +-- transition_data_collection.py  # Transition rate data
-|   +-- transition_data_analyzer.py    # Transition analysis
-|
-+-- ml_module/               # Machine learning pipeline
-|   +-- neural_network.py    # ANN and TensorNet architectures
-|   +-- ml_initializer.py    # Training data setup and validation
-|   +-- ml_trainer.py        # Model training and evaluation
-|   +-- ml_results_analyzer.py  # Results analysis and CSF selection
-|
-+-- utils/                   # Utility functions
-    +-- data_modules.py      # Data structures (MixCoefficientData, CSFs)
-    +-- environment_config.py  # HPC/SLURM detection
-    +-- progress_manager.py  # Environment-aware progress bars
-    +-- plot_functions.py    # Visualization utilities
-```
-
-## Requirements
-
-- **Python**: 3.13 (exclusive)
-- **Operating System**: Linux, Windows 10+, macOS 10.15+
-- **Memory**: 4GB RAM (recommended 8GB+ for large datasets)
-- **GPU (optional)**: NVIDIA GPU with CUDA support for accelerated ML training
-
 ## Installation
 
-### UV (Recommended)
+GraspKit supports multiple installation methods. Choose the one that best fits your workflow.
+
+### Method 1: UV (Recommended)
 
 UV is an ultra-fast Python package manager with 10-100x faster dependency resolution than pip.
 
@@ -90,13 +53,45 @@ uv sync --extra dev --extra cpu    # CPU
 uv sync --extra dev --extra gpu    # GPU
 ```
 
-**UV Features**:
-- Ultra-fast dependency resolution
-- Automatic Python version management (3.13)
-- CPU/GPU environment configurations
-- Tsinghua mirror pre-configured for faster downloads (China)
-- Cross-platform support (Linux, Windows, macOS)
-- Modern lock file mechanism (uv.lock)
+### Method 2: Pixi (Alternative)
+
+Pixi is a cross-platform package manager that uses conda-forge for dependencies.
+
+```bash
+# Install Pixi (if not already installed)
+# Windows (PowerShell)
+powershell -c "irm https://pixi.sh/install.ps1 | iex"
+# macOS/Linux
+curl -fsSL https://pixi.sh/install.sh | bash
+
+# Clone the repository
+git clone https://github.com/YenochQin/graspkit-tools.git
+cd graspkit-tools
+
+# Install dependencies and activate environment
+pixi install
+pixi shell
+
+# Pixi automatically configures the dev-gpu environment by default
+# To switch environments:
+pixi shell -e cpu     # CPU only
+pixi shell -e gpu     # GPU enabled
+pixi shell -e dev-gpu # Development with GPU
+```
+
+**Pixi Features**:
+- Conda-forge based package management
+- Cross-platform support (Linux, macOS, Windows)
+- Lock file based reproducibility (pixi.lock)
+- Automatic environment switching
+- Integration with existing conda workflows
+
+### Requirements
+
+- **Python**: 3.13 (exclusive)
+- **Operating System**: Linux, Windows 10+, macOS 10.15+
+- **Memory**: 4GB RAM (recommended 8GB+ for large datasets)
+- **GPU (optional)**: NVIDIA GPU with CUDA support for accelerated ML training
 
 ### Verification
 
@@ -109,6 +104,38 @@ python -c "import graspkit; print(graspkit.__version__)"
 ```
 
 For detailed installation instructions and troubleshooting, see [INSTALL.md](INSTALL.md).
+
+## Package Architecture
+
+```
+graspkit/
++-- CSFs_processor/          # CSF selection and processing algorithms
+|   +-- CSFs_choosing.py     # Random/threshold-based CSF selection
+|   +-- CSFs_compress_extract.py  # Descriptor generation from CSFs
+|
++-- data_IO/                 # Data input/output handling
+|   +-- GraspFileLoad        # Main loader for GRASP output files
+|   +-- EnergyFile2csv       # Energy file conversion
+|   +-- data_writer.py       # Save processed data (pickle/parquet/HDF5)
+|   +-- data_loader.py       # Load processed data
+|
++-- grasp_data_extractor/    # Physical quantity extraction
+|   +-- ASF_data_collection.py      # Energy levels, ASF composition
+|   +-- transition_data_collection.py  # Transition rate data
+|   +-- transition_data_analyzer.py    # Transition analysis
+|
++-- ml_module/               # Machine learning pipeline
+|   +-- neural_network.py    # ANN and TensorNet architectures
+|   +-- ml_initializer.py    # Training data setup and validation
+|   +-- ml_trainer.py        # Model training and evaluation
+|   +-- ml_results_analyzer.py  # Results analysis and CSF selection
+|
++-- utils/                   # Utility functions
+    +-- data_modules.py      # Data structures (MixCoefficientData, CSFs)
+    +-- environment_config.py  # HPC/SLURM detection
+    +-- progress_manager.py  # Environment-aware progress bars
+    +-- plot_functions.py    # Visualization utilities
+```
 
 ## Quick Start
 
