@@ -7,7 +7,7 @@
 ## 修改内容
 
 ### 1. 新增函数 - csf_coverage_validator.py
-- **`validate_csf_descriptors_coverage`**: 验证CSF描述符是否覆盖所有轨道的核心函数
+- **`validate_csf_desc_coverage`**: 验证CSF描述符是否覆盖所有轨道的核心函数
 - **`select_csfs_for_coverage`**: 当覆盖不足时，从完整描述符中选择补充CSF的智能选择函数
 - **`get_uncovered_orbital_names`**: 获取未覆盖轨道名称的辅助函数
 
@@ -38,7 +38,7 @@
 
 ```python
 # 验证覆盖
-is_covered, uncovered = validate_csf_descriptors_coverage(descriptors, with_subshell_info=False)
+is_covered, uncovered = validate_csf_desc_coverage(descriptors, with_subshell_info=False)
 
 # 如需要补充选择
 if not is_covered:

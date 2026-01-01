@@ -5,19 +5,17 @@
 @date :2024/05/07 11:11:09
 @author :YenochQin (秦毅)
 '''
-
+from typing import Any
 import numpy as np
-import pandas as pd
-from typing import Dict, Tuple, List, Optional, Union
-
-from .data_modules import CSFs
-from .progress_manager import wrap_iterator
+from dataclasses import dataclass
+from typing import Optional
 ######################################################################
 
-'''
-print energy levels function
-'''
+
 def level_print_title(Rydberg = 109737.31568508):
+    '''
+    print energy levels function
+    '''
     print(
 f"""
     Energy levels for ...
@@ -31,15 +29,15 @@ Rydberg constant is  {Rydberg}
     )
 
 
-def level_J_value(j_index: int) -> str:
+def level_J_value(j_idx: int) -> str:
     j_value_list = ['0', '1/2', '1', '3/2', '2', '5/2', '3', '7/2', '4', '9/2', '5', '11/2', '6', '13/2', '7', '15/2', '8', '17/2', '9', '19/2', '10', '21/2', '11', '23/2', '12', '25/2', '13', '27/2', '14', '29/2', '15', '31/2', '16', '33/2', '17', '35/2', '18', '37/2', '19', '39/2', '20', '41/2', '21', '43/2', '22']
 
-    return j_value_list[j_index-1]
+    return j_value_list[j_idx-1]
 
-def level_parity(parity_index: int) -> str:
+def level_parity(parity_idx: int) -> str:
     parity_list = ['+', '-']
 
-    return parity_list[parity_index-1]
+    return parity_list[parity_idx-1]
 
 def energy_au_cm(energy_au: float, Rydberg = 109737.31568508) -> float:
 
@@ -130,65 +128,6 @@ def doubleJ_to_J(doubleJ):
 
 ######################################################################
 
-def lsj_transition_data_level_location(transition_data_df : pd.DataFrame, level_df : pd.DataFrame, level_file_parameters : dict) -> pd.DataFrame:
-    
-    transition_data_df['Upper_level_location'] = 0
-    transition_data_df['Upper_level_location'] = transition_data_df['Upper_level_location'].astype('int')
-    transition_data_df['Lower_level_location'] = 0
-    transition_data_df['Lower_level_location'] = transition_data_df['Lower_level_location'].astype('int')
-    level_paramenter = level_file_parameters.get('level_parameter')
-    level_as = level_file_parameters.get('this_as')
-    
-    level_conf_column = f"Configuration_{level_paramenter}{level_as}raw"
-    
-    def get_level_index(level_J : str, level_conf : str, level_df : pd.DataFrame) -> int:
-        
-        level_index = level_df[(level_df['J'] == level_J) & (level_df[f'{level_conf_column}'] == level_conf)].index.values[0]
-        
-        return level_index
-
-    for index, row in transition_data_df.iterrows():
-        print(row["Upper_J"], row["Upper_configuration"])
-        temp_upper_index = get_level_index(row['Upper_J'], row['Upper_configuration'], level_df)
-        
-        print(row['Lower_J'], row["Lower_configuration"])
-        temp_lower_index = get_level_index(row['Lower_J'], row['Lower_configuration'], level_df)
-
-        transition_data_df.at[index, 'Upper_level_location'] = temp_upper_index + 1
-        transition_data_df.at[index, 'Lower_level_location'] = temp_lower_index + 1
-    return transition_data_df
-
-
-######################################################################
-
-def transition_data_level_location(transition_data_df : pd.DataFrame, level_df : pd.DataFrame) -> pd.DataFrame:
-    
-    transition_data_df['Upper_level_location'] = 0
-    transition_data_df['Upper_level_location'] = transition_data_df['Upper_level_location'].astype('int')
-    transition_data_df['Lower_level_location'] = 0
-    transition_data_df['Lower_level_location'] = transition_data_df['Lower_level_location'].astype('int')
-
-    for index, row in wrap_iterator(transition_data_df.iterrows(), desc="处理跃迁数据"):
-
-        # print(row["Upper_loc"], row["Upper_J"], row["Upper_parity"])
-        temp_upper_index = level_df[(level_df["Pos"] == row["Upper_loc"]) & (level_df["J"] == row["Upper_J"]) & (level_df["Parity"] == row["Upper_parity"])].index.values[0]
-        # print(row["Lower_loc"], row["Lower_J"], row["Lower_parity"])
-        temp_lower_index = level_df[(level_df["Pos"] == row["Lower_loc"]) & (level_df["J"] == row["Lower_J"]) & (level_df["Parity"] == row["Lower_parity"])].index.values[0]
-        transition_data_df.at[index, 'Upper_level_location'] = temp_upper_index + 1
-        transition_data_df.at[index, 'Lower_level_location'] = temp_lower_index + 1
-
-    return transition_data_df
-
-######################################################################
-
-def transition_dT_cal(transition_rate_B, transition_rate_C):
-    
-    transition_dT = abs(transition_rate_B - transition_rate_C) / max(transition_rate_B, transition_rate_C)
-    
-    return transition_dT
-
-######################################################################
-
 # Function to read Fortran-style binary records (assume 4-byte record marker)
 def read_fortran_record(file, dtype, count=1):
     # Read the record length (4 bytes before the data)
@@ -221,7 +160,7 @@ def chunk_string(s: str, n: int) -> list[str]:
 
 ######################################################################
 
-def level_data_compare(levels_file_1: List, levels_file_2: List):
+def level_data_compare(levels_file_1: list, levels_file_2: list):
     
     level_data_1 = []
     level_data_2 = []
@@ -247,5 +186,20 @@ def level_data_compare(levels_file_1: List, levels_file_2: List):
             raise ValueError(f'Configuration state functions differ at line {i+1}')
         
     return True
+
+######################################################################
+
+def LS_shell_full_charged(shell_name: str, shell_charged_num: int) -> bool:
+    
+    full_charged = {
+        "s": 2,
+        "p": 6,
+        "d": 10,
+        "f": 14,
+        "g": 18,
+        "h": 22,
+        "i": 26
+    }
+    return full_charged.get(shell_name, 0) == shell_charged_num
 
 ######################################################################

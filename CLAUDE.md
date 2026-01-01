@@ -10,135 +10,182 @@ A Python package for data collection and processing of results from GRASP (Gener
 
 ### Package Structure
 - **graspkit/** - Main Python package (in `src/`)
-  - **CSFs_choosing/** - Configuration State Function selection with ML
-  - **data_IO/** - Data input/output, plotting, and visualization  
-  - **machine_learning_module/** - ANN models and training infrastructure
-  - **processing/** - ASF/transition data collection and analysis
-  - **utils/** - Utilities, environment config, progress management
+  - **CSFs_processor/** - Configuration State Function processing and selection algorithms
+  - **data_IO/** - Data input/output handling, including specialized loaders for different data formats
+  - **grasp_data_extractor/** - Data extraction from GRASP2018 calculations (ASF and transition data)
+  - **ml_module/** - Machine learning infrastructure (neural networks, training, analysis)
+  - **utils/** - Utility functions (environment config, progress management, tool functions)
 
 ### Key Components
 
 1. **ML-driven CSF Selection Pipeline** - Uses machine learning to optimize Configuration State Function selection for quantum mechanical calculations
-2. **GRASP Integration** - Automated workflow management for GRASP calculations via shell scripts
+2. **GRASP Integration** - Automated workflow management for GRASP2018 calculations via shell scripts
 3. **Data Processing** - Comprehensive tools for atomic physics data analysis and visualization
 
 ## Development Commands
 
 ### Environment Setup
+
+#### UV Package Manager (Recommended)
 ```bash
-# Choose appropriate environment
-pip install -r requirements-cpu.txt    # CPU environment
-pip install -r requirements-gpu.txt    # GPU environment
+# Create and activate environment
+uv venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 
-# Development installation
-pip install -e .
+# Install dependencies (must choose CPU or GPU)
+uv sync --extra cpu --extra dev    # CPU version with dev tools
+uv sync --extra gpu --extra dev     # GPU version with dev tools (NVIDIA CUDA)
 
-# Build package
+# Alternative legacy installation
+uv pip install -e .
+```
+
+#### Pixi (Alternative)
+```bash
+pixi install
+pixi shell
+```
+
+#### Traditional pip Installation
+```bash
+# Create and activate environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+
+# Install dependencies
+pip install -e .  # Uses CPU dependencies by default
+```
+
+### Building and Quality
+
+#### Package Building
+```bash
+# Build the package (cross-platform scripts)
+python build_package.py --clean    # Clean build
+./build_package.sh --clean         # Unix-like systems
+build_package.bat --clean          # Windows
+
+# Manual build
 python -m build
+
+# Development build with all dependencies
+python build_package.py --dev --clean
 ```
 
-### Testing
+#### Linting and Quality
 ```bash
-# Run specific tests
-python -m pytest tests/test_cpu_threads.py
-python -m pytest tests/test_mkdisks_config.py
-
-# Run all tests
-python -m pytest tests/
-```
-
-### Linting
-```bash
-# Run Ruff linting
+# Run Ruff linting with NumPy 2.0 compatibility rules
 ruff check .
 
 # Auto-fix linting issues
 ruff check . --fix
+
+# Type checking (optional)
+mypy src/
 ```
 
-### Common Workflows
-
-#### Running ML CSF Selection
+#### Testing
 ```bash
-# Navigate to work directory containing config.toml
-cd /path/to/calculation/directory
+# Run test files in tests/ directory
+python tests/test_coverage_simple.py
+python tests/test_coverage_function.py
 
-# Interactive mode (recommended)
-/path/to/graspkit/tests/ml_csf_choosing/quick_run.sh
+# Run example scripts
+python tests/ANN.py                    # ML classifier example
+python tests/rwfn_plotter.py          # Wavefunction plotting
+python tests/Nightingale_rose.py      # Visualization example
 
-# Command line mode
-/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh train
-/path/to/graspkit/tests/ml_csf_choosing/run_ml.sh all
+# Run notebook examples
+jupyter notebook tests/test.ipynb
 ```
 
-#### Key Programs
-- **initial_csfs.py** - Initialize CSF configurations and descriptors
-- **choosing_csfs.py** - Strategy-based CSF selection for next calculation round  
-- **train.py** - ML model training and intelligent CSF selection
+#### Package Verification
+```bash
+# Verify installation
+python -c "import graspkit; print('Package OK')"
+
+# Check version
+python -c "import graspkit; print(graspkit.__version__)"
+```
+
+### Key Development Patterns
+
+#### Centralized Import Structure
+The package exposes all functionality through `src/graspkit/__init__.py` with comprehensive imports:
+- Data I/O operations (GraspFileLoad, descriptor loading/saving)
+- Utility functions (CSFs, energy calculations, transition data)
+- Machine learning modules (ANNClassifier, training functions)
+- Data processing tools (ASF composition, transition analysis)
+
+#### Module Interdependencies
+- **data_IO** serves as foundation, providing file loading and persistence
+- **CSFs_processor** contains core quantum mechanics algorithms
+- **ml_module** depends on processed data from CSFs_processor
+- **grasp_data_extractor** handles GRASP-specific data formats
+- **utils** provides shared functionality across all modules
+
+#### Environment-Aware Logging
+The codebase includes environment detection for HPC/SLURM environments:
+- `utils/environment_config.py` - Detects SLURM jobs and debug mode
+- `utils/progress_manager.py` - Hides progress bars in SLURM, shows in debug mode
+- Use `log_stage_start()` / `log_stage_end()` functions for structured logging
+
+#### Type Safety
+- Data structures use `@dataclass` (e.g., `MixCoefficientData`, `CSFs` in `utils/data_modules.py`)
+- Type-safe helper methods on `GraspFileLoad` class
+- PyTorch models use type annotations
 
 ### Configuration Management
 
-#### Main Config (config.toml)
-The `config.toml` file controls all aspects of calculations:
-- Atomic parameters (atom, conf, active_space, cal_levels)
-- ML parameters (expansion_ratio, chosen_ratio, model_params)
-- Step control for checkpoint/restart functionality
-- CPU optimization settings
+#### Main Package Configuration
+- **pyproject.toml** - Modern Python packaging configuration using Hatchling
+- **uv.lock** - UV lock file for reproducible dependency management
+- **pixi.lock** - Pixi lock file (conda-forge, Linux-64 only)
+- **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
+- **Ruff Configuration** - NumPy 2.0 compatibility rules in pyproject.toml
 
-#### Step-Level Control
-Advanced checkpoint/restart system allows granular control:
-```toml
-[step_control]
-enable_step_control = true
-target_loop = 3              # Specific loop to control
-start_step = "rmcdhf"        # Start from specific step
-end_step = "rmcdhf"          # Stop after specific step
-skip_completed_steps = true  # Auto-skip completed steps
+#### Dependencies Management
+- **CPU Environment** - PyTorch CPU version for general compatibility
+- **GPU Environment** - PyTorch CUDA version (cu128) for NVIDIA GPUs
+- **Development Tools** - pytest, ruff, mypy, black, jupyter ecosystem
+- **Data Processing** - pandas, numpy, matplotlib, h5py, polars, pyarrow
+
+### Current Repository Status
+- **Version**: 2.9dev2 (from `src/graspkit/version.py`)
+- **Python Version**: Requires 3.13+ (<3.14)
+- **Package Manager**: Hatchling with UV/Pixi support
+- **Build System**: Modern packaging with optional dependencies
+- **Testing**: Example files in tests/ directory (ANN.py, rwfn_plotter.py, Nightingale_rose.py, test.ipynb)
+
+## Common Development Workflows
+
+### Data Processing Pipeline
+```python
+# Typical workflow for processing GRASP data
+import graspkit as gk
+
+# Load GRASP calculation results
+data_loader = gk.GraspFileLoad("path/to/grasp/output")
+energy_data = gk.mcdhf_energy_data_collection(data_loader)
+
+# Process CSFs with ML-driven selection
+selected_csfs = gk.radom_choose_csfs(csf_processor, n_select=1000)
+
+# Train ML model for optimization
+model = gk.ANNClassifier(...)
+gk.train_model(model, training_data)
 ```
 
-Available steps: `initial_csfs`, `choosing_csfs`, `mkdisks`, `rangular`, `rwfnestimate`, `rmcdhf`, `rci`, `rsave`, `jj2lsj`, `rlevels`, `train`
+### Environment-Specific Commands
+```bash
+# Check which PyTorch environment is active
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 
-### GRASP Integration
-
-The system integrates with GRASP2018 through automated shell scripts:
-- **run_script.sh** - Main SLURM job script with comprehensive error handling
-- **common_functions.sh** - Shared utilities for logging and configuration
-- Supports MPI parallel execution with configurable thread counts
-- Automated error detection and file validation
-
-### Build System
-
-- **Package Manager**: Hatchling (modern Python packaging)
-- **Dependencies**: PyTorch, scikit-learn, pandas, numpy 2.0+
-- **Python Version**: Requires 3.12+
-- **Linting**: Ruff with NumPy 2.0 compatibility rules
-
-### File Organization Patterns
-
-#### ML Training Data Flow
-1. GRASP calculations produce `.level` files with energy data
-2. CSF selection tools process `.c` and `.cm` files  
-3. ML models train on energy convergence patterns
-4. New CSF selections written for next iteration
-
-#### Configuration Precedence
-1. Command line arguments override config.toml
-2. config.toml overrides package defaults
-3. Environment variables for system paths (PYTHONPATH, conda environments)
-
-## Important Notes
-
-### Environment Requirements
-- Must run in correct conda environment with GRASP modules loaded
-- Requires MPI (OpenMPI) for parallel GRASP calculations
-- Python environment must include all scientific computing dependencies
-
-### Workflow Dependencies  
-- Each calculation step depends on previous step outputs
-- Step control system allows selective re-execution but requires understanding of dependencies
-- ML training requires completed GRASP calculations with energy level data
-
-### Performance Considerations
-- PyTorch thread count configurable via `cpu_config.cpu_threads`
-- MPI temporary file paths configurable to avoid I/O bottlenecks
-- Large CSF sets require careful memory management
+# Switch between CPU/GPU environments
+uv sync --extra cpu --extra dev    # CPU with dev tools
+uv sync --extra gpu --extra dev     # GPU with dev tools
+```
