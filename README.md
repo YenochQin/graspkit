@@ -2,6 +2,8 @@
 
 **Version**: 2.9.1 | **Python**: 3.13
 
+English | [简体中文](README_zh.md)
+
 A Python package for data collection and processing of results from GRASP (General-purpose Relativistic Atomic Structure Package). This tool enhances GRASP's built-in data handling capabilities with more flexible Python-based processing, machine learning optimization, and automated workflow management.
 
 ## Overview
