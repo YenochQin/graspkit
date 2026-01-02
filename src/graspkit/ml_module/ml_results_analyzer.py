@@ -476,9 +476,9 @@ def ml_results_statistics(
 
     # 定义统计项配置：(字段名, 显示标签, 比率键名)
     stats_config = [
-        ("import_csfs_count", "重要CSFs", "important_retention_rate"),
-        ("ml_sampled_count", "ML新增CSFs", "ml_retention_rate"),
-        ("final_sampled_count", "最终选择CSFs", "final_retention_rate"),
+        ("import_csfs_count", "重要 CSFs ", "important_retention_rate"),
+        ("ml_sampled_count", "ML新增 CSFs ", "ml_retention_rate"),
+        ("final_sampled_count", "最终选择 CSFs ", "final_retention_rate"),
     ]
 
     rates = {}
