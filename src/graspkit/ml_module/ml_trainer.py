@@ -402,17 +402,7 @@ def predict_model(
     all_csfs_idxs = np.arange(total_csfs_count)
     current_calc_idxs = caled_csfs_idxs_array
 
-    # 调试：检查输入数组维度
-    logger.info(
-        f"caled_csfs_idxs_array shape: {caled_csfs_idxs_array.shape}, ndim: {caled_csfs_idxs_array.ndim}"
-    )
-
     unselected_idxs = np.setdiff1d(all_csfs_idxs, current_calc_idxs)
-
-    # 调试：检查unselected_idxs维度
-    logger.info(
-        f"unselected_idxs shape: {unselected_idxs.shape}, ndim: {unselected_idxs.ndim}"
-    )
 
     # 仅对未选择的CSF进行预测（使用分批处理避免内存溢出）
     X_unselected_for_prediction = raw_csfs_descriptors[unselected_idxs]
@@ -470,15 +460,9 @@ def predict_model(
     ml_predicted_important_mask = y_unselected_prediction == 1
     ml_predicted_important_local_idxs = np.where(ml_predicted_important_mask)[0]
 
-    # 调试：检查索引数组维度
-    logger.info(f"ml_predicted_important_local_idxs shape: {ml_predicted_important_local_idxs.shape}, ndim: {ml_predicted_important_local_idxs.ndim}")
-
     ml_predicted_important_global_idxs = unselected_idxs[
         ml_predicted_important_local_idxs
     ]
-
-    # 调试：检查global_idxs维度
-    logger.info(f"ml_predicted_important_global_idxs shape: {ml_predicted_important_global_idxs.shape}, ndim: {ml_predicted_important_global_idxs.ndim}")
 
     logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
     logger.info(
@@ -523,10 +507,6 @@ def predict_model(
 
         logger.info(f"情况2：直接使用ml_predicted_important_global_idxs，shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}")
 
-    # 调试：检查ml_sampled_idxs维度
-    logger.info(
-        f"ml_sampled_idxs after assignment: shape={ml_sampled_idxs.shape}, ndim={ml_sampled_idxs.ndim}"
-    )
     if ml_sampled_idxs.ndim > 1:
         logger.info(f"ml_sampled_idxs前3个值: {ml_sampled_idxs[:3]}")
 
@@ -534,10 +514,6 @@ def predict_model(
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
     train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
 
-    # 调试信息：检查数组维度
-    logger.info(
-        f"verified_important_idxs shape: {verified_important_idxs.shape}, ndim: {verified_important_idxs.ndim}"
-    )
     logger.info(
         f"ml_sampled_idxs shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}"
     )
