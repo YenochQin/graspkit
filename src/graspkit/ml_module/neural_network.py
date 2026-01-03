@@ -675,7 +675,7 @@ class ANNClassifier:
         y_test: np.ndarray,
         y_probability: np.ndarray,
         filename: str
-    ) -> Tuple[float, float]:
+    ):
         """
         绘制评估曲线
 
@@ -778,7 +778,7 @@ class ANNClassifier:
         y_test: np.ndarray,
         y_pred: np.ndarray,
         y_probability: np.ndarray
-    ) -> Tuple[float, float, float, float, float]:
+    ):
         """
         模型评估
 

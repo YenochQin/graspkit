@@ -524,14 +524,8 @@ def evaluate_calculation_convergence(
     energy_data_list = []
 
     for i in range(3):
-        loop_num = (
-            config.cal_settings.cal_loop_num - 2 + i
-        )  # 前3次：当前-2, 当前-1, 当前
-        csv_path = (
-            config.cal_settings.root_path
-            / f"{config.target.conf}_{loop_num}"
-            / f"{config.target.conf}_{loop_num}_correct_levels.csv"
-        )
+        loop_num = config.cal_settings.cal_loop_num - 2 + i # 前3次：当前-2, 当前-1, 当前
+        csv_path = config.cal_settings.root_path / f"{config.target.conf}_{loop_num}" / f"{config.target.conf}_{loop_num}_correct_levels.csv"
 
         if csv_path.exists():
             df = pd.read_csv(csv_path)
