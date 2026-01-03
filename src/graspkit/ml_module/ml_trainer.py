@@ -505,18 +505,9 @@ def predict_model(
         )
         ml_sampled_idxs = ml_predicted_important_global_idxs
 
-        logger.info(f"情况2：直接使用ml_predicted_important_global_idxs，shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}")
-
-    if ml_sampled_idxs.ndim > 1:
-        logger.info(f"ml_sampled_idxs前3个值: {ml_sampled_idxs[:3]}")
-
     train_data_counts.import_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
     train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
-
-    logger.info(
-        f"ml_sampled_idxs shape: {ml_sampled_idxs.shape}, ndim: {ml_sampled_idxs.ndim}"
-    )
 
     return (
         ml_sampled_idxs,
