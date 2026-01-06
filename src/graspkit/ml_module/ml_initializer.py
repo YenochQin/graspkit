@@ -174,60 +174,6 @@ def setup_logging(log_dir: Path):
 
     return logger
 
-def initialize_iteration_results_csv(
-        iteration_results_path: Path, 
-        logger: logging.Logger
-    ):
-    """
-    初始化迭代结果CSV文件的表头
-
-    Args:
-        config: 配置对象
-        logger: 日志记录器
-    """
-
-    # 如果文件已存在，不重新创建表头
-    if iteration_results_path.exists():
-        logger.info(f"迭代结果文件已存在: {iteration_results_path}")
-        return
-
-    # 创建目录
-    iteration_results_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 写入表头
-    headers = [
-        "cal_loop_num",  # 迭代轮次
-        "important_count",  # 重要组态数量
-        "ml_predicted_count",  # ML预测的高概率组态总数
-        "ml_new_count",  # ML新增的组态数（下次计算用）
-        "total_original_count",  # 原始CSFs总数
-        "current_calculation_count",  # 本轮计算的组态数
-        "data_retention_rate",  # 数据留存率（交集/本轮计算）
-        "important_retention_rate",  # 重要组态占原始比例
-        "ml_retention_rate",  # ML预测组态占原始比例
-        "training_time",
-        "actual_eval_time",  # 推理时间
-        "execution_time",
-        "execution_time",  # 总时间（现在与执行时间相同）
-        "test_f1",
-        "test_roc_auc",
-        "test_accuracy",
-        "test_precision",
-        "test_recall",
-        "train_f1",
-        "train_roc_auc",
-        "train_accuracy",
-        "train_precision",
-        "train_recall",
-        "overfitting_gap",  # 过拟合差距
-    ]
-
-    with open(iteration_results_path, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(headers)
-
-    logger.info(f"初始化迭代结果CSV文件: {iteration_results_path}")
-
 
 def training_data_loader(
         paths_cfg,

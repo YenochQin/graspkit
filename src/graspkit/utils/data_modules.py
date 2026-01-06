@@ -54,7 +54,13 @@ class MLDataCounts:
 
     import_csfs_count: Optional[int] = None
     ml_sampled_count: Optional[int] = None
-    ml_new_count: Optional[int] = None
     ml_predicted_count: Optional[int] = None
     final_sampled_count: Optional[int] = None
+
+    # 验证留存率 (Screening Retention Rate) / 良品率:经过实际计算（或仿真/实验）后，有多少数据被认为是“好”的并保留下来。
+    screening_retention_rate: Optional[float] = None
+    # ML 预测留存率 (ML Selection Retention Rate) : 进行预测并截断时产生的留存率,模型对未知空间的探索力度。
+    ml_retention_rate: Optional[float] = None
+    # 迭代增长率 (Iteration Growth/Retention Rate): 下一次计算的规模相对于这一次的变化, 控制计算成本。如果 $>1$，计算量在发散；如果 $<1$，计算量在收敛。
+    iteration_retention_rate: Optional[float] = None
 
