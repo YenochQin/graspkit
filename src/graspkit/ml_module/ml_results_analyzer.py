@@ -226,7 +226,7 @@ def save_training_results(
 
 def save_iteration_results(
         config,
-        selection_results: dict,
+        train_data_counts: MLDataCounts,
         logger: logging.Logger
     ):
     """
@@ -248,24 +248,24 @@ def save_iteration_results(
             writer.writerow([
                 "cal_loop_num",  # 迭代轮次
                 "important_count",  # 重要组态数量
-                "ml_predicted_count",  # ML预测的高概率组态总数
-                "ml_new_count",  # ML新增的组态数（下次计算用）
+                "ml_sampled_count",  # ML预测的高概率组态总数
                 "total_original_count",  # 原始CSFs总数
                 "current_calculation_count",  # 本轮计算的组态数
-                "data_retention_rate",  # 数据留存率（交集/本轮计算）
-                "important_retention_rate",  # 重要组态占原始比例
-                "ml_retention_rate",  # ML预测组态占原始比例
+                "screening_retention_rate",  # 验证留存率 
+                "ml_retention_rate",  # ML 预测留存率
+                "iteration_retention_rate",  # 迭代增长率
             ])
 
     # 提取选择结果的实际数据
-    important_count = selection_results.get("important_count", 0)
-    ml_predicted_count = selection_results.get("ml_predicted_count", 0)
-    ml_new_count = selection_results.get("ml_new_count", 0)
-    total_original_count = selection_results.get("total_original_count", 1)
-    current_calculation_count = selection_results.get("current_calculation_count", 1)
-    data_retention_rate = selection_results.get("data_retention_rate", 0.0)
-    important_retention_rate = selection_results.get("important_retention_rate", 0.0)
-    ml_retention_rate = selection_results.get("ml_retention_rate", 0.0)
+
+    import_csfs_count = getattr(train_data_counts, "import_csfs_count", 0)
+    ml_sampled_count = getattr(train_data_counts, "ml_sampled_count", 0)
+    total_original_count = getattr(train_data_counts, "total_csfs_count", 0)
+    current_calculation_count = getattr(train_data_counts, "cal_csfs_count", 0)
+    screening_retention_rate = getattr(train_data_counts, "screening_retention_rate", 0)
+    ml_retention_rate = getattr(train_data_counts, "ml_retention_rate", 0)
+    iteration_retention_rate = getattr(train_data_counts, "iteration_retention_rate", 0)
+
 
     # 安全获取配置参数
     cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
@@ -276,26 +276,17 @@ def save_iteration_results(
         writer.writerow(
             [
                 cal_loop_num,  # 迭代轮次
-                important_count,  # 重要组态数量
-                ml_predicted_count,  # ML预测的高概率组态总数
-                ml_new_count,  # ML新增的组态数（下次计算用）
+                import_csfs_count,  # 重要组态数量
+                ml_sampled_count,  # ML预测的高概率组态总数
                 total_original_count,  # 原始CSFs总数
                 current_calculation_count,  # 本轮计算的组态数
-                data_retention_rate,  # 数据留存率（交集/本轮计算）
-                important_retention_rate,  # 重要组态占原始比例
-                ml_retention_rate,  # ML预测组态占原始比例
+                screening_retention_rate,  # 验证留存率
+                ml_retention_rate,  # ML 预测留存率
+                iteration_retention_rate,  # 迭代增长率
             ]
         )
 
     logger.info(f"迭代结果已保存到: {results_file}")
-    logger.info(
-        f"第{cal_loop_num}轮 - 重要组态: {important_count} (占原始: {important_retention_rate:.4%})"
-    )
-    logger.info(
-        f"第{cal_loop_num}轮 - ML预测组态: {ml_new_count} (占原始: {ml_retention_rate:.4%})"
-    )
-    if cal_loop_num > 1:
-        logger.info(f"第{cal_loop_num}轮 - 数据留存率: {data_retention_rate:.4%}")
 
 def save_and_plot_results(
         logger: logging.Logger,
@@ -457,58 +448,35 @@ def save_and_plot_results(
 def ml_results_statistics(
         train_data_counts: MLDataCounts,
         logger: logging.Logger
-    ) -> dict:
+    ) -> MLDataCounts:
     """
     统计ML结果并返回完整的selection_results字典
 
     Returns:
         dict: 包含selection_results所需的所有字段
     """
-    total = train_data_counts.total_csfs_count
+    total_csfs_count = train_data_counts.total_csfs_count
+    cal_csfs_count = train_data_counts.cal_csfs_count
 
     # 除零保护
-    if total <= 0:
-        logger.error(f"原始CSFs总数无效: {total}")
-        return {}
+    if total_csfs_count <= 0 and cal_csfs_count <= 0:
+        logger.error(f"train_data_counts 中初始计数无效: {total_csfs_count}， {cal_csfs_count}")
+        return train_data_counts
 
-    logger.info(f"统计信息:")
-    logger.info(f"- 原始CSFs总数: {total}")
+    logger.info(f"统计 ML sampling 信息:")
+    logger.info(f"- 原始CSFs总数: {total_csfs_count}")
 
-    # 定义统计项配置：(字段名, 显示标签, 比率键名)
-    stats_config = [
-        ("import_csfs_count", "重要 CSFs ", "important_retention_rate"),
-        ("ml_sampled_count", "ML新增 CSFs ", "ml_retention_rate"),
-        ("final_sampled_count", "最终选择 CSFs ", "final_retention_rate"),
-    ]
+    import_csfs_count = getattr(train_data_counts, "import_csfs_count", None)
+    if import_csfs_count is not None:
+        train_data_counts.screening_retention_rate = import_csfs_count / cal_csfs_count
+        logger.info(f"- 计算重要 CSFs 数量: {import_csfs_count} (验证留存率: {train_data_counts.screening_retention_rate:.4%})")
 
-    rates = {}
+    ml_sampled_count = getattr(train_data_counts, "ml_sampled_count", None)
+    if ml_sampled_count is not None:
+        train_data_counts.ml_retention_rate = ml_sampled_count / (total_csfs_count - cal_csfs_count)
+        logger.info(f"- ML预测 CSFs 数量: {ml_sampled_count} (ML 预测留存率: {train_data_counts.ml_retention_rate:.4%})")
 
-    for field, label, rate_key in stats_config:
-        count = getattr(train_data_counts, field, None)
-        if count is not None:
-            rate = count / total
-            rates[rate_key] = rate
-            logger.info(f"- {label}数量: {count} (占原始: {rate:.4%})")
+        train_data_counts.iteration_retention_rate = (import_csfs_count + ml_sampled_count) / cal_csfs_count
+        logger.info(f"- ML预测 CSFs 数量: {ml_sampled_count} (迭代增长率: {train_data_counts.iteration_retention_rate:.4%})")
 
-    # 计算data_retention_rate (cal_csfs_count / total_csfs_count)
-    data_retention_rate = train_data_counts.cal_csfs_count / total
-    rates["data_retention_rate"] = data_retention_rate
-    logger.info(f"- 本轮计算CSFs数量: {train_data_counts.cal_csfs_count} (占原始: {data_retention_rate:.4%})")
-
-    # 计算ML扩展比例
-    if "ml_retention_rate" in rates and "important_retention_rate" in rates:
-        ml_improvement_ratio = rates["ml_retention_rate"] / rates["important_retention_rate"]
-    else:
-        ml_improvement_ratio = 0.0
-
-    logger.info(f"- ML扩展比例: {ml_improvement_ratio:.2f} (ML新增/重要组态)")
-
-    # 返回完整的selection_results字典
-    return {
-        'ml_new_count': train_data_counts.ml_new_count,
-        'final_sampled_count': train_data_counts.final_sampled_count,
-        'total_original_count': total,
-        'current_calculation_count': train_data_counts.cal_csfs_count,
-        **rates,
-        'ml_improvement_ratio': ml_improvement_ratio,
-    }
+    return train_data_counts

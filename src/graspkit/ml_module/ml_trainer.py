@@ -414,14 +414,12 @@ def predict_model(
     y_unselected_prediction = (y_unselected_probability[:, 1] > 0.5).astype(int)
 
     logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
-    logger.info(f" {y_unselected_prediction.shape=} ")
 
     # 为绘图准备当前计算CSF的预测概率
     # 对当前计算的CSF也进行预测（用于绘图和分析）
     X_current_calc = raw_csfs_descriptors[current_calc_idxs]
     y_current_cal_probability = model.predict_proba(X_current_calc)[:, 1]
     logger.info(f"当前计算CSF数量: {len(current_calc_idxs)}")
-    logger.info(f"当前计算CSF预测概率维度: {y_current_cal_probability.shape}")
 
     # 基于混合系数选择重要组态（已验证重要组态）
     cutoff_value = getattr(config.cal_settings, "cutoff_value", 1e-10)
@@ -507,7 +505,7 @@ def predict_model(
 
     train_data_counts.import_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
-    train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
+    train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
 
     return (
         ml_sampled_idxs,
