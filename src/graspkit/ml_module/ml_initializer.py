@@ -133,6 +133,7 @@ def setup_directories(root_path: Path):
 
     return "目录创建成功"
 
+
 def setup_logging(log_dir: Path):
     """配置日志系统，支持环境感知"""
     env_config = get_environment_config()
@@ -247,11 +248,11 @@ def training_data_loader(
 
     Returns:
         tuple: (
-                energy_level_data_pd, 
-                rmix_file_data, 
-                raw_csfs_descriptors, 
-                total_csfs_count, 
-                cal_csfs_data, 
+                energy_level_data_pd,
+                rmix_file_data,
+                raw_csfs_descriptors,
+                total_csfs_count,
+                cal_csfs_data,
                 caled_csfs_idxs_array
                 )
     """
@@ -275,19 +276,6 @@ def training_data_loader(
         )
         logger.info(f"加载 parquet raw_CSFs 描述符: {raw_desc_file_path}")
         raw_csfs_desc_count = parquet_meta_data["n_rows"]
-
-    else:
-        # 使用传统文件格式
-        result = load_descriptors_with_multi_block(
-            paths_cfg.full_CSFs_set_desc_path, "npy"
-        )
-        if result is None:
-            raise FileNotFoundError(
-                f"无法加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_desc_path}"
-            )
-        raw_csfs_descriptors, raw_csfs_idxs = result
-        logger.info(f"加载初始 CSFs 描述符文件: {paths_cfg.full_CSFs_set_desc_path}")
-        raw_csfs_desc_count = raw_csfs_descriptors.shape[0]
 
     raw_csfs_header_file = paths_cfg.full_CSFs_set_header_path
     csfs_header = rtoml.load(raw_csfs_header_file)
@@ -499,10 +487,8 @@ def check_energy_convergence(
 
 
 def evaluate_calculation_convergence(
-        config, 
-        logger: logging.Logger, 
-        cal_loop_csfs_count: int
-    ):
+    config, logger: logging.Logger, cal_loop_csfs_count: int
+):
     """
     检查GRASP计算的收敛性
 
@@ -524,8 +510,14 @@ def evaluate_calculation_convergence(
     energy_data_list = []
 
     for i in range(3):
-        loop_num = config.cal_settings.cal_loop_num - 2 + i # 前3次：当前-2, 当前-1, 当前
-        csv_path = config.cal_settings.root_path / f"{config.target.conf}_{loop_num}" / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+        loop_num = (
+            config.cal_settings.cal_loop_num - 2 + i
+        )  # 前3次：当前-2, 当前-1, 当前
+        csv_path = (
+            config.cal_settings.root_path
+            / f"{config.target.conf}_{loop_num}"
+            / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+        )
 
         if csv_path.exists():
             df = pd.read_csv(csv_path)
@@ -643,10 +635,8 @@ def evaluate_calculation_convergence(
 
 
 def merge_historical_ci_data(
-        previous_idxs_ci_dict, 
-        current_idxs_ci_dict, 
-        logger: logging.Logger
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    previous_idxs_ci_dict: dict, current_idxs_ci_dict: dict, logger: logging.Logger
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
 
@@ -711,10 +701,8 @@ def merge_historical_ci_data(
 
 
 def generate_train_csfs_descriptors(
-        config, 
-        raw_csfs_descriptors: np.ndarray, 
-        logger: logging.Logger
-    ) -> np.ndarray:
+    config, raw_csfs_descriptors: np.ndarray, logger: logging.Logger
+) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
     基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
@@ -847,9 +835,8 @@ def generate_train_csfs_descriptors(
 
 
 def get_stay_descriptors(
-        raw_csfs_descriptors: np.ndarray, 
-        sampled_csfs_idxs_array: np.ndarray
-    ) -> np.ndarray:
+    raw_csfs_descriptors: np.ndarray, sampled_csfs_idxs_array: np.ndarray
+) -> np.ndarray:
     """
     找出不在sampled_csfs_idxs_array索引中的描述符
 

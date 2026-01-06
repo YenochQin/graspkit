@@ -6,11 +6,11 @@
 """
 
 # 标准库导入
+import logging
 import math
 import os
 import shutil
 import time
-import logging
 
 # 第三方库导入
 import joblib
@@ -31,11 +31,11 @@ from .neural_network import ANNClassifier
 
 
 def train_model(
-        config, 
-        caled_csfs_descriptors: np.ndarray, 
-        correct_levels_ci: np.ndarray, 
-        logger: logging.Logger
-    ):
+    config,
+    caled_csfs_descriptors: np.ndarray,
+    correct_levels_ci: np.ndarray,
+    logger: logging.Logger,
+):
     """训练机器学习模型"""
 
     X = caled_csfs_descriptors[:, :-1]
@@ -271,15 +271,7 @@ def train_model(
     return model, X_train, X_test, y_train, y_test
 
 
-def evaluate_model(
-        model, 
-        X_train, 
-        X_test, 
-        y_train, 
-        y_test, 
-        config, 
-        logger
-    ):
+def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -505,7 +497,7 @@ def predict_model(
         )
         ml_sampled_idxs = ml_predicted_important_global_idxs
 
-    train_data_counts.import_csfs_count = verified_important_idxs.shape[0]
+    train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
     train_data_counts.ml_new_count = ml_sampled_idxs.shape[0]
 
