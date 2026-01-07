@@ -59,7 +59,6 @@ class MLDataCounts:
 
     important_csfs_count: Optional[int] = None
     ml_sampled_count: Optional[int] = None
-    ml_new_count: Optional[int] = None
     ml_predicted_count: Optional[int] = None
     final_sampled_count: Optional[int] = None
 
