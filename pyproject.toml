@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-version = '3.0.dev1'
+version = '3.0.dev2'
 # version = '2.9.1'
 description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
@@ -135,7 +135,7 @@ platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 grasp-kit = { path = ".", editable = true }
-rcsfs = { path = "/home/qqqyy/project_files/rCSFs/dist/rcsfs-0.1.0-cp313-cp313-manylinux_2_28_x86_64.whl" }
+rcsfs = { path = "../graspkit-tools/package/rcsfs/rcsfs-0.1.0-cp313-cp313-manylinux_2_28_x86_64.whl" }
 
 [tool.pixi.environments]
 # default = { solve-group = "default" }
