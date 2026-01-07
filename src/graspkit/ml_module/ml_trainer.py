@@ -503,7 +503,7 @@ def predict_model(
         ml_sampled_idxs,
         verified_important_idxs,
         y_current_cal_probability,
-        train_data_counts,
+        train_data_counts
     )
 
 

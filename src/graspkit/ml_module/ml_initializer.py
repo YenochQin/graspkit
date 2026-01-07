@@ -18,7 +18,6 @@ import rtoml
 from ..data_IO import (
     GraspFileLoad,
     load_config,
-    load_descriptors_with_multi_block,
     load_hdf5_descriptors,
     pkl_loader,
     pkl_storage,
@@ -103,11 +102,18 @@ def _setup_config_paths(config):
     config.cal_path.training_results = (
         config.cal_path.results_path / "training_results.csv"
     )
+    config.cal_path.idxs_ci_path = (
+            config.cal_path.results_path
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_ci_squared.pkl"
+        )
+    config.cal_path.previous_idxs_ci_path = (
+        config.cal_path.results_path / f"{config.target.conf}_previous_ci_squared.pkl"
+    )
 
     # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
     if config.cal_settings.cal_loop_num > 1:
         # 前一轮计算保存的重要索引文件路径
-        config.cal_path.previous_idxs_file = (
+        config.cal_path.previous_important_idxs_file = (
             config.cal_path.results_path
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_important_idxs"
         )
@@ -115,10 +121,6 @@ def _setup_config_paths(config):
         config.cal_path.ml_results_path = (
             config.cal_path.results_path
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_final_sampled_idxs"
-        )
-        config.cal_path.previous_idxs_ci_path = (
-            config.cal_path.results_path
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_ci_squared.pkl"
         )
 
     return config
@@ -644,14 +646,92 @@ def merge_historical_ci_data(
     return merged_idxs, merged_ci_squared
 
 
+def ci_idx_data_processor(
+    correct_levels_ci: np.ndarray,
+    caled_csfs_idxs_array: np.ndarray,
+    config,
+    logger: logging.Logger
+) -> np.ndarray:
+    """
+    处理CI系数数据，并与历史数据合并后保存
+
+    优化说明：
+    - 本轮计算生成的数据直接与历史数据合并
+    - 合并后的数据保存到 previous_idxs_ci_path 供下次使用
+    - 避免在 generate_train_csfs_descriptors 中的冗余读写操作
+
+    Args:
+        correct_levels_ci: 正确能级位置的CI系数
+        caled_csfs_idxs_array: 当前计算的CSF索引数组
+        config: 配置对象
+        logger: 日志记录器
+
+    Returns:
+        np.ndarray: CI系数平方数组
+    """
+
+    # 保存正确能级位置的CI系数平方对应CSF总池索引（用于历史数据累积）
+    correct_levels_ci_2d = np.atleast_2d(correct_levels_ci)
+    correct_levels_ci_squared = (
+        correct_levels_ci_2d**2
+    )  # shape: (n_correct_levels, n_current_csfs)
+
+    current_ci_squared_data_dict = {
+        "idxs": caled_csfs_idxs_array,  # CSF索引（对应总池）
+        "ci_squared": correct_levels_ci_squared,  # 对应的CI系数平方（正确能级 × 当前计算CSF）
+    }
+
+    # 如果是第二轮及之后，读取历史数据并合并
+    if config.cal_settings.cal_loop_num > 1:
+        previous_idxs_ci_path = config.cal_path.previous_idxs_ci_path
+        if previous_idxs_ci_path.exists():
+            logger.info("读取历史CI系数数据并进行合并")
+            previous_idxs_ci_dict = pkl_loader(previous_idxs_ci_path)
+            accumulated_idxs, accumulated_ci_squared = merge_historical_ci_data(
+                previous_idxs_ci_dict, current_ci_squared_data_dict, logger
+            )
+            accumulated_ci_data = {
+                "idxs": accumulated_idxs,
+                "ci_squared": accumulated_ci_squared,
+            }
+        else:
+            logger.warning(f"历史数据文件不存在: {previous_idxs_ci_path}，仅使用当前轮次数据")
+            accumulated_ci_data = current_ci_squared_data_dict
+    else:
+        # 第一轮直接使用当前数据
+        accumulated_ci_data = current_ci_squared_data_dict
+
+    # 保存合并后的累积数据到 previous_idxs_ci_path（供下次计算使用）
+    accumulated_ci_path = config.cal_path.previous_idxs_ci_path
+    pkl_storage(accumulated_ci_data, accumulated_ci_path)
+    logger.info(
+        f"保存累积CI系数数据: {accumulated_ci_path} "
+        f"(包含{len(accumulated_ci_data['idxs'])}个CSFs)"
+    )
+
+    # 仍然保存本轮的原始数据（用于调试或单独分析）
+    ci_squared_path = (
+        config.cal_path.results_path
+        / f"{config.target.conf}_{config.cal_settings.cal_loop_num}_ci_squared.pkl"
+    )
+    pkl_storage(current_ci_squared_data_dict, ci_squared_path)
+    logger.info(f"本轮CI系数数据保存到: {ci_squared_path}")
+
+    return correct_levels_ci_squared
+
+
 def generate_train_csfs_descriptors(
-    config, 
-    raw_csfs_descriptors: np.ndarray, 
+    config,
+    raw_csfs_descriptors: np.ndarray,
     logger: logging.Logger
 ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
-    基于历次迭代的CI系数数据，取索引并集并比较共有索引的CI系数大小
+
+    优化说明：
+    - 数据合并逻辑已移至 ci_idx_data_processor 函数
+    - 本函数直接读取合并后的累积数据，避免冗余读写操作
+    - previous_idxs_ci_path 包含所有历史轮次的数据并集
 
     Args:
         config: 配置对象
@@ -662,70 +742,31 @@ def generate_train_csfs_descriptors(
         np.ndarray: 包含描述符和标签的训练数据
     """
 
-    # 加载当前轮次的CSF索引和CI系数数据（从保存的文件中读取）
-    logger.info("加载当前轮次保存的CSF索引和CI系数数据")
+    # 直接读取合并后的累积CI系数数据
+    # 该数据已由 ci_idx_data_processor 函数预先合并并保存
+    logger.info("加载累积的CSF索引和CI系数数据（已包含所有历史轮次）")
+    previous_idxs_ci_path = config.cal_path.previous_idxs_ci_path
 
-    # 加载当前轮次选择的CSF索引
-    current_idxs_ci_path = (
-        config.cal_path.results_path
-        / f"{config.cal_path.loop_file_name}_ci_squared.pkl"
-    )
-    if not current_idxs_ci_path.exists():
-        raise FileNotFoundError(f"当前轮次CSF索引文件不存在: {current_idxs_ci_path}")
+    if not previous_idxs_ci_path.exists():
+        raise FileNotFoundError(f"累积CI系数文件不存在: {previous_idxs_ci_path}")
 
-    current_idxs_ci_dict = pkl_loader(current_idxs_ci_path)
+    accumulated_ci_data = pkl_loader(previous_idxs_ci_path)
     try:
-        assert "idxs" in current_idxs_ci_dict, "缺少子键 idxs"
-        assert "ci_squared" in current_idxs_ci_dict, "缺少子键 ci_squared"
-        assert current_idxs_ci_dict["idxs"] is not None, "idxs 值为空"
-        assert current_idxs_ci_dict["ci_squared"] is not None, "ci_squared 值为空"
-
+        assert "idxs" in accumulated_ci_data, "缺少子键 idxs"
+        assert "ci_squared" in accumulated_ci_data, "缺少子键 ci_squared"
+        assert accumulated_ci_data["idxs"] is not None, "idxs 值为空"
+        assert accumulated_ci_data["ci_squared"] is not None, "ci_squared 值为空"
         logger.info("所有键值验证通过")
-
     except AssertionError as e:
         logger.error(f"验证失败: {e}")
+        raise
 
-    current_sampled_idxs = np.array(current_idxs_ci_dict["idxs"])
+    accumulated_idxs = accumulated_ci_data["idxs"]
+    accumulated_ci_squared = accumulated_ci_data["ci_squared"]
 
-    if config.cal_settings.cal_loop_num > 1:
-        # 读取历次迭代保存的CI系数数据
-        previous_idxs_ci_path = config.cal_path.previous_idxs_ci_path
-
-        if not previous_idxs_ci_path.exists():
-            raise FileNotFoundError(
-                f"当前轮次CSF索引文件不存在: {previous_idxs_ci_path}"
-            )
-
-        previous_idxs_ci_dict = pkl_loader(previous_idxs_ci_path)
-        try:
-            assert "idxs" in previous_idxs_ci_dict, "缺少子键 idxs"
-            assert "ci_squared" in previous_idxs_ci_dict, "缺少子键 ci_squared"
-            assert previous_idxs_ci_dict["idxs"] is not None, "idxs 值为空"
-            assert previous_idxs_ci_dict["ci_squared"] is not None, "ci_squared 值为空"
-
-            logger.info("开始读取历次迭代的CI系数数据")
-
-        except AssertionError as e:
-            logger.error(f"验证失败: {e}")
-
-        accumulated_idxs, accumulated_ci_squared = merge_historical_ci_data(
-            previous_idxs_ci_dict, current_idxs_ci_dict, logger
-        )
-
-        logger.info(f"训练数据")
-        logger.info(f"CSF总数: {len(accumulated_idxs)}")
-        logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
-
-    elif config.cal_settings.cal_loop_num == 1:
-        accumulated_idxs = current_idxs_ci_dict["idxs"]
-        accumulated_ci_squared = current_idxs_ci_dict["ci_squared"]
-        logger.info(f"训练数据")
-        print(accumulated_idxs)
-        logger.info(f"CSF总数: {len(accumulated_idxs)}")
-        logger.info(f"当前轮次CSF数: {len(current_sampled_idxs)}")
-    else:
-        logger.error(f"{config.cal_settings.cal_loop_num=} error")
-        raise ValueError(f"Invalid cal_loop_num: {config.cal_settings.cal_loop_num}")
+    logger.info(f"训练数据统计")
+    logger.info(f"CSF总数（累积）: {len(accumulated_idxs)}")
+    logger.info(f"当前轮次: {config.cal_settings.cal_loop_num}")
 
     # 初始化变量
     cutoff_value = np.float64(config.cal_settings.cutoff_value)
@@ -741,19 +782,6 @@ def generate_train_csfs_descriptors(
     # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
     caled_csfs_descriptors = np.column_stack(
         [sampled_csfs_descriptors, important_csfs_mask]
-    )
-
-    accumulated_ci_data = {
-        "idxs": accumulated_idxs,  # CSF索引（对应总池）
-        "ci_squared": accumulated_ci_squared,  # 对应的CI系数平方（正确能级 × 当前计算CSF）
-    }
-
-    accumulated_ci_path = (
-        config.cal_path.results_path / f"{config.target.conf}_previous_ci_squared.pkl"
-    )
-    pkl_storage(accumulated_ci_data, accumulated_ci_path)
-    logger.info(
-        f"保存累积CI系数数据: {accumulated_ci_path} (包含{len(accumulated_idxs)}个CSFs)"
     )
 
     # 保存描述符文件

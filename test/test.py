@@ -24,7 +24,7 @@ class MLDataCounts:
     total_csfs_count: int
     cal_csfs_count: int
 
-    import_csfs_count: Optional[int] = None
+    important_csfs_count: Optional[int] = None
     important_retention_rate: Optional[float] = None
     ml_sampled_count: Optional[int] = None
     ml_retention_rate: Optional[float] = None
@@ -38,13 +38,13 @@ class MLDataCounts:
 train_data_counts = MLDataCounts(
     total_csfs_count=5000,
     cal_csfs_count=2000,
-    import_csfs_count=500,
+    important_csfs_count=500,
     ml_sampled_count=1500,
     final_sampled_count=1300,
 )
 # %%
 stats_config = [
-    ("import_csfs_count", "重要 CSFs ", "important_retention_rate"),
+    ("important_csfs_count", "重要 CSFs ", "important_retention_rate"),
     ("ml_sampled_count", "ML新增 CSFs ", "ml_retention_rate"),
     ("final_sampled_count", "最终选择 CSFs ", "final_retention_rate"),
 ]
