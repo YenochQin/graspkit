@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-# version = '2.9.dev1'
-version = '2.9.1'
+version = '3.0.dev1'
+# version = '2.9.1'
 description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 

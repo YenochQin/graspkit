@@ -5,21 +5,23 @@
 @author :YenochQin (秦毅)
 """
 
+import csv
 import logging
 from typing import Tuple
-import csv
-import polars as pl
-import numpy as np
-import joblib
 
-from .neural_network import ANNClassifier
+import joblib
+import numpy as np
+import polars as pl
+
 from ..utils.data_modules import MLDataCounts
+from .neural_network import ANNClassifier
+
 
 def validate_csf_desc_coverage(
-        final_sampled_idxs: np.ndarray,
-        raw_csfs_descriptors: np.ndarray,
-        logger: logging.Logger
-        ) -> np.ndarray:
+    final_sampled_idxs: np.ndarray,
+    raw_csfs_descriptors: np.ndarray,
+    logger: logging.Logger
+) -> np.ndarray:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
     对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
@@ -30,7 +32,7 @@ def validate_csf_desc_coverage(
         tuple[bool, list[int]]: (是否满足覆盖条件, 未覆盖的轨道索引列表)
     """
     # 检查输入参数
-    
+
     if final_sampled_idxs.size == 0:
         error_msg = f"final_sampled_idxs 为空，输入错误"
         logger.error(error_msg)
@@ -43,20 +45,18 @@ def validate_csf_desc_coverage(
 
     # 直接通过切片获取每个轨道的电子填充
     electron_idxs = np.arange(
-                            electron_idx_in_orbital,
-                            current_sampled_descriptors.shape[1],
-                            values_per_orbital,
-                            )
+        electron_idx_in_orbital,
+        current_sampled_descriptors.shape[1],
+        values_per_orbital,
+    )
 
     # 提取所有CSF的电子数信息
-    electron_counts = current_sampled_descriptors[
-                            :, electron_idxs
-                            ]  # 形状为 (num_csfs, actual_n_orbitals)
+    electron_counts = current_sampled_descriptors[:, electron_idxs]
+    # 形状为 (num_csfs, actual_n_orbitals)
 
     # 检查每个轨道是否至少有一个CSF的电子数不为零
-    has_nonzero_electrons = np.any(
-                                electron_counts > 0, axis=0
-                                )  # 形状为 (actual_n_orbitals,)
+    has_nonzero_electrons = np.any(electron_counts > 0, axis=0)
+    # 形状为 (actual_n_orbitals,)
 
     # 找出未覆盖的轨道索引
     uncovered_orbitals_idxs = np.where(~has_nonzero_electrons)[0].tolist()
@@ -72,21 +72,26 @@ def validate_csf_desc_coverage(
         # 修复：使用正确的参数顺序调用select_csfs_for_coverage函数
         _, additional_idxs_relative = select_csfs_for_coverage(
             current_sampled_descriptors,  # 当前已选择的CSFs描述符
-            uncovered_orbitals_idxs,            # 未覆盖的轨道索引列表
-            remaining_descriptors          # 剩余候选CSFs的描述符
+            uncovered_orbitals_idxs,  # 未覆盖的轨道索引列表
+            remaining_descriptors,  # 剩余候选CSFs的描述符
         )
         additional_idxs = remaining_candidates_idxs[additional_idxs_relative]
         additional_idxs_array = np.array(additional_idxs)
-        final_sampled_idxs = np.unique(np.sort(np.concatenate([final_sampled_idxs, additional_idxs_array])))
-        logger.info(f"使用新函数补充选择了 {len(additional_idxs)} 个CSF以满足轨道覆盖条件")
+        final_sampled_idxs = np.unique(
+            np.sort(np.concatenate([final_sampled_idxs, additional_idxs_array]))
+        )
+        logger.info(
+            f"使用新函数补充选择了 {len(additional_idxs)} 个CSF以满足轨道覆盖条件"
+        )
 
     return final_sampled_idxs
 
+
 def select_csfs_for_coverage(
-        descriptors: np.ndarray,
-        uncovered_orbitals: list[int],
-        candidate_descriptors: np.ndarray,
-    ) -> Tuple[np.ndarray, list[int]]:
+    descriptors: np.ndarray,
+    uncovered_orbitals: list[int],
+    candidate_descriptors: np.ndarray,
+) -> Tuple[np.ndarray, list[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
@@ -112,10 +117,10 @@ def select_csfs_for_coverage(
 
     # 获取每个轨道的电子填充位置索引
     electron_idxs = np.arange(
-                        electron_idx_in_orbital, 
-                        candidate_descriptors.shape[1], 
-                        values_per_orbital
-                    )
+        electron_idx_in_orbital, 
+        candidate_descriptors.shape[1], 
+        values_per_orbital
+    )
 
     # 提取候选描述符中的电子数信息
     candidate_electron_counts = candidate_descriptors[:, electron_idxs]
@@ -152,10 +157,10 @@ def select_csfs_for_coverage(
 
 
 def save_training_results(
-        config,
-        evaluation_results: dict,
-        logger: logging.Logger
-    ):
+    config, 
+    evaluation_results: dict, 
+    logger: logging.Logger
+):
     """
     保存训练结果到CSV文件
 
@@ -175,25 +180,27 @@ def save_training_results(
 
     # 保存到CSV文件
     results_file = config.cal_path.training_results
-    
+
     # 检查文件是否存在，如果不存在则写入表头
     if not results_file.exists():
         with open(results_file, mode="w", newline="", encoding="utf-8") as file:
             writer = csv.writer(file)
-            writer.writerow([
-                "cal_loop_num",  # 迭代轮次
-                "test_f1",
-                "test_roc_auc",
-                "test_accuracy",
-                "test_precision",
-                "test_recall",
-                "train_f1",
-                "train_roc_auc",
-                "train_accuracy",
-                "train_precision",
-                "train_recall",
-                "overfitting_gap",  # 过拟合差距
-            ])
+            writer.writerow(
+                [
+                    "cal_loop_num",  # 迭代轮次
+                    "test_f1",
+                    "test_roc_auc",
+                    "test_accuracy",
+                    "test_precision",
+                    "test_recall",
+                    "train_f1",
+                    "train_roc_auc",
+                    "train_accuracy",
+                    "train_precision",
+                    "train_recall",
+                    "overfitting_gap",  # 过拟合差距
+                ]
+            )
 
     # 计算过拟合差距
     overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
@@ -205,7 +212,7 @@ def save_training_results(
         writer = csv.writer(file)
 
         writer.writerow(
-            [   
+            [
                 cal_loop_num,  # 迭代轮次
                 test_metrics["f1"],
                 test_metrics["roc_auc"],
@@ -225,10 +232,10 @@ def save_training_results(
 
 
 def save_iteration_results(
-        config,
-        train_data_counts: MLDataCounts,
-        logger: logging.Logger
-    ):
+    config,
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger
+):
     """
     保存迭代结果到CSV文件
 
@@ -240,32 +247,33 @@ def save_iteration_results(
 
     # 保存到CSV文件
     results_file = config.cal_path.iteration_results
-    
+
     # 检查文件是否存在，如果不存在则写入表头
     if not results_file.exists():
         with open(results_file, mode="w", newline="", encoding="utf-8") as file:
             writer = csv.writer(file)
-            writer.writerow([
-                "cal_loop_num",  # 迭代轮次
-                "important_count",  # 重要组态数量
-                "ml_sampled_count",  # ML预测的高概率组态总数
-                "total_original_count",  # 原始CSFs总数
-                "current_calculation_count",  # 本轮计算的组态数
-                "screening_retention_rate",  # 验证留存率 
-                "ml_retention_rate",  # ML 预测留存率
-                "iteration_retention_rate",  # 迭代增长率
-            ])
+            writer.writerow(
+                [
+                    "cal_loop_num",  # 迭代轮次
+                    "important_count",  # 重要组态数量
+                    "ml_sampled_count",  # ML预测的高概率组态总数
+                    "total_original_count",  # 原始CSFs总数
+                    "current_calculation_count",  # 本轮计算的组态数
+                    "screening_retention_rate",  # 验证留存率
+                    "ml_retention_rate",  # ML 预测留存率
+                    "iteration_retention_rate",  # 迭代增长率
+                ]
+            )
 
     # 提取选择结果的实际数据
 
-    import_csfs_count = getattr(train_data_counts, "import_csfs_count", 0)
+    important_csfs_count = getattr(train_data_counts, "important_csfs_count", 0)
     ml_sampled_count = getattr(train_data_counts, "ml_sampled_count", 0)
     total_original_count = getattr(train_data_counts, "total_csfs_count", 0)
     current_calculation_count = getattr(train_data_counts, "cal_csfs_count", 0)
     screening_retention_rate = getattr(train_data_counts, "screening_retention_rate", 0)
     ml_retention_rate = getattr(train_data_counts, "ml_retention_rate", 0)
     iteration_retention_rate = getattr(train_data_counts, "iteration_retention_rate", 0)
-
 
     # 安全获取配置参数
     cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
@@ -276,7 +284,7 @@ def save_iteration_results(
         writer.writerow(
             [
                 cal_loop_num,  # 迭代轮次
-                import_csfs_count,  # 重要组态数量
+                important_csfs_count,  # 重要组态数量
                 ml_sampled_count,  # ML预测的高概率组态总数
                 total_original_count,  # 原始CSFs总数
                 current_calculation_count,  # 本轮计算的组态数
@@ -288,18 +296,19 @@ def save_iteration_results(
 
     logger.info(f"迭代结果已保存到: {results_file}")
 
+
 def save_and_plot_results(
-        logger: logging.Logger,
-        evaluation_results,
-        model,
-        path_cfg,
-        correct_levels_ci: np.ndarray,
-        caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
-        y_current_cal_probability=None,
-        save_model: bool = True,
-        save_data: bool = True,
-        plot_curves: bool = True
-    ):
+    logger: logging.Logger,
+    evaluation_results,
+    model,
+    path_cfg,
+    correct_levels_ci: np.ndarray,
+    caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
+    y_current_cal_probability=None,
+    save_model: bool = True,
+    save_data: bool = True,
+    plot_curves: bool = True,
+):
     """
     保存模型预测结果、模型文件和绘制性能曲线
     使用setup_directories创建的标准目录结构
@@ -326,7 +335,6 @@ def save_and_plot_results(
 
     # 1. 保存预测结果数据到test_data目录
     if save_data:
-
         # 保存测试集结果
         test_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
         pl.DataFrame(
@@ -445,10 +453,10 @@ def save_and_plot_results(
 
     return saved_files
 
+
 def ml_results_statistics(
-        train_data_counts: MLDataCounts,
-        logger: logging.Logger
-    ) -> MLDataCounts:
+    train_data_counts: MLDataCounts, logger: logging.Logger
+) -> MLDataCounts:
     """
     统计ML结果并返回完整的selection_results字典
 
@@ -460,23 +468,35 @@ def ml_results_statistics(
 
     # 除零保护
     if total_csfs_count <= 0 and cal_csfs_count <= 0:
-        logger.error(f"train_data_counts 中初始计数无效: {total_csfs_count}， {cal_csfs_count}")
+        logger.error(
+            f"train_data_counts 中初始计数无效: {total_csfs_count}， {cal_csfs_count}"
+        )
         return train_data_counts
 
     logger.info(f"统计 ML sampling 信息:")
     logger.info(f"- 原始CSFs总数: {total_csfs_count}")
 
-    import_csfs_count = getattr(train_data_counts, "import_csfs_count", None)
-    if import_csfs_count is not None:
-        train_data_counts.screening_retention_rate = import_csfs_count / cal_csfs_count
-        logger.info(f"- 计算重要 CSFs 数量: {import_csfs_count} (验证留存率: {train_data_counts.screening_retention_rate:.4%})")
+    important_csfs_count = getattr(train_data_counts, "important_csfs_count", None)
+    if important_csfs_count is not None:
+        train_data_counts.screening_retention_rate = (
+            important_csfs_count / cal_csfs_count
+        )
+        logger.info(
+            f"""- 计算重要 CSFs 数量: {important_csfs_count}
+            - (验证留存率: {train_data_counts.screening_retention_rate:.4%})
+            - (重要组态留存率: {train_data_counts.important_retention_rate:.4%})"""
+        )
 
     ml_sampled_count = getattr(train_data_counts, "ml_sampled_count", None)
     if ml_sampled_count is not None:
         train_data_counts.ml_retention_rate = ml_sampled_count / (total_csfs_count - cal_csfs_count)
-        logger.info(f"- ML预测 CSFs 数量: {ml_sampled_count} (ML 预测留存率: {train_data_counts.ml_retention_rate:.4%})")
+        logger.info(
+            f"- ML预测 CSFs 数量: {ml_sampled_count} (ML 预测留存率: {train_data_counts.ml_retention_rate:.4%})"
+        )
 
-        train_data_counts.iteration_retention_rate = (import_csfs_count + ml_sampled_count) / cal_csfs_count
-        logger.info(f"- ML预测 CSFs 数量: {ml_sampled_count} (迭代增长率: {train_data_counts.iteration_retention_rate:.4%})")
+        train_data_counts.iteration_retention_rate = (important_csfs_count + ml_sampled_count) / cal_csfs_count
+        logger.info(
+            f"- ML预测 CSFs 数量: {ml_sampled_count} (迭代增长率: {train_data_counts.iteration_retention_rate:.4%})"
+        )
 
     return train_data_counts
