@@ -39,7 +39,7 @@ class CSFs:
 
     @classmethod
     def from_dict(cls, data: dict) -> "CSFs":
-        """从字典创建CSFs实例（自动处理NumPy数组转换）"""
+        "从字典创建CSFs实例（自动处理NumPy数组转换）"
         return cls(
             subshell_info_raw=data.get("subshell_info_raw", []),
             CSFs_block_j_value=data.get("CSFs_block_j_value", []),

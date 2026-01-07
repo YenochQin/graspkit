@@ -20,7 +20,7 @@ from .neural_network import ANNClassifier
 def validate_csf_desc_coverage(
     final_sampled_idxs: np.ndarray,
     raw_csfs_descriptors: np.ndarray,
-    logger: logging.Logger,
+    logger: logging.Logger
 ) -> np.ndarray:
     """
     验证选取的CSFs描述符子集是否满足覆盖条件:
@@ -51,14 +51,12 @@ def validate_csf_desc_coverage(
     )
 
     # 提取所有CSF的电子数信息
-    electron_counts = current_sampled_descriptors[
-        :, electron_idxs
-    ]  # 形状为 (num_csfs, actual_n_orbitals)
+    electron_counts = current_sampled_descriptors[:, electron_idxs]
+    # 形状为 (num_csfs, actual_n_orbitals)
 
     # 检查每个轨道是否至少有一个CSF的电子数不为零
-    has_nonzero_electrons = np.any(
-        electron_counts > 0, axis=0
-    )  # 形状为 (actual_n_orbitals,)
+    has_nonzero_electrons = np.any(electron_counts > 0, axis=0)
+    # 形状为 (actual_n_orbitals,)
 
     # 找出未覆盖的轨道索引
     uncovered_orbitals_idxs = np.where(~has_nonzero_electrons)[0].tolist()
@@ -119,7 +117,9 @@ def select_csfs_for_coverage(
 
     # 获取每个轨道的电子填充位置索引
     electron_idxs = np.arange(
-        electron_idx_in_orbital, candidate_descriptors.shape[1], values_per_orbital
+        electron_idx_in_orbital, 
+        candidate_descriptors.shape[1], 
+        values_per_orbital
     )
 
     # 提取候选描述符中的电子数信息
@@ -156,7 +156,11 @@ def select_csfs_for_coverage(
     return updated_descriptors, selected_relative_idxs
 
 
-def save_training_results(config, evaluation_results: dict, logger: logging.Logger):
+def save_training_results(
+    config, 
+    evaluation_results: dict, 
+    logger: logging.Logger
+):
     """
     保存训练结果到CSV文件
 
@@ -228,7 +232,9 @@ def save_training_results(config, evaluation_results: dict, logger: logging.Logg
 
 
 def save_iteration_results(
-    config, train_data_counts: MLDataCounts, logger: logging.Logger
+    config,
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger
 ):
     """
     保存迭代结果到CSV文件
@@ -330,9 +336,7 @@ def save_and_plot_results(
     # 1. 保存预测结果数据到test_data目录
     if save_data:
         # 保存测试集结果
-        test_file = (
-            path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
-        )
+        test_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
         pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_test"],
@@ -343,9 +347,7 @@ def save_and_plot_results(
         saved_files["test_data"] = str(test_file)
 
         # 保存训练集结果到results目录
-        train_file = (
-            path_cfg.results_path / f"{path_cfg.loop_file_name}_train_results.parquet"
-        )
+        train_file = path_cfg.results_path / f"{path_cfg.loop_file_name}_train_results.parquet"
         pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_train"],
@@ -427,10 +429,7 @@ def save_and_plot_results(
                     )
 
             # 绘制ROC和PR曲线
-            plot_file = (
-                path_cfg.roc_curves_path
-                / f"{path_cfg.loop_file_name}_roc_pr_curves.png"
-            )
+            plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_roc_pr_curves.png"
             ANNClassifier.plot_curve(
                 cal_mix_coeff_list,
                 y_prob_current_cal,  # 使用对应的概率数据
@@ -490,16 +489,12 @@ def ml_results_statistics(
 
     ml_sampled_count = getattr(train_data_counts, "ml_sampled_count", None)
     if ml_sampled_count is not None:
-        train_data_counts.ml_retention_rate = ml_sampled_count / (
-            total_csfs_count - cal_csfs_count
-        )
+        train_data_counts.ml_retention_rate = ml_sampled_count / (total_csfs_count - cal_csfs_count)
         logger.info(
             f"- ML预测 CSFs 数量: {ml_sampled_count} (ML 预测留存率: {train_data_counts.ml_retention_rate:.4%})"
         )
 
-        train_data_counts.iteration_retention_rate = (
-            important_csfs_count + ml_sampled_count
-        ) / cal_csfs_count
+        train_data_counts.iteration_retention_rate = (important_csfs_count + ml_sampled_count) / cal_csfs_count
         logger.info(
             f"- ML预测 CSFs 数量: {ml_sampled_count} (迭代增长率: {train_data_counts.iteration_retention_rate:.4%})"
         )

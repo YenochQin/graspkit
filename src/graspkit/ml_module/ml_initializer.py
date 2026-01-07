@@ -175,60 +175,6 @@ def setup_logging(log_dir: Path):
 
     return logger
 
-def initialize_iteration_results_csv(
-        iteration_results_path: Path, 
-        logger: logging.Logger
-    ):
-    """
-    初始化迭代结果CSV文件的表头
-
-    Args:
-        config: 配置对象
-        logger: 日志记录器
-    """
-
-    # 如果文件已存在，不重新创建表头
-    if iteration_results_path.exists():
-        logger.info(f"迭代结果文件已存在: {iteration_results_path}")
-        return
-
-    # 创建目录
-    iteration_results_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 写入表头
-    headers = [
-        "cal_loop_num",  # 迭代轮次
-        "important_count",  # 重要组态数量
-        "ml_predicted_count",  # ML预测的高概率组态总数
-        "ml_new_count",  # ML新增的组态数（下次计算用）
-        "total_original_count",  # 原始CSFs总数
-        "current_calculation_count",  # 本轮计算的组态数
-        "data_retention_rate",  # 数据留存率（交集/本轮计算）
-        "important_retention_rate",  # 重要组态占原始比例
-        "ml_retention_rate",  # ML预测组态占原始比例
-        "training_time",
-        "actual_eval_time",  # 推理时间
-        "execution_time",
-        "execution_time",  # 总时间（现在与执行时间相同）
-        "test_f1",
-        "test_roc_auc",
-        "test_accuracy",
-        "test_precision",
-        "test_recall",
-        "train_f1",
-        "train_roc_auc",
-        "train_accuracy",
-        "train_precision",
-        "train_recall",
-        "overfitting_gap",  # 过拟合差距
-    ]
-
-    with open(iteration_results_path, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(headers)
-
-    logger.info(f"初始化迭代结果CSV文件: {iteration_results_path}")
-
 
 def training_data_loader(
         paths_cfg,
@@ -487,7 +433,9 @@ def check_energy_convergence(
 
 
 def evaluate_calculation_convergence(
-    config, logger: logging.Logger, cal_loop_csfs_count: int
+    config, 
+    logger: logging.Logger, 
+    cal_loop_csfs_count: int
 ):
     """
     检查GRASP计算的收敛性
@@ -510,14 +458,8 @@ def evaluate_calculation_convergence(
     energy_data_list = []
 
     for i in range(3):
-        loop_num = (
-            config.cal_settings.cal_loop_num - 2 + i
-        )  # 前3次：当前-2, 当前-1, 当前
-        csv_path = (
-            config.cal_settings.root_path
-            / f"{config.target.conf}_{loop_num}"
-            / f"{config.target.conf}_{loop_num}_correct_levels.csv"
-        )
+        loop_num = config.cal_settings.cal_loop_num - 2 + i # 前3次：当前-2, 当前-1, 当前
+        csv_path = config.cal_settings.root_path / f"{config.target.conf}_{loop_num}" / f"{config.target.conf}_{loop_num}_correct_levels.csv"
 
         if csv_path.exists():
             df = pd.read_csv(csv_path)
@@ -635,7 +577,9 @@ def evaluate_calculation_convergence(
 
 
 def merge_historical_ci_data(
-    previous_idxs_ci_dict: dict, current_idxs_ci_dict: dict, logger: logging.Logger
+    previous_idxs_ci_dict: dict, 
+    current_idxs_ci_dict: dict, 
+    logger: logging.Logger
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并比较共有索引的CI系数大小
@@ -701,7 +645,9 @@ def merge_historical_ci_data(
 
 
 def generate_train_csfs_descriptors(
-    config, raw_csfs_descriptors: np.ndarray, logger: logging.Logger
+    config, 
+    raw_csfs_descriptors: np.ndarray, 
+    logger: logging.Logger
 ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
@@ -835,7 +781,8 @@ def generate_train_csfs_descriptors(
 
 
 def get_stay_descriptors(
-    raw_csfs_descriptors: np.ndarray, sampled_csfs_idxs_array: np.ndarray
+    raw_csfs_descriptors: np.ndarray,
+    sampled_csfs_idxs_array: np.ndarray
 ) -> np.ndarray:
     """
     找出不在sampled_csfs_idxs_array索引中的描述符
