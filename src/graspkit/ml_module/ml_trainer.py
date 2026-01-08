@@ -11,6 +11,7 @@ import math
 import os
 import shutil
 import time
+from typing import cast
 
 # 第三方库导入
 import joblib
@@ -49,8 +50,10 @@ def train_model(
     X = caled_csfs_descriptors[:, :descriptor_features]
     y = caled_csfs_descriptors[:, descriptor_features:]  # 多标签：所有能级的标签
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+    # 使用 cast 明确声明 train_test_split 返回值的类型
+    X_train, X_test, y_train, y_test = cast(
+        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+        train_test_split(X, y, test_size=0.2, random_state=42)
     )
 
     # 初始化或加载模型
@@ -71,7 +74,9 @@ def train_model(
         f"训练集 - 正样本总数:{positive_count}, 负样本总数:{negative_count}, "
         f"平均正样本比例:{avg_positive_ratio:.4f}"
     )
-    logger.info(f"各能级正样本比例: {np.array2string(per_level_positive_ratio, precision=4)}")
+    logger.info(
+        f"各能级正样本比例: {np.array2string(per_level_positive_ratio, precision=4)}"
+    )
     logger.info(f"描述符长度:{X_train.shape[1]}, 输出维度:{n_correct_levels}")
 
     # 模型初始化
@@ -150,7 +155,8 @@ def train_model(
 
     logger.info("使用原始数据训练 - 不进行重采样")
     logger.info(
-        f"最终训练数据 - 正样本:{positive_count}, 负样本:{negative_count}, 比例:{original_ratio:.4f}"
+        f"最终训练数据 - 正样本:{positive_count}, 负样本:{negative_count}, "
+        f"平均正样本比例:{avg_positive_ratio:.4f}"
     )
     logger.info("使用类别权重和损失函数来处理数据不平衡问题")
 
@@ -229,7 +235,9 @@ def train_model(
     positive_samples_train = np.any(y_prediction_train == 1, axis=1)
     positive_true_test = np.any(y_test == 1, axis=1)
 
-    logger.info(f"测试集预测为正类的样本数: {np.sum(positive_samples_test)}/{len(y_prediction)}")
+    logger.info(
+        f"测试集预测为正类的样本数: {np.sum(positive_samples_test)}/{len(y_prediction)}"
+    )
     logger.info(f"测试集真实正样本数: {np.sum(positive_true_test)}/{len(y_test)}")
 
     # 智能阈值调整（多标签分类版本）
@@ -309,7 +317,9 @@ def train_model(
 
     # Overfitting and underfitting monitoring
     (f1_train, roc_auc_train, accuracy_train, precision_train, recall_train) = (
-        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_matrix_train)
+        ANNClassifier.model_evaluation(
+            y_train, y_prediction_train, y_probability_matrix_train
+        )
     )
     logger.info(f"训练集预测结果:")
     logger.info(
@@ -555,7 +565,7 @@ def predict_model(
         ml_sampled_idxs,
         verified_important_idxs,
         y_current_cal_probability,
-        train_data_counts
+        train_data_counts,
     )
 
 
