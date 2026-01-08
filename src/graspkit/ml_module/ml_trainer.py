@@ -36,10 +36,19 @@ def train_model(
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
 ):
-    """训练机器学习模型"""
+    """训练机器学习模型（支持多标签分类）"""
 
-    X = caled_csfs_descriptors[:, :-1]
-    y = caled_csfs_descriptors[:, -1]
+    # 数据提取：支持多标签分类
+    # caled_csfs_descriptors 形状: (n_current_csfs, descriptor_features + n_correct_levels)
+    # 前 descriptor_features 列是描述符特征，后 n_correct_levels 列是每个能级的标签
+
+    # 从 correct_levels_ci 推断能级数量
+    n_correct_levels = correct_levels_ci.shape[0] if correct_levels_ci.ndim == 2 else 1
+    descriptor_features = caled_csfs_descriptors.shape[1] - n_correct_levels
+
+    X = caled_csfs_descriptors[:, :descriptor_features]
+    y = caled_csfs_descriptors[:, descriptor_features:]  # 多标签：所有能级的标签
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -47,32 +56,46 @@ def train_model(
     # 初始化或加载模型
     config.cal_path.models_path.mkdir(exist_ok=True)
 
-    # 检查数据平衡性 (移到最前面)
+    # 检查数据平衡性（多标签分类）
+    # 统计所有能级的正负样本总数
     positive_count = np.sum(y_train == 1)
     negative_count = np.sum(y_train == 0)
-    original_ratio = positive_count / len(y_train)
+    total_labels = y_train.size
+
+    # 计算每个能级的正样本比例
+    per_level_positive_ratio = np.mean(y_train, axis=0)
+    avg_positive_ratio = np.mean(per_level_positive_ratio)
+
+    logger.info(f"多标签分类 - {n_correct_levels} 个能级")
     logger.info(
-        f"训练集 - 正样本:{positive_count}, 负样本:{negative_count}, 比例:{original_ratio:.4f}"
+        f"训练集 - 正样本总数:{positive_count}, 负样本总数:{negative_count}, "
+        f"平均正样本比例:{avg_positive_ratio:.4f}"
     )
-    logger.info(f"描述符长度{X_train.shape[1]}")
+    logger.info(f"各能级正样本比例: {np.array2string(per_level_positive_ratio, precision=4)}")
+    logger.info(f"描述符长度:{X_train.shape[1]}, 输出维度:{n_correct_levels}")
 
     # 模型初始化
+    # 计算正类权重（用于处理不平衡数据）
+    pos_weight = negative_count / positive_count if positive_count > 0 else 1.0
+    class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
+
+    # CPU优化：减少hidden_size以降低计算量
+    hidden_size = 96 if not torch.cuda.is_available() else 128
+
     if config.cal_settings.cal_loop_num == 1:
         # 第一轮：直接创建新模型
-        pos_weight = negative_count / positive_count  # 约为13
-        class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
-
-        # CPU优化：减少hidden_size以降低计算量
-        hidden_size = 96 if not torch.cuda.is_available() else 128
-
         model = ANNClassifier(
             input_size=X_train.shape[1],
+            output_size=n_correct_levels,  # 自动根据 output_size>1 启用多标签分类
             hidden_size=hidden_size,
             learning_rate=0.001,
             class_weights=class_weights,
             model_architecture="tensornet",
         )
-        logger.info(f"创建新模型，设置类别权重: 负样本=1.0, 正样本={pos_weight:.1f}")
+        logger.info(
+            f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
+            f"类别权重: 负样本=1.0, 正样本={pos_weight:.1f}"
+        )
         logger.info(
             f"模型hidden_size: {hidden_size} ({'CPU优化' if not torch.cuda.is_available() else 'GPU模式'})"
         )
@@ -85,25 +108,37 @@ def train_model(
         if model_path.exists():
             model = joblib.load(model_path)
             logger.info(f"加载已有模型: {model_path}")
+            # 验证模型输出维度是否匹配
+            if model.output_size != n_correct_levels:
+                logger.warning(
+                    f"加载的模型输出维度({model.output_size})与当前能级数({n_correct_levels})不匹配，将创建新模型"
+                )
+                model = ANNClassifier(
+                    input_size=X_train.shape[1],
+                    output_size=n_correct_levels,
+                    hidden_size=hidden_size,
+                    learning_rate=0.001,
+                    class_weights=class_weights,
+                    model_architecture="tensornet",
+                )
+                logger.info(f"创建新模型（输出维度={n_correct_levels}）")
+            else:
+                logger.info(
+                    f"已加载模型支持{'多标签' if model.multi_label else '单标签'}分类，输出维度={model.output_size}"
+                )
         else:
-            # 使用类别权重处理不平衡数据
-            # 计算类别权重：负样本数/正样本数 作为正样本权重
-            pos_weight = negative_count / positive_count  # 约为13
-            class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
-
-            # CPU优化：减少hidden_size以降低计算量
-            hidden_size = 96 if not torch.cuda.is_available() else 128
-
+            # 模型文件不存在，创建新模型
             model = ANNClassifier(
                 input_size=X_train.shape[1],
+                output_size=n_correct_levels,
                 hidden_size=hidden_size,
                 learning_rate=0.001,
-                class_weights=class_weights,  # 传入类别权重
+                class_weights=class_weights,
                 model_architecture="tensornet",
             )
-
             logger.info(
-                f"创建新模型，设置类别权重: 负样本=1.0, 正样本={pos_weight:.1f}"
+                f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
+                f"类别权重: 负样本=1.0, 正样本={pos_weight:.1f}"
             )
             logger.info(
                 f"模型hidden_size: {hidden_size} ({'CPU优化' if not torch.cuda.is_available() else 'GPU模式'})"
@@ -179,23 +214,27 @@ def train_model(
     # Model evaluation
     logger.info("             预测与评估")
     y_prediction = model.predict(X_test)
-    y_probability = model.predict_proba(X_test)[:, 1]
+    # 多标签分类：predict_proba 返回 (n_samples, n_labels)，取平均概率用于分析
+    y_probability = model.predict_proba(X_test).mean(axis=1)
     y_prediction_train = model.predict(X_train)
-    y_probability_train = model.predict_proba(X_train)[:, 1]
-    y_probability_all = model.predict_proba(X)[:, 1]
+    y_probability_train = model.predict_proba(X_train).mean(axis=1)
+    y_probability_all = model.predict_proba(X).mean(axis=1)
 
     # 诊断预测概率分布
     logger.info(
         f"预测概率统计 - 最小值:{y_probability.min():.4f}, 最大值:{y_probability.max():.4f}, 平均值:{y_probability.mean():.4f}"
     )
-    logger.info(f"预测为正类的样本数: {np.sum(y_prediction)}/{len(y_prediction)}")
-    logger.info(f"真实正样本数: {np.sum(y_test)}/{len(y_test)}")
+    # 多标签：统计至少在一个能级上被预测为重要的样本数
+    positive_samples_test = np.any(y_prediction == 1, axis=1)
+    positive_samples_train = np.any(y_prediction_train == 1, axis=1)
+    positive_true_test = np.any(y_test == 1, axis=1)
 
-    # 智能阈值调整
-    positive_ratio = np.sum(y_test) / len(y_test)  # 真实正样本比例
-    predicted_positive_ratio = np.sum(y_prediction) / len(
-        y_prediction
-    )  # 预测正样本比例
+    logger.info(f"测试集预测为正类的样本数: {np.sum(positive_samples_test)}/{len(y_prediction)}")
+    logger.info(f"测试集真实正样本数: {np.sum(positive_true_test)}/{len(y_test)}")
+
+    # 智能阈值调整（多标签分类版本）
+    positive_ratio = np.mean(y_test)  # 真实正样本比例（所有标签的平均）
+    predicted_positive_ratio = np.mean(y_prediction)  # 预测正样本比例
 
     logger.info(
         f"真实正样本比例: {positive_ratio:.3f}, 预测正样本比例: {predicted_positive_ratio:.3f}"
@@ -210,16 +249,19 @@ def train_model(
         best_threshold = 0.5
         best_diff = float("inf")
 
+        # 多标签：使用平均概率进行阈值调整
         for threshold in thresholds:
             temp_prediction = (y_probability >= threshold).astype(int)
-            temp_ratio = np.sum(temp_prediction) / len(temp_prediction)
+            temp_ratio = np.mean(temp_prediction)
             diff = abs(temp_ratio - target_ratio)
             if diff < best_diff:
                 best_diff = diff
                 best_threshold = threshold
 
-        y_prediction_optimized = (y_probability >= best_threshold).astype(int)
-        optimized_ratio = np.sum(y_prediction_optimized) / len(y_prediction_optimized)
+        # 基于优化后的阈值重新生成预测（需要基于原始概率矩阵）
+        y_probability_matrix = model.predict_proba(X_test)
+        y_prediction_optimized = (y_probability_matrix >= best_threshold).astype(int)
+        optimized_ratio = np.mean(y_prediction_optimized)
         logger.info(
             f"优化阈值: {best_threshold:.3f}, 新预测比例: {optimized_ratio:.3f}"
         )
@@ -227,12 +269,14 @@ def train_model(
         # 使用优化后的预测
         y_prediction = y_prediction_optimized
 
-    # 如果没有预测为正类，降低阈值
+    # 如果没有预测为正类，降低阈值（多标签分类版本）
     elif np.sum(y_prediction) == 0:
         logger.warning("模型没有预测任何正样本，尝试使用自适应阈值")
         threshold_percentile = 90  # 前10%概率最高的作为正样本
         adaptive_threshold = np.percentile(y_probability, threshold_percentile)
-        y_prediction_adaptive = (y_probability >= adaptive_threshold).astype(int)
+        # 基于原始概率矩阵重新生成预测
+        y_probability_matrix = model.predict_proba(X_test)
+        y_prediction_adaptive = (y_probability_matrix >= adaptive_threshold).astype(int)
         logger.info(
             f"自适应阈值:{adaptive_threshold:.4f}, 预测正样本数:{np.sum(y_prediction_adaptive)}"
         )
@@ -251,22 +295,30 @@ def train_model(
     )
     logger.info(f"y_probability_all形状: {y_probability_all.shape}")
 
+    # 模型评估：传入完整的概率矩阵而不是平均概率
+    y_probability_matrix_test = model.predict_proba(X_test)
+    y_probability_matrix_train = model.predict_proba(X_train)
+
     f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
-        y_test, y_prediction, y_probability
+        y_test, y_prediction, y_probability_matrix_test
     )
     logger.info("测试集预测结果:")
     logger.info(
-        f"AUC:{roc_auc}, f1:{f1}, accuracy:{accuracy}, precision:{precision}, recall:{recall}"
+        f"f1:{f1:.4f}, accuracy:{accuracy:.4f}, precision:{precision:.4f}, recall:{recall:.4f}"
     )
 
     # Overfitting and underfitting monitoring
     (f1_train, roc_auc_train, accuracy_train, precision_train, recall_train) = (
-        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
+        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_matrix_train)
     )
     logger.info(f"训练集预测结果:")
     logger.info(
-        f"AUC:{roc_auc_train}, f1:{f1_train}, accuracy:{accuracy_train}, precision:{precision_train}, recall:{recall_train}"
+        f"f1:{f1_train:.4f}, accuracy:{accuracy_train:.4f}, precision:{precision_train:.4f}, recall:{recall_train:.4f}"
     )
+
+    # 过拟合检测
+    overfitting_diff = f1_train - f1
+    logger.info(f"过拟合检测(训练F1 - 测试F1): {overfitting_diff:.4f}")
 
     return model, X_train, X_test, y_train, y_test
 

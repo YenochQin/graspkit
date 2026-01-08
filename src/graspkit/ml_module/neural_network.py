@@ -119,7 +119,8 @@ class ANNClassifier:
         use_dynamic_weights: bool = True,
         model_architecture: Literal["standard", "tensornet"] = "standard",
         tensor_channels: int = 3,
-        random_seed: int | None = None
+        random_seed: int | None = None,
+        multi_label: bool | None = None
     ):
         """
         初始化ANN分类器
@@ -127,7 +128,9 @@ class ANNClassifier:
         Args:
             input_size: 输入特征数量
             hidden_size: 隐藏层神经元数量（仅standard架构使用）
-            output_size: 输出类别数量（默认2用于二分类）
+            output_size: 输出维度
+                - output_size = 1: 单标签二分类
+                - output_size > 1: 多标签分类（output_size 等于能级数）
             learning_rate: 学习率
             class_weights: 类别权重用于处理不平衡数据（如果use_dynamic_weights为True则忽略）
             device: 计算设备，如果为None则自动选择
@@ -135,6 +138,7 @@ class ANNClassifier:
             model_architecture: 模型架构类型 ("standard" 标准全连接 或 "tensornet" 张量网络)
             tensor_channels: TensorNet的通道数（必须能整除input_size）
             random_seed: 随机种子（用于可重复性）
+            multi_label: 是否使用多标签分类（None时自动判断：output_size > 1 时启用）
         """
         # 设置随机种子
         if random_seed is not None:
@@ -147,6 +151,14 @@ class ANNClassifier:
         self.use_dynamic_weights = use_dynamic_weights
         self.model_architecture = model_architecture
         self.tensor_channels = tensor_channels
+
+        # 自动判断是否使用多标签分类
+        # output_size = 1: 单标签分类（单能级）
+        # output_size > 1: 多标签分类（多能级，每个能级一个独立标签）
+        if multi_label is None:
+            self.multi_label = output_size > 1
+        else:
+            self.multi_label = multi_label
 
         # 验证 TensorNet 参数
         if model_architecture == "tensornet":
@@ -176,10 +188,21 @@ class ANNClassifier:
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         # 初始化损失函数（权重将在训练时设置）
-        if self.class_weights is not None:
-            self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+        if self.multi_label:
+            # 多标签分类：使用 BCEWithLogitsLoss
+            # pos_weight 可以用来处理不平衡数据（每个标签一个权重）
+            if self.class_weights is not None:
+                # 对于多标签，class_weights 应该是正类权重
+                pos_weight = torch.tensor([self.class_weights[1]], dtype=torch.float32).to(self.device)
+                self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            else:
+                self.criterion = nn.BCEWithLogitsLoss()
         else:
-            self.criterion = nn.CrossEntropyLoss()
+            # 单标签分类：使用 CrossEntropyLoss
+            if self.class_weights is not None:
+                self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+            else:
+                self.criterion = nn.CrossEntropyLoss()
 
         # 训练历史记录
         self.training_history = {
@@ -260,16 +283,24 @@ class ANNClassifier:
         if self.use_dynamic_weights:
             self.class_weights = self._calculate_dynamic_weights(y_train)
             # 重新创建损失函数
-            self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+            if self.multi_label:
+                # 多标签分类：使用 BCEWithLogitsLoss
+                pos_weight = torch.tensor([self.class_weights[1]], dtype=torch.float32).to(self.device)
+                self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            else:
+                # 单标签分类：使用 CrossEntropyLoss
+                self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
 
         # 数据转换
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long).to(self.device)
+        # 多标签分类需要 float32 类型，单标签需要 long 类型
+        y_dtype = torch.float32 if self.multi_label else torch.long
+        y_train_tensor = torch.tensor(y_train, dtype=y_dtype).to(self.device)
 
         # 验证数据处理
         if X_val is not None and y_val is not None:
             X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(self.device)
-            y_val_tensor = torch.tensor(y_val, dtype=torch.long).to(self.device)
+            y_val_tensor = torch.tensor(y_val, dtype=y_dtype).to(self.device)
         else:
             X_val_tensor = y_val_tensor = None
 
@@ -524,7 +555,13 @@ class ANNClassifier:
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
 
         with torch.no_grad():
-            outputs = torch.softmax(self.model(X_tensor), dim=1)
+            model_outputs = self.model(X_tensor)
+            if self.multi_label:
+                # 多标签分类：每个标签独立的 sigmoid 概率
+                outputs = torch.sigmoid(model_outputs)
+            else:
+                # 单标签分类：softmax 概率
+                outputs = torch.softmax(model_outputs, dim=1)
 
         return outputs.cpu().numpy()
 
@@ -551,7 +588,11 @@ class ANNClassifier:
             for i in range(0, num_samples, batch_size):
                 batch_X = X[i:min(i + batch_size, num_samples)]
                 X_tensor = torch.tensor(batch_X, dtype=torch.float32).to(self.device)
-                outputs = torch.softmax(self.model(X_tensor), dim=1)
+                model_outputs = self.model(X_tensor)
+                if self.multi_label:
+                    outputs = torch.sigmoid(model_outputs)
+                else:
+                    outputs = torch.softmax(model_outputs, dim=1)
                 all_proba.append(outputs.cpu().numpy())
 
         return np.vstack(all_proba) if len(all_proba) > 1 else all_proba[0]
@@ -598,16 +639,33 @@ class ANNClassifier:
 
         with torch.no_grad():
             outputs = self.model(X_tensor)
-            y_pred = torch.argmax(outputs, dim=1).cpu().numpy()
-            y_probability = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
+            if self.multi_label:
+                # 多标签分类：使用 sigmoid 和阈值
+                y_probability = torch.sigmoid(outputs).cpu().numpy()
+                y_pred = (y_probability > 0.5).astype(int)
+            else:
+                # 单标签分类：使用 argmax
+                y_pred = torch.argmax(outputs, dim=1).cpu().numpy()
+                y_probability = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
 
-        metrics = {
-            "accuracy": accuracy_score(y, y_pred),
-            "f1_score": f1_score(y, y_pred),
-            "precision": precision_score(y, y_pred),
-            "recall": recall_score(y, y_pred),
-            "roc_auc": roc_auc_score(y, y_probability)
-        }
+        if self.multi_label:
+            # 多标签评估指标（使用 average='samples' 计算每个样本的平均指标）
+            metrics = {
+                "accuracy": accuracy_score(y.flatten(), y_pred.flatten()),
+                "f1_score": f1_score(y, y_pred, average='samples'),
+                "precision": precision_score(y, y_pred, average='samples'),
+                "recall": recall_score(y, y_pred, average='samples'),
+            }
+            # 注意：ROC AUC 在多标签情况下计算方式不同，这里简化处理
+        else:
+            # 单标签评估指标
+            metrics = {
+                "accuracy": accuracy_score(y, y_pred),
+                "f1_score": f1_score(y, y_pred),
+                "precision": precision_score(y, y_pred),
+                "recall": recall_score(y, y_pred),
+                "roc_auc": roc_auc_score(y, y_probability)
+            }
 
         if verbose:
             print(f"Accuracy: {metrics['accuracy']:.4f}")
@@ -631,16 +689,25 @@ class ANNClassifier:
 
         with torch.no_grad():
             outputs = self.model(X_tensor)
-            y_probability = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
+            if self.multi_label:
+                # 多标签分类：使用 sigmoid
+                y_probability = torch.sigmoid(outputs).cpu().numpy()
+            else:
+                # 单标签分类：使用 softmax
+                y_probability = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
 
-        fpr, tpr, _ = roc_curve(y, y_probability)
-        plt.figure()
-        plt.plot(fpr, tpr, label=f"ROC Curve (AUC = {roc_auc_score(y, y_probability):.4f})")
-        plt.title("ROC Curve")
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.legend(loc="lower right")
-        plt.show()
+        if not self.multi_label:
+            fpr, tpr, _ = roc_curve(y, y_probability)
+            plt.figure()
+            plt.plot(fpr, tpr, label=f"ROC Curve (AUC = {roc_auc_score(y, y_probability):.4f})")
+            plt.title("ROC Curve")
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
+            plt.legend(loc="lower right")
+            plt.show()
+        else:
+            # 多标签 ROC 曲线需要特殊处理，这里简化处理
+            self.logger.warning("多标签分类的 ROC 曲线绘制尚未实现")
 
     def save_model(self, path: str) -> None:
         """保存模型完整状态"""
@@ -655,6 +722,7 @@ class ANNClassifier:
                 'learning_rate': self.learning_rate,
                 'model_architecture': self.model_architecture,
                 'tensor_channels': self.tensor_channels,
+                'multi_label': self.multi_label,
             }
         }
         torch.save(save_dict, path)
