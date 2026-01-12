@@ -7,12 +7,13 @@
 
 import random
 import re
+
 import numpy as np
 import polars as pl
-from ..utils.progress_manager import wrap_iterator
 
-from ..utils.tool_function import str_subshell_2_kappa, chunk_string, str_subshell_2_kappa
 from ..utils.data_modules import CSFs
+from ..utils.progress_manager import wrap_iterator
+from ..utils.tool_function import chunk_string, str_subshell_2_kappa
 
 #######################################################################
 # CSFs source data compress to a simplified form
@@ -47,8 +48,13 @@ def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> b
         "f ": 8,
         "g-": 8,
         "g ": 10,
+        "h-": 10,
+        "h ": 12,
+        "i-": 12,
+        "i ": 14,
     }
     return full_charged.get(subshell_name, 0) == subshell_charged_num
+
 
 def CSF_subshell_split(CSFs_configuration_raw: str) -> list:
     # CSFs_configuration_raw need drop '\n' first !!!
@@ -59,6 +65,7 @@ def CSF_subshell_split(CSFs_configuration_raw: str) -> list:
     ]
 
     return subshells_charged
+
 
 def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list:
     """获取CSFs文件中的peel subshells列表
@@ -74,6 +81,7 @@ def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list:
 
     # 分割字符串并过滤掉空字符串，同时对每个子串去除前后空格
     return [s.strip() for s in peel_subshells.split() if s.strip()]
+
 
 def CSF_subshell_transform(
     subshells_charged: str, CSFs_file_Peel_subshells: list
@@ -95,7 +103,9 @@ def CSF_subshell_transform(
 
     return transform_subshells_charged
 
+
 #######################################################################
+
 
 def CSF_subshell_compress(CSF_configuration_raw: str):
     """
@@ -119,6 +129,7 @@ def CSF_subshell_compress(CSF_configuration_raw: str):
 
     return compressed_CSF
 
+
 def CSF_compress(CSF_raw: list) -> str:
     """
     compress CSF
@@ -127,6 +138,7 @@ def CSF_compress(CSF_raw: list) -> str:
         raise ValueError("CSF_raw need to be 3 line")
 
     return CSF_subshell_compress(CSF_raw[0]) + "".join(CSF_raw[1:])
+
 
 def CSF_subshell_extract(simplified_str):
     """
@@ -164,7 +176,9 @@ def CSF_subshell_extract(simplified_str):
 
     return "  ".join(restored)
 
+
 #######################################################################
+
 
 def csf_J(csf_3rd_line: str):
     """
@@ -183,6 +197,7 @@ def csf_J(csf_3rd_line: str):
     # 返回J字符串和宇称符号
     return j_str, parity
 
+
 def J_to_doubleJ(J_str: str) -> int:
     """
     将J字符串转换为二倍值(2J)
@@ -199,6 +214,7 @@ def J_to_doubleJ(J_str: str) -> int:
     else:
         # 处理整数情况
         return int(J_str) * 2
+
 
 def CSF_info_2_dict(CSF_item_list: list[str]) -> dict:
     # 解析 subshell 信息
@@ -220,6 +236,7 @@ def CSF_info_2_dict(CSF_item_list: list[str]) -> dict:
 
     return CSF_info_dict
 
+
 def CSF_item_2_dict(CSF_item_list: list[str]) -> dict:
     CSF_item_dict = {}
 
@@ -236,6 +253,7 @@ def CSF_item_2_dict(CSF_item_list: list[str]) -> dict:
     CSF_item_dict["J"] = j_p[:-1]  # J 是 parity 之前的部分
 
     return CSF_item_dict
+
 
 def get_CSFs_file_info(csfs_file_data: list) -> dict:
     """
@@ -304,7 +322,9 @@ def get_CSFs_file_info(csfs_file_data: list) -> dict:
 
     return CSFs_file_info
 
+
 #######################################################################
+
 
 def split_by_asterisk(lines):
     """
@@ -329,6 +349,7 @@ def split_by_asterisk(lines):
     result.append(current_chunk)
 
     return result
+
 
 def shuffle_three_line_groups(lst):
     """
@@ -357,6 +378,7 @@ def shuffle_three_line_groups(lst):
 #######################################################################
 ################### CSFs descriptor      #############################
 #######################################################################
+
 
 def parse_csf_2_descriptor(
     peel_subshells_list: list[str], csf: list[str]
@@ -454,9 +476,7 @@ def parse_csf_2_descriptor(
     # 第八步：处理未占用的轨道（使用集合运算找到差集）
     all_orbs_idxs = set(range(len(peel_subshells_list)))  # 所有轨道索引
     occupied_orbs_idxs = set(orbs_occupied_idxs)  # 已占用轨道索引
-    remaining_orbs_idxs = list(
-        all_orbs_idxs - occupied_orbs_idxs
-    )  # 未占用轨道索引
+    remaining_orbs_idxs = list(all_orbs_idxs - occupied_orbs_idxs)  # 未占用轨道索引
 
     # 第九步：为未占用轨道填充最终J值
     for idx in remaining_orbs_idxs:
@@ -464,11 +484,11 @@ def parse_csf_2_descriptor(
 
     return csf_descriptor
 
+
 #######################################################################
 
-def batch_process_csfs_to_descriptors(
-                                    CSFs_file_data: CSFs
-                                ) -> np.ndarray:
+
+def batch_process_csfs_to_descriptors(CSFs_file_data: CSFs) -> np.ndarray:
     """
     批量处理CSFs文件中的所有CSF数据，转换为描述符数组
 
@@ -502,9 +522,7 @@ def batch_process_csfs_to_descriptors(
                         f"Warning: CSF item in block {block_idx}, idx {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
                     )
                     continue
-                descriptor = parse_csf_2_descriptor(
-                        peel_subshells_list, csf_item
-                    )
+                descriptor = parse_csf_2_descriptor(peel_subshells_list, csf_item)
                 all_descriptors.append(descriptor)
 
             except Exception as e:
@@ -524,10 +542,10 @@ def batch_process_csfs_to_descriptors(
 
     return descriptors_array
 
+
 def batch_process_csfs_parquet_to_descriptors(
-                                    CSFs_file_header: dict,
-                                    CSFs_file_data: pl.DataFrame
-                                ) -> np.ndarray:
+    CSFs_file_header: dict, CSFs_file_data: pl.DataFrame
+) -> np.ndarray:
     """
     批量处理CSFs文件中的所有CSF数据，转换为描述符数组
     """
@@ -538,19 +556,19 @@ def batch_process_csfs_parquet_to_descriptors(
     # 【修改点】：将 with_columns 改为 select
     # 这样返回的 descriptors_df 将只包含 "descriptor" 这一列
     descriptors_df = CSFs_file_data.select(
-        descriptor = pl.concat_list(["line1", "line2", "line3"])
-            .map_elements(
-                lambda x: parse_csf_2_descriptor(peel_subshells_list, x).tolist(),
-                return_dtype=pl.List(pl.Float64) 
-            )
+        descriptor=pl.concat_list(["line1", "line2", "line3"]).map_elements(
+            lambda x: parse_csf_2_descriptor(peel_subshells_list, x).tolist(),
+            return_dtype=pl.List(pl.Float64),
+        )
     )
 
     print(f"Successfully processed {CSFs_file_data.shape[0]} CSFs")
     # 这里的 shape 列数应该是 1
-    print(f"Descriptor df shape: {descriptors_df.shape}") 
+    print(f"Descriptor df shape: {descriptors_df.shape}")
     print(f"Number of orbitals: {len(peel_subshells_list)}")
 
     numpy_matrix = np.array(descriptors_df["descriptor"].to_list())
     return numpy_matrix
+
 
 #######################################################################
