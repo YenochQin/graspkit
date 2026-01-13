@@ -607,8 +607,11 @@ def merge_historical_ci_data(
     current_ci_squared = np.array(current_idxs_ci_dict["ci_squared"])
 
     # 创建索引到CI系数的映射
-    previous_dict = dict(zip(previous_idxs, previous_ci_squared))
-    current_dict = dict(zip(current_idxs, current_ci_squared))
+    # 注意：ci_squared的shape是(n_correct_levels, n_csfs)，需要转置使每个CSF对应一行
+    previous_ci_squared_t = previous_ci_squared.T
+    current_ci_squared_t = current_ci_squared.T
+    previous_dict = dict(zip(previous_idxs, previous_ci_squared_t))
+    current_dict = dict(zip(current_idxs, current_ci_squared_t))
 
     # 获取索引的并集
     all_idxs = set(previous_idxs) | set(current_idxs)
@@ -631,7 +634,8 @@ def merge_historical_ci_data(
             merged_ci_squared.append(current_dict[idx])
 
     merged_idxs = np.array(merged_idxs)
-    merged_ci_squared = np.array(merged_ci_squared)
+    # 转置回原始shape: (n_correct_levels, n_csfs)
+    merged_ci_squared = np.array(merged_ci_squared).T
 
     logger.info(f"历史数据合并统计:")
     logger.info(f"历史数据CSFs数量: {len(previous_idxs)}")
@@ -736,7 +740,7 @@ def generate_train_csfs_descriptors(
     logger.info("加载累积的CSF索引和CI系数数据（已包含所有历史轮次）")
     accumulated_idxs_ci_path = config.cal_path.accumulated_idxs_ci_path
 
-    if not accumulated_idxs_ci_path.exists():
+    if config.cal_settings.cal_loop_num > 1 and not accumulated_idxs_ci_path.exists():
         raise FileNotFoundError(f"累积CI系数文件不存在: {accumulated_idxs_ci_path}")
 
     accumulated_ci_data = pkl_loader(accumulated_idxs_ci_path)
