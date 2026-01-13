@@ -153,10 +153,12 @@ class ANNClassifier:
         self.tensor_channels = tensor_channels
 
         # 自动判断是否使用多标签分类
-        # output_size = 1: 单标签分类（单能级）
-        # output_size > 1: 多标签分类（多能级，每个能级一个独立标签）
+        # 对于本任务（CSF重要性检测），每个能级都是独立的二分类标签
+        # 因此应该始终使用多标签分类（BCEWithLogitsLoss），无论 output_size 是多少
+        # output_size = 1: 单个能级，但仍使用多标签模式（1个标签）
+        # output_size > 1: 多个能级，使用多标签模式（多个标签）
         if multi_label is None:
-            self.multi_label = output_size > 1
+            self.multi_label = True  # 始终使用多标签模式
         else:
             self.multi_label = multi_label
 
@@ -281,15 +283,19 @@ class ANNClassifier:
 
         # 动态计算权重（如果启用）
         if self.use_dynamic_weights:
-            self.class_weights = self._calculate_dynamic_weights(y_train)
+            pos_weight_tensor = self._calculate_dynamic_weights(y_train)
             # 重新创建损失函数
             if self.multi_label:
                 # 多标签分类：使用 BCEWithLogitsLoss
-                pos_weight = torch.tensor([self.class_weights[1]], dtype=torch.float32).to(self.device)
-                self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+                # pos_weight_tensor 形状为 (N_roots,)，直接用于 BCEWithLogitsLoss
+                self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
             else:
                 # 单标签分类：使用 CrossEntropyLoss
-                self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+                # 从 pos_weight_tensor 提取权重构建 [负类权重, 正类权重]
+                neg_weight = 1.0
+                pos_weight = pos_weight_tensor[0].item()  # 取第一个能级的权重
+                class_weights = torch.tensor([neg_weight, pos_weight], dtype=torch.float32).to(self.device)
+                self.criterion = nn.CrossEntropyLoss(weight=class_weights)
 
         # 数据转换
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
@@ -421,97 +427,112 @@ class ANNClassifier:
         adaptive_strength: float = 0.5
     ) -> torch.Tensor:
         """
-        针对"找出重要组态"任务优化的权重计算
+        针对"找出重要组态"任务优化的权重计算 (适配多能级/多输出 BCEWithLogitsLoss)
 
-        核心思想：
-        1. 始终对正类（重要组态）保持一定的权重优势，即使它变成多数类
-        2. 根据正样本比例动态调整权重强度
-        3. 避免权重过于极端导致过拟合
+        修改说明：
+        1. 移除了 bincount，改用 sum(dim=0) 以支持二维标签矩阵。
+        2. 返回值调整为 pos_weight 向量，直接用于 BCEWithLogitsLoss。
+        3. 所有逻辑改为向量化操作，为每个能级(Root)单独计算权重。
 
         Args:
-            y_train: 训练标签 (0=不重要, 1=重要)
-            focus_on_recall: 是否优先保证召回率（推荐True）
+            y_train: 训练标签 (N_samples, N_roots)
+            focus_on_recall: 是否优先保证召回率
             min_positive_weight: 正类的最小权重倍数
-            adaptive_strength: 自适应调整的强度
-                - 0.0: 完全不自适应，始终固定权重
-                - 1.0: 完全自适应，根据比例动态调整
-                - 0.5: 折中（推荐）
+            adaptive_strength: 自适应调整强度
 
         Returns:
-            类别权重张量 [负类权重, 正类权重]
+            pos_weight: 张量，形状为 (N_roots,)，用于 BCEWithLogitsLoss
         """
-        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-        n_samples = len(y_train_tensor)
+        # 1. 数据转换与统计 (支持二维矩阵)
+        # y_train shape: [Batch_Size, N_roots]
+        y_tensor = torch.tensor(y_train, dtype=torch.float32)
+        n_samples = y_tensor.size(0)
+        n_roots = y_tensor.size(1) if y_tensor.dim() > 1 else 1
 
-        # 计算每个类别的数量
-        counts = torch.bincount(y_train_tensor, minlength=2).float()
-        neg_count, pos_count = counts[0].item(), counts[1].item()
+        # 容错处理：如果变成一维了，强制unsqueeze
+        if y_tensor.dim() == 1:
+            y_tensor = y_tensor.unsqueeze(1)
 
-        # 计算正样本比例
-        pos_ratio = pos_count / n_samples
-        neg_ratio = neg_count / n_samples
+        # 按列求和：获得每个能级的正样本数
+        # shape: [N_roots]
+        pos_counts = y_tensor.sum(dim=0)
+        neg_counts = n_samples - pos_counts
+
+        # 防止除零
+        pos_counts = torch.clamp(pos_counts, min=1.0)
+
+        # 计算比例
+        pos_ratios = pos_counts / n_samples
+        neg_ratios = 1.0 - pos_ratios
 
         if focus_on_recall:
-            # 策略：始终让正类权重 >= 负类权重 * min_positive_weight
-            # 确保模型不会忽视"重要组态"
+            # --- 向量化逻辑开始 ---
 
-            if pos_ratio <= 0.5:
-                # 早期迭代：正类是少数类或平衡
-                # 使用较强的权重来提升召回率
-                pos_weight = 1.0 / pos_ratio  # 反比
-                neg_weight = 1.0
+            # 创建结果容器
+            calculated_weights = torch.zeros_like(pos_ratios)
 
-                # 应用自适应强度调整
-                pos_weight = 1.0 + (pos_weight - 1.0) * adaptive_strength
+            # 情况 A: 早期迭代/少数类 (Ratio <= 0.5)
+            # 逻辑：pos_weight = 1/ratio, 然后应用 adaptive_strength
+            mask_early = pos_ratios <= 0.5
+            if mask_early.any():
+                raw_weight = 1.0 / (pos_ratios[mask_early] + 1e-6)
+                # 自适应调整: base + (target - base) * strength
+                # 这里 base=1.0 (无加权), target=raw_weight
+                calculated_weights[mask_early] = 1.0 + (raw_weight - 1.0) * adaptive_strength
 
-            else:
-                # 后期迭代：正类变成多数类
-                # 仍然保持正类的权重优势，但不那么激进
+            # 情况 B: 后期迭代/多数类 (Ratio > 0.5)
+            # 逻辑：权重衰减，但保持 >= min_positive_weight
+            mask_late = ~mask_early
+            if mask_late.any():
+                # 衰减因子: 0 (当ratio=0.5) -> 1 (当ratio=1.0)
+                decay_factor = (pos_ratios[mask_late] - 0.5) / 0.5
 
-                # 基础权重（如果完全平衡）
-                base_pos_weight = min_positive_weight
+                # 计算当前权重
+                # 你的逻辑: pos_weight = base * (1 - 0.3 * decay * strength)
+                current_weights = min_positive_weight * (1.0 - 0.3 * decay_factor * adaptive_strength)
 
-                # 根据正类占比调整：占比越高，权重略微降低
-                # 但始终保持 >= min_positive_weight
-                decay_factor = (pos_ratio - 0.5) / 0.5  # 0.5→1.0 映射到 0→1
-                pos_weight = base_pos_weight * (1.0 - 0.3 * decay_factor * adaptive_strength)
-                pos_weight = max(pos_weight, min_positive_weight)
+                # 确保不低于最小值
+                calculated_weights[mask_late] = torch.max(current_weights, torch.tensor(min_positive_weight))
 
-                neg_weight = 1.0
-
-            # 构建权重张量
-            weights = torch.tensor([neg_weight, pos_weight], dtype=torch.float32)
+            # 最终赋予 pos_weight
+            pos_weight_tensor = calculated_weights
 
         else:
-            # 标准的平衡权重（不推荐用于你的任务）
-            weights = n_samples / (2 * counts)
+            # 标准平衡模式: num_neg / num_pos
+            pos_weight_tensor = neg_counts / pos_counts
 
         # 移动到设备
-        weight_tensor = weights.to(self.device)
+        pos_weight_tensor = pos_weight_tensor.to(self.device)
 
-        # 详细日志
+        # --- 详细日志 (针对多能级优化显示) ---
+        # 计算一些统计量用于展示
+        avg_pos_ratio = pos_ratios.mean().item()
+        min_w = pos_weight_tensor.min().item()
+        max_w = pos_weight_tensor.max().item()
+        avg_w = pos_weight_tensor.mean().item()
+
         self.logger.info(
             f"\n{'='*70}\n"
-            f"权重计算 - 重要组态检测模式\n"
+            f"权重计算 v2 (BCE-MultiLabel) - 重要组态检测模式\n"
             f"{'='*70}\n"
-            f"  样本统计:\n"
+            f"  数据统计:\n"
             f"    总样本数:     {n_samples:,}\n"
-            f"    不重要组态:   {neg_count:,} ({neg_ratio:.1%})\n"
-            f"    重要组态:     {pos_count:,} ({pos_ratio:.1%})\n"
+            f"    能级数量:     {n_roots}\n"
+            f"    平均正类占比: {avg_pos_ratio:.1%}\n"
             f"\n"
-            f"  权重配置:\n"
-            f"    负类权重:     {weights[0]:.3f}\n"
-            f"    正类权重:     {weights[1]:.3f}\n"
-            f"    权重比例:     1 : {weights[1]/weights[0]:.2f}\n"
+            f"  权重配置 (pos_weight):\n"
+            f"    Min 权重:     {min_w:.3f}\n"
+            f"    Max 权重:     {max_w:.3f}\n"
+            f"    Avg 权重:     {avg_w:.3f}\n"
             f"\n"
             f"  策略说明:\n"
-            f"    {'✓ 高召回率模式 - 优先找出所有重要组态' if focus_on_recall else '○ 平衡模式'}\n"
-            f"    正类阶段:     {'早期(少数类)' if pos_ratio <= 0.5 else '后期(多数类)'}\n"
+            f"    {'✓ 高召回率模式' if focus_on_recall else '○ 平衡模式'}\n"
             f"    自适应强度:   {adaptive_strength:.1f}\n"
+            f"    策略逻辑:     Ratio<=0.5用反比增强, Ratio>0.5用衰减保护\n"
             f"{'='*70}"
         )
 
-        return weight_tensor
+        return pos_weight_tensor
 
     def _validate_input_data(
         self,
@@ -527,10 +548,28 @@ class ANNClassifier:
                 f"输入特征维度 {X.shape[1]} 与模型期望的 {self.input_size} 不匹配"
             )
 
-        if len(np.unique(y)) > self.output_size:
-            raise ValueError(
-                f"标签类别数 {len(np.unique(y))} 超过模型输出维度 {self.output_size}"
-            )
+        if self.multi_label:
+            # 多标签分类：检查标签维度
+            if y.ndim != 2:
+                raise ValueError(
+                    f"多标签分类期望二维标签数组，但收到 {y.ndim} 维数组"
+                )
+            if y.shape[1] != self.output_size:
+                raise ValueError(
+                    f"标签维度 {y.shape[1]} 与模型输出维度 {self.output_size} 不匹配"
+                )
+            # 检查标签值是否为 0/1
+            unique_vals = np.unique(y)
+            if not np.all((unique_vals == 0) | (unique_vals == 1)):
+                raise ValueError(
+                    f"多标签分类期望标签值为 0/1，但收到 {unique_vals}"
+                )
+        else:
+            # 单标签分类：检查类别数
+            if len(np.unique(y)) > self.output_size:
+                raise ValueError(
+                    f"标签类别数 {len(np.unique(y))} 超过模型输出维度 {self.output_size}"
+                )
 
     def predict(
         self,
@@ -539,7 +578,17 @@ class ANNClassifier:
     ) -> np.ndarray:
         """预测类别"""
         predictions = self.predict_proba(X)
-        return (predictions[:, 1] > threshold).astype(int)
+        if self.multi_label:
+            # 多标签分类：每个标签独立 sigmoid，返回 0/1 标签
+            return (predictions > threshold).astype(int)
+        else:
+            # 单标签分类：softmax 概率，取正类（索引1）
+            # 注意：当 output_size=1 时，也应该使用 multi_label 模式
+            # 这里保留是为了兼容性
+            if predictions.shape[1] == 1:
+                # 只有 1 个输出，直接使用 sigmoid
+                return (predictions > threshold).astype(int)
+            return (predictions[:, 1] > threshold).astype(int)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
@@ -745,7 +794,7 @@ class ANNClassifier:
         filename: str
     ):
         """
-        绘制评估曲线
+        绘制评估曲线（支持多标签分类）
 
         Args:
             cal_mix_coeff_List: 混合系数列表
@@ -757,10 +806,25 @@ class ANNClassifier:
         Returns:
             ROC AUC和PR AUC
         """
-        # 绘制 ROC 曲线
-        fpr, tpr, _ = roc_curve(y_test, y_probability)
-        roc_auc = roc_auc_score(y_test, y_probability)
         plt.figure(figsize=(10, 8))
+
+        # 处理多标签分类：展平数据
+        if y_test.ndim == 2:
+            # 多标签分类：展平所有标签和概率
+            y_test_flat = y_test.flatten()
+            # 对于多标签，y_probability 形状为 (n_samples, n_labels)
+            if y_probability.ndim == 2:
+                y_prob_flat = y_probability.flatten()
+            else:
+                y_prob_flat = y_probability
+        else:
+            # 单标签分类
+            y_test_flat = y_test
+            y_prob_flat = y_probability
+
+        # 绘制 ROC 曲线
+        fpr, tpr, _ = roc_curve(y_test_flat, y_prob_flat)
+        roc_auc = roc_auc_score(y_test_flat, y_prob_flat)
         plt.subplot(2, 2, 1)
         plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.4f}")
         plt.title("ROC Curve")
@@ -769,7 +833,7 @@ class ANNClassifier:
         plt.legend(loc="lower right")
 
         # 绘制 PR 曲线
-        precision, recall, _ = precision_recall_curve(y_test, y_probability)
+        precision, recall, _ = precision_recall_curve(y_test_flat, y_prob_flat)
         pr_auc = auc(recall, precision)
         plt.subplot(2, 2, 2)
         plt.plot(recall, precision, label=f"PR AUC = {pr_auc:.4f}")
@@ -779,8 +843,9 @@ class ANNClassifier:
         plt.legend(loc="lower left")
 
         # 绘制混淆矩阵
-        y_pred = np.where(y_probability > 0.5, 1, 0)
-        cm = confusion_matrix(y_test, y_pred)
+        # 对于多标签，需要使用展平的数据
+        y_pred = np.where(y_prob_flat > 0.5, 1, 0)
+        cm = confusion_matrix(y_test_flat, y_pred)
         plt.subplot(2, 2, 3)
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
         plt.title('Confusion Matrix')
