@@ -158,26 +158,26 @@ class ShellFormatter:
             intra_ls: 组内LS耦合信息，可能为None
 
         Returns:
-            str: LaTeX格式的LS耦合字符串，如"(^32_0\\text{S})"
-            如果format_to_word_document为真则取消了\\text{},并在特定地方加入了空格，
+            str: LaTeX格式的LS耦合字符串，如 r"(^32_0\\mathrm{S})"
+            如果format_to_word_document为真则取消了\\mathrm{},并在特定地方加入了空格，
             可以直接在word公式latex形式从"线性"转为"专业"
         """
         # 如果不存在LS耦合信息，返回空字符串
         if not intra_ls:
-            return ""
+            return r""
 
         # 添加对office word中的latex形式公式的支持，此形式应该可以直接从"线性"转为"专业"
         if format_to_word_document:
             if intra_ls.intra_J is not None:
-                return f"( ^{intra_ls.multiplicity}_{intra_ls.intra_J}{intra_ls.L} )"
+                return rf"( ^{intra_ls.multiplicity}_{intra_ls.intra_J}{intra_ls.L} )"
             # 否则只格式化多重度角动量
-            return f"( ^{intra_ls.multiplicity}{intra_ls.L} )"
-        
+            return rf"( ^{intra_ls.multiplicity}{intra_ls.L} )"
+
         # 如果存在中间耦合J值，包含在格式中
         if intra_ls.intra_J is not None:
-            return f"(^{intra_ls.multiplicity}_{intra_ls.intra_J}\\text{{{intra_ls.L}}})"
+            return rf"(^{intra_ls.multiplicity}_{intra_ls.intra_J}\mathrm{{{intra_ls.L}}})"
         # 否则只格式化多重度角动量
-        return f"(^{intra_ls.multiplicity}\\text{{{intra_ls.L}}})"
+        return rf"(^{intra_ls.multiplicity}\mathrm{{{intra_ls.L}}})"
 
     @staticmethod
     def format_inter_ls(
@@ -190,12 +190,12 @@ class ShellFormatter:
             inter_ls: 组间LS耦合信息
 
         Returns:
-            str: LaTeX格式的LS耦合字符串，如"^7\\text{P}"
+            str: LaTeX格式的LS耦合字符串，如 "^7\\mathrm{P}"
         """
         if format_to_word_document:
-            return f"^{{{inter_ls.multiplicity}}}{inter_ls.L}"
+            return rf"^{{{inter_ls.multiplicity}}}{inter_ls.L}"
 
-        return f"^{{{inter_ls.multiplicity}}}\\text{{{inter_ls.L}}}"
+        return rf"^{{{inter_ls.multiplicity}}}\mathrm{{{inter_ls.L}}}"
 
 
 class ConfigurationFormatter:
@@ -237,11 +237,11 @@ class ConfigurationFormatter:
 
         Returns:
             Tuple[str, str]: (格式化的配置字符串, 原始配置字符串)
-                           例如: ("4f^{7}\\,(^3_0\\text{S})\\;5d^{3}\\,(^4_5\\text{F})\\;",
+                           例如: (r"4f^{7}\\,(^3_0\\mathrm{S})\\;5d^{3}\\,(^4_5\\mathrm{F})\\;",
                                  "4f(7)3S0_7P.5d(3)4F5_5G")
         """
-        formatted_conf = ""
-        format_LS_compling = ""
+        formatted_conf = r""
+        format_LS_compling = r""
 
         list_length = len(self.temp_conf_list)
         for index, shell in enumerate(self.temp_conf_list):
@@ -259,9 +259,9 @@ class ConfigurationFormatter:
             formatted_conf = (
                 formatted_conf
                 + ShellFormatter.format_shell(formated_shell)
-                + "\\,"
+                + r"\,"
                 + (ShellFormatter.format_intra_ls(formated_shell.intra_ls, self.format_to_word_document) or "")
-                + "\\;"
+                + r"\;"
             )
 
             if is_last and formated_shell.inter_ls is not None:
@@ -395,20 +395,21 @@ class LevelsEnergyData:
                     lambda x: ConfigurationFormatter(
                         x, self.show_full_charged_subshell, self.format_to_word_document
                     ).conf_format()[1]
-                + "_{"
-                + self.level_read_df["J"]
-                + "}"
-            ))
+                ).astype(str)
+                + r"_{"
+                + self.level_read_df["J"].astype(str)
+                + r"}"
+            )
 
             self.level_read_df[f"ASF_LSJ_as{self.this_as}"] = (
-                "$"
+                r"$"
                 + self.level_read_df[
                     f"Configuration_{self.level_parameter}{self.this_as}"
-                ]
+                ].astype(str)
                 + self.level_read_df[
                     f"Configuration_LSJ_{self.level_parameter}_as{self.this_as}"
-                ]
-                + "$"
+                ].astype(str)
+                + r"$"
             )
 
         # self.level_read_df[[f'E_as{self.this_as}', 'Splitting']].fillna(0, inplace=True)
@@ -565,10 +566,10 @@ class LevelsASFComposition:
         temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.conf_format()[1]
 
         if temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls != "":
-            temp_comp_unit_format = f"${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}\\,{temp_lsj_unit_format_conf_ls}$ +"
+            temp_comp_unit_format = rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}\,{temp_lsj_unit_format_conf_ls}$ +"
         elif temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls == "":
             temp_comp_unit_format = (
-                f"${str(temp_lsj_unit_w)}\\;{temp_lsj_unit_format_conf}$ +"
+                rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}$ +"
             )
         else:
             raise ValueError(f"{temp_lsj_unit_format_conf=}为空字符")
