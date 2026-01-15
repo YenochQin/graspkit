@@ -358,13 +358,13 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
     y_prediction = model.predict(X_test)
     eval_time = time.time() - start_time
 
-    # 预测概率
-    y_probability = model.predict_proba(X_test)[:, 1]
+    # 预测概率 - 多标签情况下保留所有能级的概率
+    y_probability = model.predict_proba(X_test)
     y_prediction_train = model.predict(X_train)
-    y_probability_train = model.predict_proba(X_train)[:, 1]
+    y_probability_train = model.predict_proba(X_train)
 
     # 生成完整训练数据集的概率用于分析
-    y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))[:, 1]
+    y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))
 
     # 评估指标计算
     test_f1, test_roc_auc, test_accuracy, test_precision, test_recall = (
