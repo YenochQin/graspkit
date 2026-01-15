@@ -304,7 +304,6 @@ def save_and_plot_results(
     evaluation_results,
     model,
     correct_levels_ci: np.ndarray,
-    caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
     y_current_cal_probability=None,
     save_model: bool = True,
     save_data: bool = True,
@@ -316,15 +315,14 @@ def save_and_plot_results(
 
     Args:
         config: 配置对象
+        logger: 日志记录器
         evaluation_results: evaluate_model函数返回的结果字典
         model: 训练好的模型对象
         correct_levels_ci: 混合系数数据Ci用于绘图，shape: (n_levels, n_csfs) 或 (n_csfs,)
-        caled_csfs_idxs_array: 当前计算的CSF索引
         y_current_cal_probability: 当前计算CSF的预测概率，shape: (n_csfs, n_levels)
         save_model: 是否保存模型文件
         save_data: 是否保存预测结果数据
         plot_curves: 是否绘制ROC/PR曲线
-        logger: 日志记录器
 
     Returns:
         dict: 包含所有保存文件路径的字典
@@ -384,7 +382,7 @@ def save_and_plot_results(
             spectral_term = config.cal_settings.spectral_term
             if spectral_term is not None:
                 for term in spectral_term:
-                    _formatted_conf, format_LS_coupling = ConfigurationFormatter(term).conf_format()
+                    _, format_LS_coupling = ConfigurationFormatter(term).conf_format()
                     latex_form_spectral_term.append(format_LS_coupling)
 
             # 确定能级数量
@@ -440,11 +438,8 @@ def save_and_plot_results(
                         f"能级 {level_idx}: CI系数shape={level_ci.shape}, 预测概率shape={level_probability.shape}, 测试集shape={level_y_test.shape}"
                     )
 
-                # 生成图表标题
-                if level_idx < len(latex_form_spectral_term):
-                    level_title = latex_form_spectral_term[level_idx]
-                else:
-                    level_title = f"Level {level_idx}"
+                # 生成图表标题（LaTeX 格式支持）
+                level_title = f"${latex_form_spectral_term[level_idx]}$ Ci Values vs Predicted Probability"
 
                 # 绘制当前能级的ROC和PR曲线
                 plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_level{level_idx}_roc_pr_curves.png"
