@@ -95,12 +95,12 @@ from .CSFs_processor import (
 )
 
 from .grasp_data_extractor import (
-    ConfigurationFormatter,
+    format_configuration,
     LevelsEnergyData,
     mcdhf_energy_data_collection,
     ci_energy_data_collection,
     level_energy_collector,
-    LevelsASFComposition,
+    add_asf_compositions,
     asf_radial_wavefunction_collection,
     RadialElectrondensityFunction,
     TransitionDataCollection,
@@ -213,12 +213,12 @@ __all__ = [
     "batch_process_csfs_to_descriptors",
     "batch_process_csfs_parquet_to_descriptors",
     # grasp_data_extractor
-    "ConfigurationFormatter",
+    "format_configuration",
     "LevelsEnergyData",
     "mcdhf_energy_data_collection",
     "ci_energy_data_collection",
     "level_energy_collector",
-    "LevelsASFComposition",
+    "add_asf_compositions",
     "asf_radial_wavefunction_collection",
     "RadialElectrondensityFunction",
     "TransitionDataCollection",

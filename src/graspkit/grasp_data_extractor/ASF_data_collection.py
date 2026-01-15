@@ -8,13 +8,14 @@
 """
 
 import re
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
-from ..data_IO.grasp_data_loader import GraspFileLoad, EnergyFile2csv
+import numpy as np
+import pandas as pd
+
+from ..data_IO.grasp_data_loader import EnergyFile2csv, GraspFileLoad
 from ..utils.tool_function import LS_shell_full_charged
 
 
@@ -52,8 +53,8 @@ class ShellInfo:
     n: int  # 主量子数
     shell: str  # 轨道类型：s/p/d/f
     electrons: int | None  # 轨道中的电子数，来自(e)格式，可能缺省
-    intra_ls: IntraCoupled_LS | None # 组内LS耦合信息，可能缺省
-    inter_ls: InterCoupled_LS | None # 组间LS耦合信息，可能缺省
+    intra_ls: IntraCoupled_LS | None  # 组内LS耦合信息，可能缺省
+    inter_ls: InterCoupled_LS | None  # 组间LS耦合信息，可能缺省
 
 
 class ShellFormatter:
@@ -131,9 +132,7 @@ class ShellFormatter:
         )
 
     @staticmethod
-    def format_shell(
-                    shell_info: ShellInfo
-                    ) -> str:
+    def format_shell(shell_info: ShellInfo) -> str:
         """格式化原子轨道核心部分
 
         Args:
@@ -149,9 +148,8 @@ class ShellFormatter:
 
     @staticmethod
     def format_intra_ls(
-                        intra_ls: IntraCoupled_LS | None,
-                        format_to_word_document: bool = False
-                    ) -> str:
+        intra_ls: IntraCoupled_LS | None, format_to_word_document: bool = False
+    ) -> str:
         """格式化组内LS耦合信息为LaTeX格式
 
         Args:
@@ -175,15 +173,16 @@ class ShellFormatter:
 
         # 如果存在中间耦合J值，包含在格式中
         if intra_ls.intra_J is not None:
-            return rf"(^{intra_ls.multiplicity}_{intra_ls.intra_J}\mathrm{{{intra_ls.L}}})"
+            return (
+                rf"(^{intra_ls.multiplicity}_{intra_ls.intra_J}\mathrm{{{intra_ls.L}}})"
+            )
         # 否则只格式化多重度角动量
         return rf"(^{intra_ls.multiplicity}\mathrm{{{intra_ls.L}}})"
 
     @staticmethod
     def format_inter_ls(
-                        inter_ls: InterCoupled_LS,
-                        format_to_word_document: bool = False
-                        ) -> str:
+        inter_ls: InterCoupled_LS, format_to_word_document: bool = False
+    ) -> str:
         """格式化组间LS耦合信息为LaTeX格式
 
         Args:
@@ -198,80 +197,67 @@ class ShellFormatter:
         return rf"^{{{inter_ls.multiplicity}}}\mathrm{{{inter_ls.L}}}"
 
 
-class ConfigurationFormatter:
-    """
-    GRASP能级格式化器类
+def format_configuration(
+    temp_configuration: str,
+    show_full_charged_subshell: bool = False,
+    format_to_word_document: bool = False,
+) -> Tuple[str, str]:
+    """格式化GRASP原子配置字符串
 
     使用ShellFormatter来解析和格式化原子配置字符串
     支持处理多个子轨道的组合配置，如"4f(7)3S0_7P.5d(3)2F_5G"
 
-    Attributes:
-        temp_configuration: 清理后的配置字符串（去除换行符）
-        show_full_charged_subshell: 是否显示满电子子轨道的布尔值
-        temp_conf_list: 按.分割的子轨道配置列表
+    Args:
+        temp_configuration: 原子配置字符串，可包含换行符
+        show_full_charged_subshell: 是否显示满电子子轨道，默认False
+        format_to_word_document: 是否格式化为Word文档兼容的LaTeX，默认False
+
+    Returns:
+        Tuple[str, str]: (格式化的配置字符串, 组间LS耦合字符串)
+                       例如: (r"4f^{7}\\,(^3_0\\mathrm{S})\\;5d^{3}\\,(^4_5\\mathrm{F})\\;",
+                             "^7\\mathrm{P}")
     """
+    temp_configuration = re.sub(r"\n", "", temp_configuration)
+    temp_conf_list = temp_configuration.split(".")
 
-    def __init__(
-                self, 
-                temp_configuration: str, 
-                show_full_charged_subshell: bool = False,
-                format_to_word_document: bool = False
-                ):
-        """
-        初始化ConfigurationFormatter
+    formatted_conf = r""
+    format_LS_compling = r""
 
-        Args:
-            temp_configuration: 原子配置字符串，可包含换行符
-            show_full_charged_subshell: 是否显示满电子子轨道，默认False
-        """
-        self.temp_configuration = re.sub(r"\n", "", temp_configuration)
-        self.temp_conf_list = self.temp_configuration.split(".")
+    list_length = len(temp_conf_list)
+    for index, shell in enumerate(temp_conf_list):
+        # 检查是否是满电子子轨道
+        formated_shell = ShellFormatter.parse_subshell(shell)
+        is_last = index == list_length - 1
+        temp_shell = formated_shell.shell
 
-        self.show_full_charged_subshell = show_full_charged_subshell
-        self.format_to_word_document = format_to_word_document
+        if (formated_shell.electrons is not None) and (not is_last):
+            temp_electrons = formated_shell.electrons
 
-    def conf_format(self) -> Tuple[str, str]:
-        """格式化整个原子配置
+            if (
+                LS_shell_full_charged(temp_shell, temp_electrons)
+                and not show_full_charged_subshell
+            ):
+                continue
 
-        处理所有子轨道，过滤满电子子轨道（如果需要），并格式化为LaTeX字符串
-
-        Returns:
-            Tuple[str, str]: (格式化的配置字符串, 原始配置字符串)
-                           例如: (r"4f^{7}\\,(^3_0\\mathrm{S})\\;5d^{3}\\,(^4_5\\mathrm{F})\\;",
-                                 "4f(7)3S0_7P.5d(3)4F5_5G")
-        """
-        formatted_conf = r""
-        format_LS_compling = r""
-
-        list_length = len(self.temp_conf_list)
-        for index, shell in enumerate(self.temp_conf_list):
-            # 检查是否是满电子子轨道
-            formated_shell = ShellFormatter.parse_subshell(shell)
-            is_last = index == list_length - 1
-            temp_shell = formated_shell.shell
-
-            if (formated_shell.electrons is not None) and (not is_last):
-                temp_electrons = formated_shell.electrons
-
-                if LS_shell_full_charged(temp_shell, temp_electrons) and not self.show_full_charged_subshell:
-                    continue
-
-            formatted_conf = (
-                formatted_conf
-                + ShellFormatter.format_shell(formated_shell)
-                + r"\,"
-                + (ShellFormatter.format_intra_ls(formated_shell.intra_ls, self.format_to_word_document) or "")
-                + r"\;"
-            )
-
-            if is_last and formated_shell.inter_ls is not None:
-
-                format_LS_compling = ShellFormatter.format_inter_ls(
-                    formated_shell.inter_ls,
-                    self.format_to_word_document
+        formatted_conf = (
+            formatted_conf
+            + ShellFormatter.format_shell(formated_shell)
+            + r"\,"
+            + (
+                ShellFormatter.format_intra_ls(
+                    formated_shell.intra_ls, format_to_word_document
                 )
-        formatted_conf = formatted_conf.replace(r"\,\;", r"\;")
-        return formatted_conf, format_LS_compling
+                or ""
+            )
+            + r"\;"
+        )
+
+        if is_last and formated_shell.inter_ls is not None:
+            format_LS_compling = ShellFormatter.format_inter_ls(
+                formated_shell.inter_ls, format_to_word_document
+            )
+    formatted_conf = formatted_conf.replace(r"\,\;", r"\;")
+    return formatted_conf, format_LS_compling
 
 
 #######################################################################
@@ -288,7 +274,7 @@ class LevelsEnergyData:
         filepath,
         store_csv_path: str = "",
         show_full_charged_subshell: bool = False,
-        format_to_word_document: bool = False
+        format_to_word_document: bool = False,
     ):
         """从文件路径直接创建实例的类方法"""
         file_dir = str(Path(filepath).parent)
@@ -381,9 +367,9 @@ class LevelsEnergyData:
             ] = self.level_read_df[
                 f"Configuration_{self.level_parameter}{self.this_as}raw"
             ].apply(
-                lambda x: ConfigurationFormatter(
+                lambda x: format_configuration(
                     x, self.show_full_charged_subshell, self.format_to_word_document
-                ).conf_format()[0]
+                )[0]
             )
 
             self.level_read_df[
@@ -391,11 +377,13 @@ class LevelsEnergyData:
             ] = (
                 self.level_read_df[
                     f"Configuration_{self.level_parameter}{self.this_as}raw"
-                ].apply(
-                    lambda x: ConfigurationFormatter(
+                ]
+                .apply(
+                    lambda x: format_configuration(
                         x, self.show_full_charged_subshell, self.format_to_word_document
-                    ).conf_format()[1]
-                ).astype(str)
+                    )[1]
+                )
+                .astype(str)
                 + r"_{"
                 + self.level_read_df["J"].astype(str)
                 + r"}"
@@ -520,130 +508,206 @@ def level_energy_collector(
 # Add level's composition of ASF
 
 
-class LevelsASFComposition:
-    def __init__(
-        self,
-        energy_data_df: pd.DataFrame,
-        data_file_info: dict,
-        min_comp: float = 0.03,
-        show_comp_num: int = 0,
-        show_full_charged_subshell: bool = False,
-        format_to_word_document: bool = False,
-    ):
-        self.energy_data_df = energy_data_df
-        self.data_file_info = data_file_info
-        # TODO 这里有bug
-        self.show_full_charged_subshell = show_full_charged_subshell
-        self.format_to_word_document = format_to_word_document
-        # self.show_full_charged_subshell = data_file_info.get(
-        #     "show_full_charged_subshell", False
-        # )
-        # self.format_to_word_document = data_file_info.get(
-        #     "format_to_word_document", False
-        # )
-        self.data_file_info["file_type"] = "LSJ"
-        self.data_file_load = GraspFileLoad(self.data_file_info)
-        result = self.data_file_load.data_file_process()
-        if isinstance(result, tuple) and len(result) == 2:
-            self.lsj_lbl_data, self.level_loc_lbl = result
-        else:
-            raise ValueError(
-                "Expected tuple of (lsj_lbl_data, level_loc_lbl) from data_file_process"
-            )
+def _format_lsj_unit(
+    lsj_unit_info_list: list,
+    show_full_charged_subshell: bool = False,
+    format_to_word_document: bool = False,
+) -> tuple[str, np.float64, np.float64]:
+    """Format a single LSJ unit for composition display.
 
-        self.min_comp = min_comp
-        self.show_comp_num = show_comp_num
+    Args:
+        lsj_unit_info_list: List containing [coefficient, weight, configuration]
+        show_full_charged_subshell: Whether to show fully charged subshells
+        format_to_word_document: Whether to format for Word document compatibility
 
-    def level_composition_unit_format(self):
-        temp_lsj_unit_info_list = self.temp_lsj_unit_information
-        temp_lsj_unit_coefficient = np.float64(temp_lsj_unit_info_list[0])
-        temp_lsj_unit_w = np.float64(temp_lsj_unit_info_list[1]).round(3)
-        temp_lsj_unit_conf = temp_lsj_unit_info_list[2]
-        temp_lsj_unit_format = ConfigurationFormatter(
-            temp_lsj_unit_conf, self.show_full_charged_subshell, self.format_to_word_document
+    Returns:
+        Tuple of (formatted_string, coefficient, weight)
+
+    Raises:
+        ValueError: If both configuration and LS coupling strings are empty
+    """
+    temp_lsj_unit_coefficient = np.float64(lsj_unit_info_list[0])
+    temp_lsj_unit_w = np.float64(lsj_unit_info_list[1]).round(3)
+    temp_lsj_unit_conf = lsj_unit_info_list[2]
+    temp_lsj_unit_format_conf, temp_lsj_unit_format_conf_ls = format_configuration(
+        temp_lsj_unit_conf,
+        show_full_charged_subshell,
+        format_to_word_document,
+    )
+
+    if temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls != "":
+        temp_comp_unit_format = rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}\,{temp_lsj_unit_format_conf_ls}$ +"
+    elif temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls == "":
+        temp_comp_unit_format = (
+            rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}$ +"
         )
-        temp_lsj_unit_format_conf = temp_lsj_unit_format.conf_format()[0]
-        temp_lsj_unit_format_conf_ls = temp_lsj_unit_format.conf_format()[1]
+    elif temp_lsj_unit_format_conf == "" and temp_lsj_unit_format_conf_ls != "":
+        temp_comp_unit_format = (
+            rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf_ls}$ +"
+        )
+    else:
+        raise ValueError(
+            f"Both configuration and LS coupling strings are empty. "
+            f"conf={temp_lsj_unit_format_conf!r}, ls={temp_lsj_unit_format_conf_ls!r}"
+        )
 
-        if temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls != "":
-            temp_comp_unit_format = rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}\,{temp_lsj_unit_format_conf_ls}$ +"
-        elif temp_lsj_unit_format_conf != "" and temp_lsj_unit_format_conf_ls == "":
-            temp_comp_unit_format = (
-                rf"${str(temp_lsj_unit_w)}\;{temp_lsj_unit_format_conf}$ +"
-            )
+    return temp_comp_unit_format, temp_lsj_unit_coefficient, temp_lsj_unit_w
+
+
+def _format_level_composition(
+    lsj_information: list,
+    min_comp: float = 0.03,
+    show_comp_num: int = 0,
+    show_full_charged_subshell: bool = False,
+    format_to_word_document: bool = False,
+) -> str:
+    """Format level composition from LSJ information.
+
+    Args:
+        lsj_information: List of LSJ unit strings to format
+        min_comp: Minimum component weight threshold (when show_comp_num=0)
+        show_comp_num: Number of components to show (0 means filter by weight)
+        show_full_charged_subshell: Whether to show fully charged subshells
+        format_to_word_document: Whether to format for Word document compatibility
+
+    Returns:
+        Formatted composition string
+    """
+    temp_level_asf_comp = ""
+    component_count = 0
+
+    for lsj_unit in lsj_information:
+        lsj_unit_information = lsj_unit.split()
+        if len(lsj_unit_information) == 3:
+            # Get weight for filtering
+            temp_lsj_unit_w = np.float64(lsj_unit_information[1]).round(3)
+
+            # Apply filter logic: if show_comp_num is 0, filter by weight; otherwise, filter by count
+            if show_comp_num == 0:
+                # Filter by weight: only include components with weight > min_comp
+                if temp_lsj_unit_w <= min_comp:
+                    continue
+            else:
+                # Filter by count: only include first show_comp_num components
+                if component_count >= show_comp_num:
+                    continue
+                component_count += 1
+
+            temp_comp_unit_format = _format_lsj_unit(
+                lsj_unit_information,
+                show_full_charged_subshell,
+                format_to_word_document,
+            )[0]
+            temp_level_asf_comp = temp_level_asf_comp + temp_comp_unit_format
         else:
-            raise ValueError(f"{temp_lsj_unit_format_conf=}为空字符")
+            continue
 
-        return temp_comp_unit_format, temp_lsj_unit_coefficient, temp_lsj_unit_w
+    temp_level_asf_comp = temp_level_asf_comp.strip(" +")
+    temp_level_asf_comp = re.sub(r"\$ \+\$", " + ", temp_level_asf_comp)
 
-    # def level_composition_format(self, self.temp_lsj_information):
-    def level_composition_format(self):
-        self.temp_level_asf_comp = ""
-        component_count = 0
+    return temp_level_asf_comp
 
-        for self.temp_lsj_unit in self.temp_lsj_information:
-            self.temp_lsj_unit_information = self.temp_lsj_unit.split()
-            if len(self.temp_lsj_unit_information) == 3:
-                # Get weight for filtering
-                temp_lsj_unit_w = np.float64(self.temp_lsj_unit_information[1]).round(3)
 
-                # Apply filter logic: if show_comp_num is 0, filter by weight; otherwise, filter by count
-                if self.show_comp_num == 0:
-                    # Filter by weight: only include components with weight > min_comp
-                    if temp_lsj_unit_w <= self.min_comp:
-                        continue
-                else:
-                    # Filter by count: only include first show_comp_num components
-                    if component_count >= self.show_comp_num:
-                        continue
-                    component_count += 1
+def _locate_asf_composition(
+    temp_level_asf: str, energy_data_df: pd.DataFrame
+) -> int:
+    """Locate ASF composition in DataFrame.
 
-                self.temp_comp_unit_format = (
-                    LevelsASFComposition.level_composition_unit_format(self)[0]
-                )
-                self.temp_level_asf_comp = (
-                    self.temp_level_asf_comp + self.temp_comp_unit_format
-                )
+    Args:
+        temp_level_asf: ASF level string to locate
+        energy_data_df: DataFrame to search in
 
-            else:
-                continue
-        self.temp_level_asf_comp = self.temp_level_asf_comp.strip(" +")
-        self.temp_level_asf_comp = re.sub(r"\$ \+\$", " + ", self.temp_level_asf_comp)
+    Returns:
+        Index of the matching row in the DataFrame
 
-        return self.temp_level_asf_comp
+    Raises:
+        ValueError: If ASF level format is invalid or level not found in DataFrame
+    """
+    temp_level_asf_comp_loc = temp_level_asf.split()
+    if len(temp_level_asf_comp_loc) < 3:
+        raise ValueError(
+            f"Invalid ASF level format: '{temp_level_asf}'. "
+            f"Expected at least 3 fields (Pos, J, Parity), got {len(temp_level_asf_comp_loc)}"
+        )
+    temp_level_asf_dataframe_loc = energy_data_df.loc[
+        (energy_data_df["Pos"] == temp_level_asf_comp_loc[0])
+        & (energy_data_df["J"] == temp_level_asf_comp_loc[1])
+        & (energy_data_df["Parity"] == temp_level_asf_comp_loc[2])
+    ].index[0]
 
-    def asf_comp_locate(self):
-        self.temp_level_asf_comp_loc = self.temp_level_asf.split()
-        self.temp_level_asf_dataframe_loc = self.energy_data_df.loc[
-            (self.energy_data_df["Pos"] == self.temp_level_asf_comp_loc[0])
-            & (self.energy_data_df["J"] == self.temp_level_asf_comp_loc[1])
-            & (self.energy_data_df["Parity"] == self.temp_level_asf_comp_loc[2])
-        ].index[0]
+    return temp_level_asf_dataframe_loc
 
-        return self.temp_level_asf_dataframe_loc
 
-    def level_comp_of_asf(self):
-        for self.temp_level_loc in self.level_loc_lbl:
-            if self.temp_level_loc != self.level_loc_lbl[-1]:
-                self.temp_level_lsj_info = self.lsj_lbl_data[
-                    self.temp_level_loc + 1 : self.level_loc_lbl[
-                        self.level_loc_lbl.index(self.temp_level_loc) + 1
-                    ]
+def add_asf_compositions(
+    energy_data_df: pd.DataFrame,
+    data_file_info: dict,
+    min_comp: float = 0.03,
+    show_comp_num: int = 0,
+    show_full_charged_subshell: bool = False,
+    format_to_word_document: bool = False,
+) -> pd.DataFrame:
+    """Add ASF composition information to energy data DataFrame.
+
+    This is the main entry function for processing level compositions.
+    It loads LSJ data, formats compositions for each level, and updates the DataFrame.
+
+    Args:
+        energy_data_df: DataFrame containing energy level data to be updated
+        data_file_info: Dictionary containing file information for loading LSJ data
+        min_comp: Minimum component weight threshold (when show_comp_num=0)
+        show_comp_num: Number of components to show (0 means filter by weight)
+        show_full_charged_subshell: Whether to show fully charged subshells
+        format_to_word_document: Whether to format for Word document compatibility
+
+    Returns:
+        The updated energy data DataFrame with composition information added
+
+    Raises:
+        ValueError: If level_loc_lbl is empty or data_file_process returns unexpected format
+    """
+    # Load LSJ data
+    data_file_info["file_type"] = "LSJ"
+    data_file_load = GraspFileLoad(data_file_info)
+    result = data_file_load.data_file_process()
+    if isinstance(result, tuple) and len(result) == 2:
+        lsj_lbl_data, level_loc_lbl = result
+    else:
+        raise ValueError(
+            "Expected tuple of (lsj_lbl_data, level_loc_lbl) from data_file_process"
+        )
+
+    if not level_loc_lbl:
+        raise ValueError(
+            "level_loc_lbl is empty - no level locations to process. "
+            "Check if the LSJ data file was correctly parsed."
+        )
+
+    # Process each level
+    for temp_level_loc in level_loc_lbl:
+        if temp_level_loc != level_loc_lbl[-1]:
+            temp_level_lsj_info = lsj_lbl_data[
+                temp_level_loc + 1 : level_loc_lbl[
+                    level_loc_lbl.index(temp_level_loc) + 1
                 ]
-            else:
-                self.temp_level_lsj_info = self.lsj_lbl_data[self.temp_level_loc + 1 :]
-            self.temp_level_asf = self.lsj_lbl_data[self.temp_level_loc]
-            self.temp_level_df_loc = LevelsASFComposition.asf_comp_locate(self)
-            self.temp_lsj_information = self.temp_level_lsj_info
-            self.temp_level_asf_comp = LevelsASFComposition.level_composition_format(
-                self
-            )
-            self.energy_data_df.loc[
-                self.temp_level_df_loc,
-                f"Comp_of_asf_{self.data_file_info['level_parameter']}{self.data_file_info['this_as']}",
-            ] = self.temp_level_asf_comp
+            ]
+        else:
+            temp_level_lsj_info = lsj_lbl_data[temp_level_loc + 1 :]
+        temp_level_asf = lsj_lbl_data[temp_level_loc]
 
-        return self.energy_data_df
+        temp_level_df_loc = _locate_asf_composition(temp_level_asf, energy_data_df)
+        temp_level_asf_comp = _format_level_composition(
+            temp_level_lsj_info,
+            min_comp,
+            show_comp_num,
+            show_full_charged_subshell,
+            format_to_word_document,
+        )
+        energy_data_df.loc[
+            temp_level_df_loc,
+            f"Comp_of_asf_{data_file_info['level_parameter']}{data_file_info['this_as']}",
+        ] = temp_level_asf_comp
+
+    return energy_data_df
 
 
 #######################################################################
