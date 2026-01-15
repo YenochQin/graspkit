@@ -13,6 +13,7 @@ import joblib
 import numpy as np
 import polars as pl
 
+from ..grasp_data_extractor.ASF_data_collection import ConfigurationFormatter
 from ..utils.data_modules import MLDataCounts
 from .neural_network import ANNClassifier
 
@@ -298,10 +299,10 @@ def save_iteration_results(
 
 
 def save_and_plot_results(
+    config,
     logger: logging.Logger,
     evaluation_results,
     model,
-    path_cfg,
     correct_levels_ci: np.ndarray,
     caled_csfs_idxs_array: np.ndarray = np.array([], dtype=int),
     y_current_cal_probability=None,
@@ -314,11 +315,12 @@ def save_and_plot_results(
     使用setup_directories创建的标准目录结构
 
     Args:
+        config: 配置对象
         evaluation_results: evaluate_model函数返回的结果字典
         model: 训练好的模型对象
-        correct_levels_ci: 混合系数数据Ci用于绘图
+        correct_levels_ci: 混合系数数据Ci用于绘图，shape: (n_levels, n_csfs) 或 (n_csfs,)
         caled_csfs_idxs_array: 当前计算的CSF索引
-        y_current_cal_probability: 当前计算CSF的预测概率，与混合系数维度匹配
+        y_current_cal_probability: 当前计算CSF的预测概率，shape: (n_csfs, n_levels)
         save_model: 是否保存模型文件
         save_data: 是否保存预测结果数据
         plot_curves: 是否绘制ROC/PR曲线
@@ -327,6 +329,8 @@ def save_and_plot_results(
     Returns:
         dict: 包含所有保存文件路径的字典
     """
+    # 内部定义path_cfg
+    path_cfg = config.cal_path
 
     if logger:
         logger.info("开始保存结果和绘制图表")
@@ -375,72 +379,75 @@ def save_and_plot_results(
     # 3. 绘制性能曲线到roc_curves目录
     if plot_curves:
         try:
-            # 获取真实的混合系数数据或使用占位数据
-            y_prob_all = evaluation_results["probabilities"]["y_probability_all"]
+            # 生成latex格式的谱项符号列表
+            latex_form_spectral_term: list[str] = []
+            spectral_term = config.cal_settings.spectral_term
+            if spectral_term is not None:
+                for term in spectral_term:
+                    _formatted_conf, format_LS_coupling = ConfigurationFormatter(term).conf_format()
+                    latex_form_spectral_term.append(format_LS_coupling)
 
-            # 修复：使用正确能级位置的混合系数数据
+            # 确定能级数量
             if len(correct_levels_ci.shape) > 1:
-                # 如果是多维数组，计算每个CSF的混合系数幅值
-                cal_mix_coeff_list = np.sqrt(np.sum(correct_levels_ci**2, axis=0))
+                n_levels = correct_levels_ci.shape[0]  # 多能级情况
             else:
-                cal_mix_coeff_list = np.abs(correct_levels_ci)
+                n_levels = 1  # 单能级情况
 
             if logger:
-                logger.info(f"混合系数维度: {cal_mix_coeff_list.shape}")
+                logger.info(f"检测到能级数量: {n_levels}")
+                if spectral_term:
+                    logger.info(f"谱项符号: {spectral_term}")
+                    logger.info(f"LaTeX格式: {latex_form_spectral_term}")
 
-            # 使用传入的当前计算CSF预测概率（与ann3_proba.py保持一致的数据处理）
-            if y_current_cal_probability is not None:
-                y_prob_current_cal = y_current_cal_probability
+            # 为每个能级绘制图表
+            for level_idx in range(n_levels):
+                # 提取当前能级的CI系数
+                if len(correct_levels_ci.shape) > 1:
+                    level_ci = np.abs(correct_levels_ci[level_idx, :])
+                else:
+                    level_ci = np.abs(correct_levels_ci)
+
+                # 提取当前能级的预测概率
+                if y_current_cal_probability is not None:
+                    if len(y_current_cal_probability.shape) > 1:
+                        # y_current_cal_probability: (n_csfs, n_levels)
+                        level_probability = y_current_cal_probability[:, level_idx]
+                    else:
+                        # 单能级情况
+                        level_probability = y_current_cal_probability
+                else:
+                    # 回退：使用全局概率
+                    y_prob_all = evaluation_results["probabilities"]["y_probability_all"]
+                    if len(y_prob_all.shape) > 1:
+                        level_probability = y_prob_all[:, level_idx]
+                    else:
+                        level_probability = y_prob_all
 
                 if logger:
                     logger.info(
-                        f"绘图数据检查 - 混合系数数量: {len(cal_mix_coeff_list)}, 预测概率数量: {len(y_prob_current_cal)}"
+                        f"能级 {level_idx}: CI系数shape={level_ci.shape}, 预测概率shape={level_probability.shape}"
                     )
 
-                # 数据维度验证
-                if len(cal_mix_coeff_list) != len(y_prob_current_cal):
-                    if logger:
-                        logger.warning(
-                            f"数据维度不匹配: 混合系数({len(cal_mix_coeff_list)}) vs 预测概率({len(y_prob_current_cal)})"
-                        )
-                    # 取较小的长度
-                    min_len = min(len(cal_mix_coeff_list), len(y_prob_current_cal))
-                    cal_mix_coeff_list = cal_mix_coeff_list[:min_len]
-                    y_prob_current_cal = y_prob_current_cal[:min_len]
-                    if logger:
-                        logger.info(f"已调整为相同长度: {min_len}")
-            elif caled_csfs_idxs_array.size > 0:
-                # 回退到原有逻辑（从全局概率中提取对应部分）
-                current_cal_idxs = caled_csfs_idxs_array
-                y_prob_current_cal = y_prob_all[current_cal_idxs]
+                # 生成图表标题
+                if level_idx < len(latex_form_spectral_term):
+                    level_title = latex_form_spectral_term[level_idx]
+                else:
+                    level_title = f"Level {level_idx}"
+
+                # 绘制当前能级的ROC和PR曲线
+                plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_level{level_idx}_roc_pr_curves.png"
+                ANNClassifier.plot_curve(
+                    level_ci,
+                    level_probability,
+                    evaluation_results["true_labels"]["y_test"],
+                    evaluation_results["probabilities"]["y_probability_test"],
+                    str(plot_file),
+                    level_title=level_title,
+                )
+                saved_files[f"roc_pr_plot_level{level_idx}"] = str(plot_file)
+
                 if logger:
-                    logger.info(
-                        f"使用索引提取 - 混合系数数量: {len(cal_mix_coeff_list)}, 对应概率数量: {len(y_prob_current_cal)}"
-                    )
-                    logger.info(
-                        f"当前计算CSF索引范围: {current_cal_idxs.min()}-{current_cal_idxs.max()}"
-                    )
-            else:
-                # 如果没有提供任何信息，使用原有逻辑（可能有问题）
-                y_prob_current_cal = y_prob_all
-                if logger:
-                    logger.warning(
-                        "未提供y_current_cal_probability或caled_csfs_idxs_dict，第四个子图可能显示不正确"
-                    )
-
-            # 绘制ROC和PR曲线
-            plot_file = path_cfg.roc_curves_path / f"{path_cfg.loop_file_name}_roc_pr_curves.png"
-            ANNClassifier.plot_curve(
-                cal_mix_coeff_list,
-                y_prob_current_cal,  # 使用对应的概率数据
-                evaluation_results["true_labels"]["y_test"],
-                evaluation_results["probabilities"]["y_probability_test"],
-                str(plot_file),
-            )
-            saved_files["roc_pr_plot"] = str(plot_file)
-
-            if logger:
-                logger.info(f"性能图表已保存到: {path_cfg.roc_curves_path}")
+                    logger.info(f"能级 {level_idx} 性能图表已保存到: {plot_file}")
 
         except Exception as e:
             if logger:

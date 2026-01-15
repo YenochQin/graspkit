@@ -464,16 +464,17 @@ def predict_model(
         X_unselected_for_prediction,
         batch_size=10_000_000,  # 可根据内存调整
     )
-    # 修复：使用正类概率（第1列）进行预测，而不是整个概率矩阵
-    y_unselected_prediction = (y_unselected_probability[:, 1] > 0.5).astype(int)
+    # 多能级情况：在所有能级中取最大概率值，然后与阈值比较
+    y_unselected_prediction = (np.max(y_unselected_probability, axis=1) > 0.5).astype(int)
 
     logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
 
     # 为绘图准备当前计算CSF的预测概率
     # 对当前计算的CSF也进行预测（用于绘图和分析）
     X_current_calc = raw_csfs_descriptors[current_calc_idxs]
-    y_current_cal_probability = model.predict_proba(X_current_calc)[:, 1]
-    logger.info(f"当前计算CSF数量: {len(current_calc_idxs)}")
+    # 多能级情况：保留所有能级的预测概率，shape: (n_current_csfs, n_levels)
+    y_current_cal_probability = model.predict_proba(X_current_calc)
+    logger.info(f"当前计算CSF数量: {len(current_calc_idxs)}, 预测概率shape: {y_current_cal_probability.shape}")
 
     # 基于混合系数选择重要组态（已验证重要组态）
     cutoff_value = getattr(config.cal_settings, "cutoff_value", 1e-10)
@@ -533,10 +534,11 @@ def predict_model(
         # 情况1：ML预测的重要组态数量充足，按概率排序选择top-k
         logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
 
-        # 获取ML预测重要组态的正类概率（只取第1列）
-        ml_predicted_important_probabilities = y_unselected_probability[
-            ml_predicted_important_local_idxs, 1
-        ]
+        # 获取ML预测重要组态的最大概率（在所有能级中取最大值）
+        ml_predicted_important_probabilities = np.max(
+            y_unselected_probability[ml_predicted_important_local_idxs],
+            axis=1
+        )
 
         # 按概率降序排序
         probability_sorted_idxs = np.argsort(ml_predicted_important_probabilities)[::-1]
