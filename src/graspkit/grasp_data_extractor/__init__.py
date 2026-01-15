@@ -6,12 +6,12 @@
 """
 
 from .ASF_data_collection import (
-    ConfigurationFormatter,
+    format_configuration,
     LevelsEnergyData,
     mcdhf_energy_data_collection,
     ci_energy_data_collection,
     level_energy_collector,
-    LevelsASFComposition,
+    add_asf_compositions,
     asf_radial_wavefunction_collection,
     RadialElectrondensityFunction,
 )
@@ -30,12 +30,12 @@ from .transition_data_analyzer import (
 
 __all__ = [
     # ASF_data_collection
-    "ConfigurationFormatter",
+    "format_configuration",
     "LevelsEnergyData",
     "mcdhf_energy_data_collection",
     "ci_energy_data_collection",
     "level_energy_collector",
-    "LevelsASFComposition",
+    "add_asf_compositions",
     "asf_radial_wavefunction_collection",
     "RadialElectrondensityFunction",
     

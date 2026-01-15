@@ -13,7 +13,7 @@ import joblib
 import numpy as np
 import polars as pl
 
-from ..grasp_data_extractor.ASF_data_collection import ConfigurationFormatter
+from ..grasp_data_extractor.ASF_data_collection import format_configuration
 from ..utils.data_modules import MLDataCounts
 from .neural_network import ANNClassifier
 
@@ -382,7 +382,7 @@ def save_and_plot_results(
             spectral_term = config.cal_settings.spectral_term
             if spectral_term is not None:
                 for term in spectral_term:
-                    _, format_LS_coupling = ConfigurationFormatter(term).conf_format()
+                    _, format_LS_coupling = format_configuration(term)
                     latex_form_spectral_term.append(format_LS_coupling)
 
             # 确定能级数量
