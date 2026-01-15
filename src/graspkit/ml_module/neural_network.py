@@ -791,7 +791,8 @@ class ANNClassifier:
         y_probability_all: np.ndarray,
         y_test: np.ndarray,
         y_probability: np.ndarray,
-        filename: str
+        filename: str,
+        level_title: str = "Ci Values vs Predicted Probability"
     ):
         """
         绘制评估曲线（支持多标签分类）
@@ -802,6 +803,7 @@ class ANNClassifier:
             y_test: 测试标签
             y_probability: 测试概率
             filename: 保存文件名
+            level_title: 能级标题（用于多能级图表标题）
 
         Returns:
             ROC AUC和PR AUC
@@ -858,11 +860,11 @@ class ANNClassifier:
         # 数据维度检查和处理
         if len(cal_mix_coeff_List) == 0 or len(y_probability_all) == 0:
             plt.text(0.5, 0.5, 'No data to plot', ha='center', va='center', transform=plt.gca().transAxes)
-            plt.title('Ci Values vs Predicted Probability')
+            plt.title(level_title)
         elif len(cal_mix_coeff_List) != len(y_probability_all):
             plt.text(0.5, 0.5, f'Data length mismatch:\nMix coeff: {len(cal_mix_coeff_List)}\nProbability: {len(y_probability_all)}',
                     ha='center', va='center', transform=plt.gca().transAxes, fontsize=10)
-            plt.title('Ci Values vs Predicted Probability (Data Mismatch)')
+            plt.title(f'{level_title} (Data Mismatch)')
         else:
             # 数据长度匹配，正常绘图
             if y_probability_all.ndim == 2 and y_probability_all.shape[1] >= 2:
@@ -891,11 +893,11 @@ class ANNClassifier:
 
                 plt.xlabel('Predicted Probability')
                 plt.ylabel('Log|Ci Values|')
-                plt.title(f'Ci Values vs Predicted Probability\n(n={total_count}, zeros={zero_count})')
+                plt.title(f'{level_title}\n(n={total_count}, zeros={zero_count})')
                 plt.grid(True, alpha=0.3)
             else:
                 plt.text(0.5, 0.5, 'No valid data points', ha='center', va='center', transform=plt.gca().transAxes)
-                plt.title('Ci Values vs Predicted Probability (No Valid Data)')
+                plt.title(f'{level_title} (No Valid Data)')
 
         plt.tight_layout()
 
@@ -924,11 +926,24 @@ class ANNClassifier:
             f1, roc_auc, accuracy, precision, recall
         """
         try:
-            f1 = f1_score(y_test, y_pred, average='binary')
-            roc_auc = roc_auc_score(y_test, y_probability)
+            # 根据标签维度选择合适的 average 参数
+            if y_test.ndim == 2:
+                # 多标签分类：使用 'micro' 或 'macro'
+                avg = 'micro'
+                # 展平数据用于 roc_auc 计算
+                y_test_flat = y_test.flatten()
+                y_probability_flat = y_probability.flatten() if y_probability.ndim == 2 else y_probability
+            else:
+                # 二元分类：使用 'binary'
+                avg = 'binary'
+                y_test_flat = y_test
+                y_probability_flat = y_probability
+
+            f1 = f1_score(y_test, y_pred, average=avg)
+            roc_auc = roc_auc_score(y_test_flat, y_probability_flat)
             accuracy = accuracy_score(y_test, y_pred)
-            precision = precision_score(y_test, y_pred, average='binary')
-            recall = recall_score(y_test, y_pred, average='binary')
+            precision = precision_score(y_test, y_pred, average=avg)
+            recall = recall_score(y_test, y_pred, average=avg)
         except Exception as e:
             logging.getLogger(__name__).warning(f"评估指标计算出错: {e}")
             f1 = roc_auc = accuracy = precision = recall = 0.0
