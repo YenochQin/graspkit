@@ -407,7 +407,7 @@ def save_and_plot_results(
                 else:
                     level_ci = np.abs(correct_levels_ci)
 
-                # 提取当前能级的预测概率
+                # 提取当前能级的预测概率（当前计算的CSFs）
                 if y_current_cal_probability is not None:
                     if len(y_current_cal_probability.shape) > 1:
                         # y_current_cal_probability: (n_csfs, n_levels)
@@ -423,9 +423,21 @@ def save_and_plot_results(
                     else:
                         level_probability = y_prob_all
 
+                # 提取当前能级的测试集标签和概率
+                y_test = evaluation_results["true_labels"]["y_test"]
+                y_probability_test = evaluation_results["probabilities"]["y_probability_test"]
+                if len(y_test.shape) > 1:
+                    # 多标签情况：提取当前能级的列
+                    level_y_test = y_test[:, level_idx]
+                    level_y_probability_test = y_probability_test[:, level_idx]
+                else:
+                    # 单标签情况：直接使用
+                    level_y_test = y_test
+                    level_y_probability_test = y_probability_test
+
                 if logger:
                     logger.info(
-                        f"能级 {level_idx}: CI系数shape={level_ci.shape}, 预测概率shape={level_probability.shape}"
+                        f"能级 {level_idx}: CI系数shape={level_ci.shape}, 预测概率shape={level_probability.shape}, 测试集shape={level_y_test.shape}"
                     )
 
                 # 生成图表标题
@@ -439,8 +451,8 @@ def save_and_plot_results(
                 ANNClassifier.plot_curve(
                     level_ci,
                     level_probability,
-                    evaluation_results["true_labels"]["y_test"],
-                    evaluation_results["probabilities"]["y_probability_test"],
+                    level_y_test,
+                    level_y_probability_test,
                     str(plot_file),
                     level_title=level_title,
                 )

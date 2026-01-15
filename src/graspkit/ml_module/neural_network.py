@@ -930,17 +930,14 @@ class ANNClassifier:
             if y_test.ndim == 2:
                 # 多标签分类：使用 'micro' 或 'macro'
                 avg = 'micro'
-                # 展平数据用于 roc_auc 计算
-                y_test_flat = y_test.flatten()
-                y_probability_flat = y_probability.flatten() if y_probability.ndim == 2 else y_probability
+                # 多标签ROC AUC：直接传入2D数组，指定average参数
+                roc_auc = roc_auc_score(y_test, y_probability, average=avg)
             else:
                 # 二元分类：使用 'binary'
                 avg = 'binary'
-                y_test_flat = y_test
-                y_probability_flat = y_probability
+                roc_auc = roc_auc_score(y_test, y_probability)
 
             f1 = f1_score(y_test, y_pred, average=avg)
-            roc_auc = roc_auc_score(y_test_flat, y_probability_flat)
             accuracy = accuracy_score(y_test, y_pred)
             precision = precision_score(y_test, y_pred, average=avg)
             recall = recall_score(y_test, y_pred, average=avg)
