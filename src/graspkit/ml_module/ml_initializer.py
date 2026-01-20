@@ -15,7 +15,6 @@ import pandas as pd
 import rtoml
 
 from ..data_IO import (
-    GraspFileLoad,
     load_config,
     load_hdf5_descriptors,
     pkl_loader,
@@ -23,7 +22,9 @@ from ..data_IO import (
     save_descriptors,
     scan_descriptors_polars,
 )
-from ..grasp_data_extractor.ASF_data_collection import LevelsEnergyData
+from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
+from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
+from ..grasp_data_extractor import format_energy_configurations
 from ..utils.data_modules import MixCoefficientData
 from ..utils.environment_config import get_environment_config
 
@@ -240,10 +241,10 @@ def training_data_loader(
     energy_level_file_path = (
         paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}.level"
     )
-    energy_level_file_load = LevelsEnergyData.from_filepath(
-        str(energy_level_file_path), "LEVEL"
-    )  ## !TODO 存在严重问题
-    energy_level_data_pd = energy_level_file_load.energy_level_2_pd()
+    energy_level_file_load = EnergyFileLoader(energy_level_file_path)
+    energy_level_data = energy_level_file_load.load()
+    # 转换为 pandas DataFrame 以兼容现有代码
+    energy_level_data_pd = energy_level_data.to_pandas()
     logger.info(f"加载能级数据: {energy_level_file_path}")
 
     # 加载rmix文件
@@ -255,8 +256,8 @@ def training_data_loader(
     else:
         raise ValueError(f"不支持的计算方法: {cal_method}")
 
-    rmix_file_load = GraspFileLoad.from_filepath(str(rmix_file_path), "mix")
-    rmix_file_data = rmix_file_load.get_mix_coefficient_data()
+    rmix_file_load = MixCoefLoader(rmix_file_path)
+    rmix_file_data = rmix_file_load.load()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
     csfs_count_from_rmix = rmix_file_data.block_CSFs_nums[0]

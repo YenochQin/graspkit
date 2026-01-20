@@ -14,89 +14,7 @@ import numpy as np
 ######################################################################
 
 
-def level_print_title(Rydberg=109737.31568508):
-    """
-    print energy levels function
-    """
-    print(
-        f"""
-    Energy levels for ...
-Rydberg constant is  {Rydberg}
-
----------------------------------------------
- No Pos  J  Parity   Energy Total    Levels
-                      (a.u.)         (cm^-1)
----------------------------------------------
-"""
-    )
-
-
-def level_J_value(j_idx: int) -> str:
-    j_value_list = [
-        "0",
-        "1/2",
-        "1",
-        "3/2",
-        "2",
-        "5/2",
-        "3",
-        "7/2",
-        "4",
-        "9/2",
-        "5",
-        "11/2",
-        "6",
-        "13/2",
-        "7",
-        "15/2",
-        "8",
-        "17/2",
-        "9",
-        "19/2",
-        "10",
-        "21/2",
-        "11",
-        "23/2",
-        "12",
-        "25/2",
-        "13",
-        "27/2",
-        "14",
-        "29/2",
-        "15",
-        "31/2",
-        "16",
-        "33/2",
-        "17",
-        "35/2",
-        "18",
-        "37/2",
-        "19",
-        "39/2",
-        "20",
-        "41/2",
-        "21",
-        "43/2",
-        "22",
-    ]
-
-    return j_value_list[j_idx - 1]
-
-
-def level_parity(parity_idx: int) -> str:
-    parity_list = ["+", "-"]
-
-    return parity_list[parity_idx - 1]
-
-
-def energy_au_cm(energy_au: float, Rydberg=109737.31568508) -> float:
-    return energy_au * Rydberg * 2
-
-
-######################################################################
-
-
-def align_2d_list_columns(two_dimensional_list):
+def align_2d_list_columns(two_dimensional_list: list[Any]) -> list[Any]:
     """
     根据最长列的长度，对二维列表中的所有列进行补0对齐。
 
@@ -172,40 +90,11 @@ def str_subshell_2_kappa(str_subshell: str) -> int:
 ######################################################################
 
 
-def doubleJ_to_J(doubleJ):
+def doubleJ_to_J(doubleJ: int) -> str:
     if doubleJ % 2 == 0:
         return f"{int(doubleJ / 2)}"
     else:
         return f"{doubleJ}/2"
-
-
-######################################################################
-
-
-# Function to read Fortran-style binary records (assume 4-byte record marker)
-def read_fortran_record(file, dtype, count=1):
-    # Read the record length (4 bytes before the data)
-    record_len_before = np.fromfile(file, dtype=np.int32, count=1)[0]
-
-    # Print for debugging
-    # print(f"Record length before: {record_len_before}")
-
-    # Read the actual data
-    data = np.fromfile(file, dtype=dtype, count=count)
-
-    # Read the record length (4 bytes after the data)
-    record_len_after = np.fromfile(file, dtype=np.int32, count=1)[0]
-
-    # Print for debugging
-    # print(f"Record length after: {record_len_after}")
-
-    # Verify that the record lengths match
-    if record_len_before != record_len_after:
-        raise ValueError(
-            f"Record length mismatch: {record_len_before} != {record_len_after}"
-        )
-
-    return data
 
 
 ######################################################################
@@ -219,7 +108,7 @@ def chunk_string(s: str, n: int) -> list[str]:
 ######################################################################
 
 
-def level_data_compare(levels_file_1: list, levels_file_2: list):
+def level_data_compare(levels_file_1: list[Any], levels_file_2: list[Any]) -> bool:
     level_data_1 = []
     level_data_2 = []
     skip_line = 0
