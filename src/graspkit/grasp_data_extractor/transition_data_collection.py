@@ -4,7 +4,7 @@
 @date :2024/01/15 15:15:57
 @author :YenochQin (秦毅)
 
-@version 1.0: Object Oriented Programming modified from transition_data2csv.py
+@version 2.0: 迁移到使用新的 TransitionLoader
 """
 
 import re
@@ -14,22 +14,52 @@ import pandas as pd
 
 from .transition_data_analyzer import transition_dT_cal
 from ..utils.progress_manager import wrap_iterator, progress_range
-from ..data_IO.grasp_data_loader import GraspFileLoad
-from ..utils.tool_function import  doubleJ_to_J
+from ..data_IO.loaders.transition_loader import TransitionLoader
+from ..utils.tool_function import doubleJ_to_J
+from pathlib import Path
 
 
 class TransitionDataCollection:
+    """标准跃迁数据收集类
+
+    用于处理 GRASP2018 生成的标准格式跃迁数据文件。
+    """
+
     def __init__(self, data_file_info: dict):
+        """
+        Args:
+            data_file_info: 数据文件信息字典，需包含：
+                - file_dir: 文件目录
+                - file_name: 文件名
+                - file_type: 文件类型（可选，默认为 "TRANSITION"）
+        """
         self.data_file_info = data_file_info
-        self.file_type = data_file_info.get("file_type")
+        self.file_type = data_file_info.get("file_type", "TRANSITION")
 
-        result = GraspFileLoad(self.data_file_info).data_file_process()
-        if isinstance(result, list):
-            self.transition_data_list = result
-        else:
-            raise ValueError("Expected list from data_file_process")
+        # 构建文件路径
+        file_dir = data_file_info.get("file_dir", "")
+        file_name = data_file_info.get("file_name", "")
+        file_path = Path(file_dir) / file_name
 
-    def transition_type_check(self, transition_type_line):
+        # 使用 TransitionLoader 加载数据
+        loader = TransitionLoader(file_path)
+        self.transition_data_list = loader.load()
+
+        # 存储loader以便后续使用
+        self._loader = loader
+
+    def transition_type_check(self, transition_type_line: str) -> str:
+        """检查跃迁类型
+
+        Args:
+            transition_type_line: 跃迁类型行
+
+        Returns:
+            跃迁类型字符串（如 "E1", "M1"）
+
+        Raises:
+            ValueError: 无法识别跃迁类型行
+        """
         transition_type_match = re.match(
             r"([A-Za-z]*) 2\*\*\( ([0-9])\)-pole transitions", transition_type_line
         )
@@ -39,41 +69,21 @@ class TransitionDataCollection:
         else:
             return transition_type_match.group(1)[0] + transition_type_match.group(2)
 
-    def trans_data_line_location(self):
-        self.trans_data_line_index = []
-        transition_type_line_index = [
-            i
-            for i in range(len(self.transition_data_list))
-            if re.match(
-                r"([A-Za-z]*) 2\*\*\( ([0-9])\)-pole transitions",
-                self.transition_data_list[i],
-            )
-        ]
-        print(transition_type_line_index)
+    def trans_data_line_location(self) -> tuple[list[int], list[int]]:
+        """查找跃迁数据行的位置
 
-        self.transition_data_type_line_index = [
-            line
-            for line in transition_type_line_index
-            if re.match(r"f.*f.*[M,C,B]", self.transition_data_list[line + 5])
-        ]
+        Returns:
+            (trans_data_line_index, transition_type_line_index) 元组
+        """
+        # 使用 TransitionLoader 的方法
+        return self._loader.find_transition_blocks()
 
-        for i in self.transition_data_type_line_index:
-            if (
-                i == self.transition_data_type_line_index[-1]
-                and i == transition_type_line_index[-1]
-            ):
-                self.trans_data_line_index.append(i + 5)
-                self.trans_data_line_index.append(len(self.transition_data_list) - 2)
-            else:
-                temp_index = transition_type_line_index.index(i)
-                self.trans_data_line_index.append(i + 5)
-                self.trans_data_line_index.append(
-                    transition_type_line_index[temp_index + 1] - 2
-                )
+    def transition_data2dataframe(self) -> pd.DataFrame:
+        """将跃迁数据转换为 DataFrame
 
-        return self.trans_data_line_index, self.transition_data_type_line_index
-
-    def transition_data2dataframe(self):
+        Returns:
+            包含跃迁数据的 DataFrame
+        """
         self.transition_data_pd = pd.DataFrame()
         columns_orders = [
             "Upper_file",
@@ -99,12 +109,13 @@ class TransitionDataCollection:
             "transition_dT",
         ]
 
-        self.trans_data_line_location()
+        trans_data_line_index, transition_data_type_line_index = self.trans_data_line_location()
+
         for i in progress_range(
-            len(self.transition_data_type_line_index), desc="处理跃迁数据类型"
+            len(transition_data_type_line_index), desc="处理跃迁数据类型"
         ):
             temp_transition_type = TransitionDataCollection.transition_type_check(
-                self, self.transition_data_list[self.transition_data_type_line_index[i]]
+                self, self.transition_data_list[transition_data_type_line_index[i]]
             )
             trans_data_block_step = 2  # 默认值
             if "E" in temp_transition_type:
@@ -114,8 +125,8 @@ class TransitionDataCollection:
 
             for line in wrap_iterator(
                 range(
-                    self.trans_data_line_index[2 * i],
-                    self.trans_data_line_index[2 * i + 1],
+                    trans_data_line_index[2 * i],
+                    trans_data_line_index[2 * i + 1],
                     trans_data_block_step,
                 ),
                 desc=f"处理数据块 {i + 1}",
@@ -126,7 +137,6 @@ class TransitionDataCollection:
                     self.transition_data_list[line : line + trans_data_block_step],
                     temp_transition_type,
                 ).transition_data_block2dict()
-                # print(temp_transition_data_dict)
 
                 if (
                     temp_transition_data_dict.get("line_strength_C") == 0
@@ -174,17 +184,36 @@ class TransitionDataCollection:
 
 
 class LSJTransitionDataCollection:
-    def __init__(self, data_file_info: dict, debug=False):
+    """LSJ耦合格式跃迁数据收集类
+
+    用于处理 GRASP2018 生成的 LSJ 耦合格式跃迁数据文件。
+    """
+
+    def __init__(self, data_file_info: dict, debug: bool = False):
+        """
+        Args:
+            data_file_info: 数据文件信息字典
+            debug: 是否打印调试信息
+        """
         self.data_file_info = data_file_info
-        self.file_type = data_file_info.get("file_type")
-        result = GraspFileLoad(self.data_file_info).data_file_process()
-        if isinstance(result, list):
-            self.transition_data_list = result
-        else:
-            raise ValueError("Expected list from data_file_process")
+        self.file_type = data_file_info.get("file_type", "TRANSITION_LSJ")
         self.debug = debug
 
-    def transition_block_index(self):
+        # 构建文件路径
+        file_dir = data_file_info.get("file_dir", "")
+        file_name = data_file_info.get("file_name", "")
+        file_path = Path(file_dir) / file_name
+
+        # 使用 TransitionLoader 加载数据
+        loader = TransitionLoader(file_path)
+        self.transition_data_list = loader.load()
+
+    def transition_block_index(self) -> list[int]:
+        """查找跃迁块的索引
+
+        Returns:
+            跃迁块索引列表
+        """
         self.transition_block_index_list = []
         temp_data_index = []
         for i in range(len(self.transition_data_list)):
@@ -197,8 +226,6 @@ class LSJTransitionDataCollection:
 
         temp_data_index_len = len(temp_data_index)
         for i in range(0, temp_data_index_len, 2):
-            # print(temp_data_index[i])
-
             if (
                 i + 2 < temp_data_index_len
                 and temp_data_index[i + 2] - temp_data_index[i] <= 7
@@ -231,7 +258,12 @@ class LSJTransitionDataCollection:
 
         return self.transition_block_index_list
 
-    def transition_data2dataframe(self):
+    def transition_data2dataframe(self) -> pd.DataFrame:
+        """将跃迁数据转换为 DataFrame
+
+        Returns:
+            包含跃迁数据的 DataFrame
+        """
         self.transition_data_pd = pd.DataFrame()
         columns_orders = [
             "Upper_J",
@@ -256,6 +288,7 @@ class LSJTransitionDataCollection:
             "transition_dT",
         ]
         self.transition_block_index()
+
         for i in range(0, len(self.transition_block_index_list), 2):
             temp_transition_data_block = self.transition_data_list[
                 self.transition_block_index_list[i] : self.transition_block_index_list[
@@ -294,49 +327,57 @@ class LSJTransitionDataCollection:
 
 
 class LSJTransitionDataBlock:
-    """
-    Transition Data block in LSJ form like below:
+    """LSJ跃迁数据块处理类
 
-    electronic *-pole transitions:
-    2J&LevelEnergy  Configuration(Lower)
-    2J&LevelEnergy  Configuration(Upper)
-    energy_level_difference CM-1        wavelength ANGS(VAC)        wavelength ANGS(AIR)
-    transition_type  line_strength_B =  0.00000D+00   oscillator_strength_B =  0.00000D+00   transition_rate_B =  0.00000D+00
-              line_strength_C   oscillator_strength_C   transition_rate_C
+    处理 LSJ 耦合格式的跃迁数据块。
 
-
-    magnetic *-pole transitions:
-    2J&LevelEnergy  Configuration(Lower)
-    2J&LevelEnergy  Configuration(Upper)
-    energy_level_difference CM-1        wavelength ANGS(VAC)        wavelength ANGS(AIR)
-    transition_type  line_strength =  0.00000D+00   oscillator_strength =  0.00000D+00   transition_rate =  0.00000D+00
+    格式示例:
+        electronic *-pole transitions:
+        2J&LevelEnergy  Configuration(Lower)
+        2J&LevelEnergy  Configuration(Upper)
+        energy_level_difference CM-1        wavelength ANGS(VAC)        wavelength ANGS(AIR)
+        transition_type  line_strength_B =  0.00000D+00   oscillator_strength_B =  0.00000D+00   transition_rate_B =  0.00000D+00
+                      line_strength_C   oscillator_strength_C   transition_rate_C
     """
 
-    def __init__(self, data_block, debug=False):
+    def __init__(self, data_block: list[str], debug: bool = False):
+        """
+        Args:
+            data_block: 跃迁数据块的行列表
+            debug: 是否打印调试信息
+        """
         self.data_block = data_block
         self.debug = debug
         if self.debug:
             print(self.data_block)
         self.block_trasnsition_data_dict = {}
 
-    def get_transition_level_info(self, level_line):
+    def get_transition_level_info(self, level_line: str) -> list:
+        """从能级行提取信息
+
+        Args:
+            level_line: 能级行
+
+        Returns:
+            [double_j, level_energy, level_configuration]
+        """
         level_info = re.split(r"\s+", level_line)
         level_configuration = level_info[1]
         j_energy = level_info[0].split("-")
         double_j = j_energy[0]
-        # level_energy_str = np.float64('-' + j_energy[1])
         level_energy = np.float64("-" + j_energy[1])
-        # if int(level_energy_str[-1]) >5:
-        #     level_energy = np.float64(level_energy_str).round(7)
-
-        # elif int(level_energy_str[-1]) == 5 and int(level_energy_str[-2]) == 0:
-        #     level_energy = np.float64(level_energy_str).round(7) - 0.0000001
-        # else:
-        #     level_energy = np.float64(level_energy_str[:-1])
 
         return [double_j, level_energy, level_configuration]
 
-    def get_transition_wavelength(self, wavelength_data_line):
+    def get_transition_wavelength(self, wavelength_data_line: str) -> tuple:
+        """从波长数据行提取信息
+
+        Args:
+            wavelength_data_line: 波长数据行
+
+        Returns:
+            (energy_level, wavelength_vac, wavelength_air)
+        """
         wavelength_info = re.split(r"\s+", wavelength_data_line)
         self.energy_level = np.float64(wavelength_info[0])
         self.wavelength_vac = np.float64(wavelength_info[2])
@@ -344,17 +385,24 @@ class LSJTransitionDataBlock:
 
         return self.energy_level, self.wavelength_vac, self.wavelength_air
 
-    def get_transition_properties(self, properties_lines):
+    def get_transition_properties(self, properties_lines: list[str]) -> dict:
+        """从属性行提取跃迁性质
+
+        Args:
+            properties_lines: 属性行列表
+
+        Returns:
+            跃迁性质字典
+        """
         self.block_trasnsition_properties_dict = {}
         properties_line_1 = properties_lines[0]
         properties_info_1 = re.split(r"\s+", properties_line_1)
         properties_info_1 = [i.replace("D", "e") for i in properties_info_1]
-        # print(properties_info_1)
+
         if "E" in properties_info_1[0]:
             self.block_trasnsition_properties_dict["transition_type"] = (
                 properties_info_1[0]
             )
-
             self.block_trasnsition_properties_dict["line_strength_B"] = np.float64(
                 properties_info_1[3]
             )
@@ -367,6 +415,7 @@ class LSJTransitionDataBlock:
             self.block_trasnsition_properties_dict["transition_dT"] = np.float64(
                 properties_info_1[12]
             )
+
             properties_line_2 = properties_lines[1]
             properties_info_2 = re.split(r"\s+", properties_line_2)
             properties_info_2 = [i.replace("D", "e") for i in properties_info_2]
@@ -393,13 +442,17 @@ class LSJTransitionDataBlock:
             self.block_trasnsition_properties_dict["transition_rate_M"] = np.float64(
                 properties_info_1[9]
             )
-
         else:
             return None
 
         return self.block_trasnsition_properties_dict
 
-    def transition_data_block2dict(self):
+    def transition_data_block2dict(self) -> dict:
+        """将跃迁数据块转换为字典
+
+        Returns:
+            跃迁数据字典
+        """
         lower_level_info = self.data_block[0]
         upper_level_info = self.data_block[1]
         energy_level_difference_info = self.data_block[2]
@@ -435,20 +488,24 @@ class LSJTransitionDataBlock:
 
 
 class TransitionDataBlock:
+    """标准跃迁数据块处理类
+
+    处理标准格式的跃迁数据块。
+
+    格式示例:
+        'Upper       Lower',
+        'Lev  J P   Lev  J P       E (Kays)         A (s-1)          gf            S',
+        'f2  1  1/2 +  f1  1  1/2 -      energy_level_difference C  transition_rate_C  oscillator_strength_C  line_strength_C',
+        'B  transition_rate_B  oscillator_strength_B  line_strength_B',
+        'f2  1  3/2 +  f1  1  1/2 -      energy_level_difference M  transition_rate_M  oscillator_strength_M  line_strength_M'
     """
-    Transition Data block in regular form like below:
 
-    'Upper       Lower',
-    'Lev  J P   Lev  J P       E (Kays)         A (s-1)          gf            S',
-    'f2  1  1/2 +  f1  1  1/2 -      energy_level_difference C  transition_rate_C  oscillator_strength_C  line_strength_C',
-    'B  transition_rate_B  oscillator_strength_B  line_strength_B',
-
-    'f2  1  3/2 +  f1  1  1/2 -      energy_level_difference M  transition_rate_M  oscillator_strength_M  line_strength_M'
-    """
-
-    def __init__(self, data_block, transition_type, debug=False):
+    def __init__(self, data_block: list[str], transition_type: str, debug: bool = False):
         """
-        Note this class need transition_type to distinguish between Electronic and Magnetic *-poles transition
+        Args:
+            data_block: 跃迁数据块的行列表
+            transition_type: 跃迁类型（用于区分电多极和磁多极跃迁）
+            debug: 是否打印调试信息
         """
         self.data_block = data_block
         self.debug = debug
@@ -459,7 +516,8 @@ class TransitionDataBlock:
         self.block_trasnsition_data_dict = {}
         self.block_trasnsition_data_dict["transition_type"] = transition_type
 
-    def get_transition_level_info(self):
+    def get_transition_level_info(self) -> None:
+        """从数据块提取能级信息"""
         level_info = self.data_block_list[0][:8]
         self.block_trasnsition_data_dict["Upper_file"] = level_info[0]
         self.block_trasnsition_data_dict["Upper_loc"] = level_info[1]
@@ -481,9 +539,12 @@ class TransitionDataBlock:
 
         self.block_trasnsition_data_dict["wavelength_vac"] = wavelength_vac
 
-        return self.block_trasnsition_data_dict
+    def get_transition_properties(self) -> dict:
+        """从数据块提取跃迁性质
 
-    def get_transition_properties(self):
+        Returns:
+            跃迁性质字典
+        """
         self.block_trasnsition_properties_dict = {}
 
         if "C" in self.data_block_list[0]:
@@ -521,43 +582,43 @@ class TransitionDataBlock:
 
         return self.block_trasnsition_properties_dict
 
-    def transition_data_block2dict(self):
+    def transition_data_block2dict(self) -> dict:
+        """将跃迁数据块转换为字典
+
+        Returns:
+            跃迁数据字典
+        """
         self.get_transition_level_info()
-
         self.get_transition_properties()
-
         self.block_trasnsition_data_dict.update(self.block_trasnsition_properties_dict)
 
         return self.block_trasnsition_data_dict
 
 
-def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0001):
-    """[summary]: Find the index of lower and upper levels in level_DataFrame. Add the results into transition_df and sort the Lower_index from smallest to biggest, so do the Upper_index.
+def data_process(
+    transition_df: pd.DataFrame,
+    level_df: pd.DataFrame,
+    data_file_info: dict,
+    Branching_Fraction: float = 0.0001
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """处理跃迁数据，添加能级索引，计算寿命和分支比
+
+    [summary]: 找到 lower 和 upper 能级在 level_DataFrame 中的索引。
+    将结果添加到 transition_df 中，并按 Lower_index 和 Upper_index 排序。
 
     Args:
-        transition_df ([type: DataFrame]): [description] : columns_orders = ['transition_type',
-                                                        'Upper_file',
-                                                        'Upper_loc',
-                                                        'Upper_J',
-                                                        'Upper_parity',
-                                                        'Lower_file',
-                                                        'Lower_loc',
-                                                        'Lower_J',
-                                                        'Lower_parity',
-                                                        'energy_level_difference',
-                                                        'wavelength_vac',
-                                                        'transition_rate_C',
-                                                        'oscillator_strength_C',
-                                                        'line_strength_C',
-                                                        'transition_rate_B',
-                                                        'oscillator_strength_B',
-                                                        'line_strength_B',
-                                                        'transition_rate_M',
-                                                        'oscillator_strength_M',
-                                                        'line_strength_M']
+        transition_df: 跃迁数据 DataFrame
+        level_df: 能级数据 DataFrame
+        data_file_info: 数据文件信息
+        Branching_Fraction: 分支比阈值，小于此值的跃迁将被删除
 
     Returns:
-        [type : DataFrame]: [description: return transition_df]
+        (transition_df, level_df) 元组：
+        - transition_df: 添加了能级索引、寿命和分支比的跃迁数据
+        - level_df: 添加了寿命信息的能级数据
+
+    Raises:
+        ValueError: file_type 不匹配
     """
     data_parameter = data_file_info.get("level_parameter")
     file_type = data_file_info.get("file_type")
@@ -612,7 +673,7 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
         by=["Lower_index", "Upper_index"], ascending=True, inplace=True
     )
 
-    transition_df.A_B_to_A_C = (
+    transition_df["A_B_to_A_C"] = (
         transition_df.transition_rate_B / transition_df.transition_rate_C
     )
 
@@ -622,14 +683,14 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
     transition_df["sum_A_B"] = np.float64(0)
     transition_df["sum_A_C"] = np.float64(0)
 
-    for lno in wrap_iterator(range(2, len(level_df) + 1), desc="计算跃迁率"):
+    for lno in wrap_iterator(range(2, len(level_df) + 1), "计算跃迁率"):
         temp_sum_A_B = transition_df.loc[
             (transition_df["Upper_index"] == lno), "transition_rate_B"
         ].sum()
         temp_sum_A_C = transition_df.loc[
             (transition_df["Upper_index"] == lno), "transition_rate_C"
         ].sum()
-        # print(temp_sum_A_B,temp_sum_A_C)
+
         if temp_sum_A_B != 0:
             transition_df.loc[(transition_df["Upper_index"] == lno), "sum_A_B"] = (
                 temp_sum_A_B
@@ -638,6 +699,7 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
             level_df.loc[lno - 1, "lifetime_B"] = temp_lifetime_B
         else:
             continue
+
         if temp_sum_A_C != 0:
             transition_df.loc[(transition_df["Upper_index"] == lno), "sum_A_C"] = (
                 temp_sum_A_C
@@ -646,6 +708,7 @@ def data_process(transition_df, level_df, data_file_info, Branching_Fraction=0.0
             level_df.loc[lno - 1, "lifetime_C"] = temp_lifetime_C
         else:
             continue
+
     transition_df["branching_fraction"] = np.float64(0)
     for trannum in range(len(transition_df)):
         # 根据跃迁类型选择对应的跃迁几率
