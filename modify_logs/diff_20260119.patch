@@ -1,0 +1,284 @@
+diff --git a/src/graspkit/data_IO/grasp_data_loader.py b/src/graspkit/data_IO/grasp_data_loader.py
+index 44ebcfb..110f017 100644
+--- a/src/graspkit/data_IO/grasp_data_loader.py
++++ b/src/graspkit/data_IO/grasp_data_loader.py
+@@ -16,16 +16,16 @@ import struct
+ 
+ from ..utils.progress_manager import wrap_iterator
+ from ..utils.tool_function import (
+-            level_print_title, 
+-            read_fortran_record, 
+-            align_2d_list_columns, 
+-            int_nl_2_str_nl, 
+-            level_J_value, 
+-            level_parity, 
+-            energy_au_cm
+-        )
++    level_print_title,
++    read_fortran_record,
++    align_2d_list_columns,
++    int_nl_2_str_nl,
++    level_J_value,
++    level_parity,
++    energy_au_cm,
++)
+ from ..utils.data_modules import MixCoefficientData, CSFs
+-from ..CSFs_processor.CSFs_compress_extract import *
++from ..CSFs_processor.CSFs_compress_extract import csf_J
+ 
+ 
+ class GraspFileLoad:
+@@ -41,7 +41,7 @@ class GraspFileLoad:
+             "file_name": file_name,
+             "level_parameter": "",
+             "this_as": None,
+-            "file_type": file_type, # 部分数据的file_type是不需要的
++            "file_type": file_type,  # 部分数据的file_type是不需要的
+         }
+         return cls(config)
+ 
+@@ -68,12 +68,18 @@ class GraspFileLoad:
+             self.data_file_dir = Path(self.file_dir) if self.file_dir else Path(".")
+ 
+         # 加载文件配置参数
+-        self.file_type = data_file_info.get("file_type", "")  # 文件类型标识，默认空字符串
++        self.file_type = data_file_info.get(
++            "file_type", ""
++        )  # 文件类型标识，默认空字符串
+         self.level_parameter = data_file_info.get("level_parameter", "")  # 能级参数
+         self.this_as = data_file_info.get("this_as", None)  # AS过程标识
+ 
+         # 处理文件路径逻辑
+         self.file_name = data_file_info.get("file_name", "")
++        self.data_file_path: Path | None = (
++            None  # Initialize with explicit type annotation
++        )
++
+         if Path(self.file_dir).is_file():
+             self.data_file_path = Path(self.file_dir)  # 直接使用完整路径
+             print(f"Data file {self.data_file_path} loaded.")
+@@ -100,7 +106,7 @@ class GraspFileLoad:
+ 
+     # the function "file_read" has two input arguments: the file name and the number of columns
+     # the function "file_read" returns the data array
+-    @staticmethod 
++    @staticmethod
+     def file_load2list(load_file_path: Path | str) -> list:
+         # open the data file
+         # print(f"load data file {self.data_file_path}")
+@@ -118,7 +124,7 @@ class GraspFileLoad:
+             self.load_files_data.extend(temp_load_file_data)
+         return self.load_files_data
+ 
+-    @staticmethod 
++    @staticmethod
+     def load_rwfn_bin(load_file_path):
+         nn_list = []
+         laky_list = []
+@@ -196,16 +202,14 @@ class GraspFileLoad:
+ 
+                 temp_int = binary_file.read(4)
+                 # temp_int = binary_file.read(4)
+-            
++
+         rg_list_len = [len(rg_list[i]) for i in range(len(rg_list))]
+         max_rg_idx = rg_list_len.index(max(rg_list_len))
+         pg_aligned_list = align_2d_list_columns(pg_list)
+         qg_aligned_list = align_2d_list_columns(qg_list)
+ 
+         # Collect all columns in a dictionary to avoid DataFrame fragmentation
+-        columns_data = {
+-            "r(a.u)": rg_list[max_rg_idx]
+-        }
++        columns_data = {"r(a.u)": rg_list[max_rg_idx]}
+ 
+         for n in range(len(nn_list)):
+             str_nl = int_nl_2_str_nl(nn_list[n], laky_list[n])
+@@ -255,9 +259,7 @@ class GraspFileLoad:
+             print(
+                 f" nblock = {num_block},       ncftot =   {total_num_configuration},          nw =  {nw},            nelec =   {num_electron}"
+             )
+-            for jblock in wrap_iterator(
+-                range(1, num_block + 1), desc="处理数据块"
+-            ):
++            for jblock in wrap_iterator(range(1, num_block + 1), desc="处理数据块"):
+                 print("cycle jblock =", jblock)
+ 
+                 # Read block data: nb, ncfblk, nevblk, iatjp, iaspa
+@@ -495,18 +497,18 @@ class GraspFileLoad:
+         else:
+             raise TypeError(f"Expected MixCoefficientData object, got {type(result)}")
+ 
+-
+-    def data_file_process(self) -> list[str] | Tuple[list, list] | pd.DataFrame | int | None :
++    def data_file_process(
++        self,
++    ) -> list[str] | Tuple[list, list] | pd.DataFrame | int | None:
+         """
+         The data_file_process method in the GraspFileLoad class is designed to identify the data type of the input file and process it accordingly.
+         """
+         # set the data type as the attribute of the class
+         if "ENERGY" in self.file_type.upper() or "LEVEL" in self.file_type.upper():
+-
+             if self.data_file_path:
+                 load_file_path = self.data_file_path
+             else:
+-                file_name = f"{self.atom}{self.level_parameter}{self.this_as}"
++                self.file_name = f"{self.atom}{self.level_parameter}{self.this_as}"
+                 load_file_path = self.data_file_dir / self.file_name
+             # set "ENERGY" or "LEVEL" as the key of "file_type"
+             self.file_type = "ENERGY"
+@@ -582,6 +584,7 @@ class GraspFileLoad:
+         else:
+             return 0
+ 
++
+ #######################################################################
+ 
+ 
+diff --git a/src/graspkit/grasp_data_extractor/asfs_data_processor.py b/src/graspkit/grasp_data_extractor/asfs_data_processor.py
+index 134575c..8d98e3d 100644
+--- a/src/graspkit/grasp_data_extractor/asfs_data_processor.py
++++ b/src/graspkit/grasp_data_extractor/asfs_data_processor.py
+@@ -323,38 +323,58 @@ class LevelsEnergyData:
+         self.file_name = f"{self.atom}{self.level_parameter}{self.this_as}"
+         self.raw_data2csv = EnergyFile2csv(self.data_file_info)
+ 
+-    def energy_file2dataframe(self):
++    def to_dataframe(self, use_custom_columns: bool = True) -> pd.DataFrame:
++        """Convert energy file to DataFrame with optional custom column names
++
++        Args:
++            use_custom_columns: If True, use custom column names; otherwise use CSV header
++
++        Returns:
++            pd.DataFrame: The loaded energy data
++        """
+         self.saved_csv_file_path = self.raw_data2csv.energy_file2csv()
+ 
+-        # self.level_read_df = pd.read_csv(f"{self.saved_csv_file_path}", sep=r'\s+', names=['No', 'Pos', 'J', 'Parity', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}', 'Splitting', f'Configuration_{self.level_parameter}{self.this_as}raw'], dtype=str)
+-        self.level_read_df = pd.read_csv(
+-            f"{self.saved_csv_file_path}",
+-            header=0,
+-            names=[
+-                "No",
+-                "Pos",
+-                "J",
+-                "Parity",
+-                f"Energy_Total_{self.level_parameter}{self.this_as}",
+-                f"E_as{self.this_as}",
+-                "Splitting",
+-                f"Configuration_{self.level_parameter}{self.this_as}raw",
+-            ],
+-            dtype=str,
+-        )
++        if use_custom_columns:
++            self.level_read_df = pd.read_csv(
++                f"{self.saved_csv_file_path}",
++                header=0,
++                names=[
++                    "No",
++                    "Pos",
++                    "J",
++                    "Parity",
++                    f"Energy_Total_{self.level_parameter}{self.this_as}",
++                    f"E_as{self.this_as}",
++                    "Splitting",
++                    f"Configuration_{self.level_parameter}{self.this_as}raw",
++                ],
++                dtype=str,
++            )
++        else:
++            self.level_read_df = pd.read_csv(f"{self.saved_csv_file_path}", header=0)
+ 
+         return self.level_read_df
+ 
++    # Deprecated: Use to_dataframe() instead
++    def energy_file2dataframe(self):
++        """Deprecated: Use to_dataframe() instead"""
++        return self.to_dataframe(use_custom_columns=True)
++
++    # Deprecated: Use to_dataframe(use_custom_columns=False) instead
+     def energy_level_2_pd(self):
+-        self.saved_csv_file_path = self.raw_data2csv.energy_file2csv()
++        """Deprecated: Use to_dataframe(use_custom_columns=False) instead"""
++        return self.to_dataframe(use_custom_columns=False)
+ 
+-        # self.level_read_df = pd.read_csv(f"{self.saved_csv_file_path}", sep=r'\s+', names=['No', 'Pos', 'J', 'Parity', f'Energy_Total_{self.level_parameter}{self.this_as}', f'E_as{self.this_as}', 'Splitting', f'Configuration_{self.level_parameter}{self.this_as}raw'], dtype=str)
+-        self.level_read_df = pd.read_csv(f"{self.saved_csv_file_path}", header=0)
++    def energy_data_format(self) -> pd.DataFrame:
++        """Format energy data from CSV file
+ 
+-        return self.level_read_df
++        Returns:
++            pd.DataFrame: Formatted energy data with configuration strings
++        """
++        result = self.energy_file2dataframe()
++        if result is None or self.level_read_df.empty:
++            raise ValueError("Failed to load energy data - DataFrame is empty or None")
+ 
+-    def energy_data_formate(self):
+-        self.energy_file2dataframe()
+         if (
+             not self.level_read_df[
+                 f"Configuration_{self.level_parameter}{self.this_as}raw"
+@@ -417,6 +437,11 @@ class LevelsEnergyData:
+ 
+         return self.level_read_df
+ 
++    # Deprecated: Use energy_data_format() instead
++    def energy_data_formate(self) -> pd.DataFrame:
++        """Deprecated: Use energy_data_format() instead"""
++        return self.energy_data_format()
++
+ 
+ #######################################################################
+ 
+@@ -429,13 +454,13 @@ def mcdhf_energy_data_collection(
+     """
+     data_file_info["this_as"] = a_s_list[0]
+     data_file_info["show_full_charged_subshell"] = show_full_charged_subshell
+-    energy_data = LevelsEnergyData(data_file_info).energy_data_formate()
++    energy_data = LevelsEnergyData(data_file_info).energy_data_format()
+     for a_s in a_s_list[1:]:
+         data_file_info["file"] = (
+             f"{data_file_info['atom']}{data_file_info['level_parameter']}{a_s}"
+         )
+         data_file_info["this_as"] = a_s
+-        temp_level_as = LevelsEnergyData(data_file_info).energy_data_formate()
++        temp_level_as = LevelsEnergyData(data_file_info).energy_data_format()
+         energy_data = pd.merge(
+             energy_data,
+             temp_level_as,
+@@ -464,9 +489,9 @@ def ci_energy_data_collection(
+     """
+     data_file_info["show_full_charged_subshell"] = show_full_charged_subshell
+     if energy_data is None:
+-        energy_data = LevelsEnergyData(data_file_info).energy_data_formate()
++        energy_data = LevelsEnergyData(data_file_info).energy_data_format()
+     else:
+-        temp_ci_level_as = LevelsEnergyData(data_file_info).energy_data_formate()
++        temp_ci_level_as = LevelsEnergyData(data_file_info).energy_data_format()
+         energy_data = pd.merge(
+             energy_data,
+             temp_ci_level_as,
+@@ -498,7 +523,7 @@ def level_energy_collector(
+     temp_level_load = LevelsEnergyData.from_filepath(
+         data_file_path, store_csv_path, show_full_charged_subshell
+     )
+-    level_data = temp_level_load.energy_data_formate()
++    level_data = temp_level_load.energy_data_format()
+ 
+     return level_data
+ 
+@@ -608,9 +633,7 @@ def _format_level_composition(
+     return temp_level_asf_comp
+ 
+ 
+-def _locate_asf_composition(
+-    temp_level_asf: str, energy_data_df: pd.DataFrame
+-) -> int:
++def _locate_asf_composition(temp_level_asf: str, energy_data_df: pd.DataFrame) -> int:
+     """Locate ASF composition in DataFrame.
+ 
+     Args:

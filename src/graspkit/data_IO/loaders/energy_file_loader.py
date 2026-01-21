@@ -87,7 +87,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         df = pl.DataFrame(data_dict)
 
         # 转换数值列 - polars 方式
-        int_columns = ["No", "Pos"]
+        int_columns = ["No"]  # Pos 保留为字符串类型
         float_columns = ["EnergyTotal", "EnergyLevel", "splitting"]
 
         for col in int_columns:

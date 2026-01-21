@@ -122,8 +122,8 @@ graspkit/
 |   +-- data_loader.py       # 加载处理后的数据
 |
 +-- grasp_data_extractor/    # 物理量提取
-|   +-- ASF_data_collection.py      # 能级、ASF 组成
-|   +-- transition_data_collection.py  # 跃迁率数据
+|   +-- asfs_data_processor.py      # 能级、ASF 组成
+|   +-- transition_data_processor.py  # 跃迁率数据
 |   +-- transition_data_analyzer.py    # 跃迁分析
 |
 +-- ml_module/               # 机器学习流程

@@ -13,8 +13,8 @@ from typing import Any
 
 import polars as pl
 
-from .base_loader import BaseLoader
 from ...utils.tool_function import doubleJ_to_J
+from .base_loader import BaseLoader
 
 
 class TransitionFileScan:
@@ -134,70 +134,41 @@ def _convert_fortran_float(value: str) -> float:
     return float(value.replace("D", "E"))
 
 
-def parse_electric_transition_line(line1: str, line2: str = "") -> dict[str, Any]:
-    """解析电性跃迁数据行
+def _parse_transition_first_line(line: str) -> dict[str, Any]:
+    """解析跃迁数据的第一行（磁性跃迁和电性跃迁通用）
 
-    电性跃迁有两行数据（实际格式）：
-    - 第一行：f1/f2 上能级Pos 上能级J 上能级宇称  f1/f2 下能级Pos 下能级J 下能级宇称  能量 规范 A_C gf_C S_C
-    - 第二行（可选）：[, B规范标识, A_B, gf_B, S_B]
+    格式: f1/f2 上能级Pos 上能级J 上能级宇称  f1/f2 下能级Pos 下能级J 下能级宇称  能量 规范 A_C gf_C S_C
 
     例如：
     f1  1    2 +  f2  1    2 +        2368.69 C  0.00000D+00  0.00000D+00  0.00000D+00
-                                           B  0.00000D+00  0.00000D+00  0.00000D+00
 
     Args:
-        line1: 第一行数据（必需）
-        line2: 第二行数据（可选，如果为空字符串则不解析B规范）
+        line: 第一行数据
 
     Returns:
-        包含跃迁数据的字典
+        包含跃迁基础数据的字典（不包含B规范数据）
     """
-    # 解析第一行
-    # 格式: f1/f2 上能级Pos 上能级J 上能级宇称  f1/f2 下能级Pos 下能级J 下能级宇称  能量 规范 A gf S
-    parts1 = line1.split()
+    parts = line.split()
 
     # 解析上能级信息 (前4个字段: f1/f2, Pos, J, 宇称)
-    # 注意：parts1[0] 是 "f1" 或 "f2"，需要提取数字作为文件编号
-    upper_file_str = parts1[0] if len(parts1) > 0 else ""
+    upper_file_str = parts[0] if len(parts) > 0 else ""
     upper_file = int(upper_file_str[1]) if upper_file_str in ("f1", "f2") else 1
-    upper_pos = parts1[1] if len(parts1) > 1 else ""
-    upper_j = parts1[2] if len(parts1) > 2 else ""
-    upper_parity = parts1[3] if len(parts1) > 3 else ""
+    upper_pos = parts[1] if len(parts) > 1 else ""
+    upper_j = parts[2] if len(parts) > 2 else ""
+    upper_parity = parts[3] if len(parts) > 3 else ""
 
     # 解析下能级信息 (接下来4个字段: f1/f2, Pos, J, 宇称)
-    lower_file_str = parts1[4] if len(parts1) > 4 else ""
+    lower_file_str = parts[4] if len(parts) > 4 else ""
     lower_file = int(lower_file_str[1]) if lower_file_str in ("f1", "f2") else 2
-    lower_pos = parts1[5] if len(parts1) > 5 else ""
-    lower_j = parts1[6] if len(parts1) > 6 else ""
-    lower_parity = parts1[7] if len(parts1) > 7 else ""
+    lower_pos = parts[5] if len(parts) > 5 else ""
+    lower_j = parts[6] if len(parts) > 6 else ""
+    lower_parity = parts[7] if len(parts) > 7 else ""
 
-    # 解析跃迁数据 (能量, 规范, A, gf, S)
-    # 注意：gf 也可能使用 Fortran D 记数法
-    energy = float(parts1[8]) if len(parts1) > 8 else 0.0
-    gauge = parts1[9] if len(parts1) > 9 else ""
-    transition_rate = _convert_fortran_float(parts1[10]) if len(parts1) > 10 else 0.0
-    gf = _convert_fortran_float(parts1[11]) if len(parts1) > 11 else 0.0
-    line_strength = _convert_fortran_float(parts1[12]) if len(parts1) > 12 else 0.0
-
-    # 解析第二行（B规范数据）
-    # 格式: [空格] B A_B gf_B S_B
-    transition_rate_b = 0.0
-    gf_b = 0.0
-    line_strength_b = 0.0
-
-    if line2 and line2.strip():
-        parts2 = line2.split()
-        if len(parts2) >= 4 and parts2[0] in ("C", "B", "M"):
-            # 第一个字段是规范标识 (C/B/M)
-            # 后面三个字段是 A, gf, S
-            # 注意：gf 也可能使用 Fortran D 记数法
-            transition_rate_b = (
-                _convert_fortran_float(parts2[1]) if len(parts2) > 1 else 0.0
-            )
-            gf_b = _convert_fortran_float(parts2[2]) if len(parts2) > 2 else 0.0
-            line_strength_b = (
-                _convert_fortran_float(parts2[3]) if len(parts2) > 3 else 0.0
-            )
+    # 解析跃迁数据 (能量, 规范, A_C, gf_C, S_C)
+    energy = float(parts[8]) if len(parts) > 8 else 0.0
+    transition_rate = _convert_fortran_float(parts[10]) if len(parts) > 10 else 0.0
+    gf = _convert_fortran_float(parts[11]) if len(parts) > 11 else 0.0
+    line_strength = _convert_fortran_float(parts[12]) if len(parts) > 12 else 0.0
 
     return {
         "upper_file": upper_file,
@@ -209,20 +180,88 @@ def parse_electric_transition_line(line1: str, line2: str = "") -> dict[str, Any
         "lower_j": lower_j,
         "lower_parity": lower_parity,
         "energy": energy,
-        "gauge": gauge,
         "transition_rate_C": transition_rate,
         "gf_C": gf,
         "line_strength_C": line_strength,
-        "transition_rate_B": transition_rate_b,
-        "gf_B": gf_b,
-        "line_strength_B": line_strength_b,
     }
+
+
+def _parse_transition_second_line(line: str) -> dict[str, float]:
+    """解析电性跃迁数据的第二行（B规范数据）
+
+    格式: [空格] B A_B gf_B S_B
+
+    例如：
+            B  0.00000D+00  0.00000D+00  0.00000D+00
+
+    Args:
+        line: 第二行数据（B规范）
+
+    Returns:
+        包含B规范数据的字典 {"transition_rate_B": ..., "gf_B": ..., "line_strength_B": ...}
+
+    Raises:
+        ValueError: 如果第二行数据格式不正确或不包含B规范数据
+    """
+    parts = line.split()
+
+    if len(parts) < 4:
+        raise ValueError(
+            f"Invalid second line format for electric transition: expected at least 4 fields, got {len(parts)}"
+        )
+
+    if parts[0] not in ("C", "B", "M"):
+        raise ValueError(
+            f"Invalid gauge identifier in second line: expected 'C', 'B', or 'M', got '{parts[0]}'"
+        )
+
+    return {
+        "transition_rate_B": _convert_fortran_float(parts[1]),
+        "gf_B": _convert_fortran_float(parts[2]),
+        "line_strength_B": _convert_fortran_float(parts[3]),
+    }
+
+
+def parse_electric_transition_line(line1: str, line2: str) -> dict[str, Any]:
+    """解析电性跃迁数据行
+
+    电性跃迁有两行数据：
+    - 第一行：f1/f2 上能级Pos 上能级J 上能级宇称  f1/f2 下能级Pos 下能级J 下能级宇称  能量 规范 A_C gf_C S_C
+    - 第二行：B规范数据
+
+    例如：
+    f2  1    2 +  f1  1    1 -        6489.57 C  6.06225D+00  1.07902D-06  5.47381D-05
+                                              B  9.08381D-04  1.61683D-10  8.20207D-09
+
+    Args:
+        line1: 第一行数据（必需）
+        line2: 第二行数据（必需）
+
+    Returns:
+        包含跃迁数据的字典
+
+    Raises:
+        ValueError: 如果第二行数据为空或格式不正确
+    """
+    # 解析第一行
+    result = _parse_transition_first_line(line1)
+
+    # 解析第二行（B规范数据）
+    if not line2 or not line2.strip():
+        raise ValueError(
+            "Second line is required for electric transition but got empty line"
+        )
+
+    b_data = _parse_transition_second_line(line2)
+    result.update(b_data)
+
+    return result
 
 
 def parse_magnetic_transition_line(line: str) -> dict[str, Any]:
     """解析磁性跃迁数据行
 
-    磁性跃迁只有一行数据，结构与电性跃迁相同，但只有M规范（对应C规范）
+    磁性跃迁只有一行数据，格式与电性跃迁的第一行相同，但只有M规范（对应C规范）
 
     例如：
     f1  1    2 +  f2  1    2 +        2368.69 M  0.00000D+00  0.00000D+00  0.00000D+00
@@ -233,7 +272,7 @@ def parse_magnetic_transition_line(line: str) -> dict[str, Any]:
     Returns:
         包含跃迁数据的字典（B规范字段为None）
     """
-    result = parse_electric_transition_line(line, "")
+    result = _parse_transition_first_line(line)
     # 磁性跃迁只有C规范（M规范），没有B规范
     result["transition_rate_B"] = None
     result["gf_B"] = None
@@ -327,8 +366,16 @@ def _parse_lsj_magnetic_transition(
     )
 
     # 转换 double_J 为 J 字符串
-    upper_j = doubleJ_to_J(int(upper["double_J"])) if upper["double_J"].isdigit() else upper["double_J"]
-    lower_j = doubleJ_to_J(int(lower["double_J"])) if lower["double_J"].isdigit() else lower["double_J"]
+    upper_j = (
+        doubleJ_to_J(int(upper["double_J"]))
+        if upper["double_J"].isdigit()
+        else upper["double_J"]
+    )
+    lower_j = (
+        doubleJ_to_J(int(lower["double_J"]))
+        if lower["double_J"].isdigit()
+        else lower["double_J"]
+    )
 
     return {
         "upper_j": upper_j,
@@ -425,8 +472,16 @@ def _parse_lsj_electric_transition(
             )
 
     # 转换 double_J 为 J 字符串
-    upper_j = doubleJ_to_J(int(upper["double_J"])) if upper["double_J"].isdigit() else upper["double_J"]
-    lower_j = doubleJ_to_J(int(lower["double_J"])) if lower["double_J"].isdigit() else lower["double_J"]
+    upper_j = (
+        doubleJ_to_J(int(upper["double_J"]))
+        if upper["double_J"].isdigit()
+        else upper["double_J"]
+    )
+    lower_j = (
+        doubleJ_to_J(int(lower["double_J"]))
+        if lower["double_J"].isdigit()
+        else lower["double_J"]
+    )
 
     return {
         "upper_j": upper_j,
@@ -538,14 +593,7 @@ class TransitionLoader(BaseLoader):
         Returns:
             文件行列表（原始文本数据）
         """
-        file_type = TransitionFileScan.get_file_type(file_path)
-
-        if file_type in ("t.lsj", "ct.lsj"):
-            return self._load_ct_lsj_file(file_path)
-        elif file_type in ("t", "ct"):
-            return self._load_ct_file(file_path)
-        else:
-            raise ValueError(f"Unknown transition file type: {file_path}")
+        return self._load_transition_file(file_path)
 
     def _load_multiple_files(self) -> list[str]:
         """加载多个跃迁文件并合并
@@ -585,25 +633,8 @@ class TransitionLoader(BaseLoader):
 
         return all_lines
 
-    def _load_ct_file(self, file_path: Path) -> list[str]:
-        """加载标准格式的跃迁文件（.t 或 .ct）
-
-        Args:
-            file_path: 文件路径
-
-        Returns:
-            文件行列表（原始文本数据）
-        """
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = [line.rstrip("\n") for line in f.readlines()]
-
-        # 添加空字符串作为结束标记（与旧代码兼容）
-        lines.append("")
-
-        return lines
-
-    def _load_ct_lsj_file(self, file_path: Path) -> list[str]:
-        """加载 LSJ 耦合格式的跃迁文件（.t.lsj 或 .ct.lsj）
+    def _load_transition_file(self, file_path: Path) -> list[str]:
+        """加载跃迁文件（支持所有文本格式：.t, .ct, .t.lsj, .ct.lsj）
 
         Args:
             file_path: 文件路径
@@ -662,7 +693,9 @@ class TransitionLoader(BaseLoader):
                         break
 
                 # 检查是否到达文件末尾或下一个跃迁块
-                if i >= len(lines) or (i < len(lines) and "Transition between files:" in lines[i]):
+                if i >= len(lines) or (
+                    i < len(lines) and "Transition between files:" in lines[i]
+                ):
                     break
 
                 # 每个跃迁数据块至少需要4行：上能级、下能级、能量行、跃迁数据行
@@ -859,7 +892,10 @@ class TransitionLoader(BaseLoader):
         all_data = []
 
         # 检查是否是 .lsj 格式
-        if self.load_ct_lsj or (self.file_paths and TransitionFileScan.get_file_type(self.file_paths[0]).endswith(".lsj")):
+        if self.load_ct_lsj or (
+            self.file_paths
+            and TransitionFileScan.get_file_type(self.file_paths[0]).endswith(".lsj")
+        ):
             # .lsj 格式：数据已经解析好了
             lines = self.load()
             classified = self._classify_lsj_transitions(lines)
@@ -872,7 +908,8 @@ class TransitionLoader(BaseLoader):
 
         else:
             # .ct/.t 格式：需要解析原始行
-            classified = self.get_ct_transitions()
+            lines = self.load()
+            classified = self._classify_ct_transitions(lines)
 
             for transition_type, data_lines in classified.items():
                 # 判断是电性(E)还是磁性(M)
@@ -886,7 +923,9 @@ class TransitionLoader(BaseLoader):
                             if line1 and line1.strip():
                                 stripped = line1.strip()
                                 # 检查是否为数据行（以 f1 或 f2 开头）
-                                if stripped.startswith("f1 ") or stripped.startswith("f2 "):
+                                if stripped.startswith("f1 ") or stripped.startswith(
+                                    "f2 "
+                                ):
                                     try:
                                         parsed_data = parse_electric_transition_line(
                                             line1, line2
@@ -922,7 +961,7 @@ class TransitionLoader(BaseLoader):
                 "lower_j",
                 "lower_parity",
                 "energy",
-                "gauge",
+                # "gauge",
                 "transition_rate_C",
                 "gf_C",
                 "line_strength_C",
@@ -933,13 +972,3 @@ class TransitionLoader(BaseLoader):
             ]
 
             return pl.DataFrame(all_data, schema=columns)
-
-    def get_ct_transitions(self) -> dict[str, list[str]]:
-        """获取归类后的跃迁数据
-
-        Returns:
-            字典 {跃迁种类标记: 数据行列表}
-            例如: {"E1": [...], "M1": [...], "E2": [...]}
-        """
-        lines = self.load()
-        return self._classify_ct_transitions(lines)

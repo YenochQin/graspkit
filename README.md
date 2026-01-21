@@ -122,8 +122,8 @@ graspkit/
 |   +-- data_loader.py       # Load processed data
 |
 +-- grasp_data_extractor/    # Physical quantity extraction
-|   +-- ASF_data_collection.py      # Energy levels, ASF composition
-|   +-- transition_data_collection.py  # Transition rate data
+|   +-- asfs_data_processor.py      # Energy levels, ASF composition
+|   +-- transition_data_processor.py  # Transition rate data
 |   +-- transition_data_analyzer.py    # Transition analysis
 |
 +-- ml_module/               # Machine learning pipeline

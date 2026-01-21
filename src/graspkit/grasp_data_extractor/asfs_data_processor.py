@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 """
-@Id :level_data_collection.py
+@Id :asfs_data_processor.py
 @date :2023/04/28 11:08:58
 @author :YenochQin (秦毅)
 
@@ -18,7 +18,6 @@ from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
 from ..data_IO.loaders.lsj_comp_loader import LSJCompLoader
 from ..data_IO.loaders.radial_wavefunction_loader import RadialWavefunctionLoader
 from ..utils.tool_function import LS_shell_full_charged
-
 
 #######################################################################
 # Configuration formatting utilities
@@ -325,7 +324,9 @@ def format_compositions(
         ValueError: 如果同一行有多个 compositions_raw_* 列包含数据
     """
     # 查找所有 compositions_raw_* 列
-    comp_columns = [col for col in energy_df.columns if col.startswith("compositions_raw_")]
+    comp_columns = [
+        col for col in energy_df.columns if col.startswith("compositions_raw_")
+    ]
 
     if not comp_columns:
         # 如果没有组成列，返回原DataFrame
@@ -409,18 +410,14 @@ def format_compositions(
         merged_data.append(_merge_compositions(row, idx))
 
     # 添加合并后的 compositions_raw 列
-    energy_df = energy_df.with_columns(
-        pl.Series("compositions_raw", merged_data)
-    )
+    energy_df = energy_df.with_columns(pl.Series("compositions_raw", merged_data))
 
     # 2. 格式化合并后的 compositions_raw 列为 Comp_of_asf
     formatted_comp = energy_df["compositions_raw"].map_elements(
         _format_single_composition, return_dtype=pl.Utf8, skip_nulls=True
     )
 
-    energy_df = energy_df.with_columns(
-        formatted_comp.alias("Comp_of_asf")
-    )
+    energy_df = energy_df.with_columns(formatted_comp.alias("Comp_of_asf"))
 
     return energy_df
 
@@ -450,9 +447,7 @@ def mcdhf_energy_data_collection(
     # 加载第一个AS数据
     file_path = f"{file_dir}/{atom}{level_parameter}{a_s_list[0]}"
     energy_data = EnergyFileLoader(file_path).load()
-    energy_data = format_energy_configurations(
-        energy_data, show_full_charged_subshell
-    )
+    energy_data = format_energy_configurations(energy_data, show_full_charged_subshell)
 
     # 重命名列
     energy_data = energy_data.rename(
