@@ -698,7 +698,7 @@ class TransitionLoader(BaseLoader):
                 ):
                     break
 
-                # 每个跃迁数据块至少需要4行：上能级、下能级、能量行、跃迁数据行
+                # 每个跃迁数据块至少需要4行：下能级、上能级、能量行、跃迁数据行
                 if i + 3 >= len(lines):
                     break
 
@@ -714,10 +714,10 @@ class TransitionLoader(BaseLoader):
 
                 # 判断是电性(E)还是磁性(M)
                 if stripped_data[0] == "E":
-                    # 电性跃迁：5行（上能级、下能级、能量、C规范数据、B规范数据）
+                    # 电性跃迁：5行（下能级、上能级、能量、C规范数据、B规范数据）
                     if i + 4 < len(lines):
-                        upper_line = lines[i]
-                        lower_line = lines[i + 1]
+                        lower_line = lines[i]
+                        upper_line = lines[i + 1]
                         energy_line = lines[i + 2]
                         data_line = lines[i + 3]
                         extra_line = lines[i + 4] if i + 4 < len(lines) else ""
@@ -741,9 +741,9 @@ class TransitionLoader(BaseLoader):
                         break
 
                 elif stripped_data[0] == "M":
-                    # 磁性跃迁：4行（上能级、下能级、能量、M规范数据）
-                    upper_line = lines[i]
-                    lower_line = lines[i + 1]
+                    # 磁性跃迁：4行（下能级、上能级、能量、M规范数据）
+                    lower_line = lines[i]
+                    upper_line = lines[i + 1]
                     energy_line = lines[i + 2]
                     data_line = lines[i + 3]
 
