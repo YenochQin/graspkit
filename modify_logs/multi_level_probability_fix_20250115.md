@@ -313,7 +313,7 @@ gk.save_and_plot_results(
 
 **添加导入**：
 ```python
-from ..grasp_data_extractor.ASF_data_collection import ConfigurationFormatter
+from ..grasp_data_extractor.asfs_data_processor import ConfigurationFormatter
 ```
 
 ## 修改文件清单

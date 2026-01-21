@@ -1,7 +1,7 @@
 # ASF Data Collection 重构日志
 
 **日期**: 2025-01-15
-**模块**: `src/graspkit/grasp_data_extractor/ASF_data_collection.py`
+**模块**: `src/graspkit/grasp_data_extractor/asfs_data_processor.py`
 **重构类型**: 类转函数 (Class to Functions Refactoring)
 
 ## 概述
@@ -115,7 +115,7 @@ result = add_asf_compositions(df, info, min_comp=0.03)
 ## 影响的文件
 
 ### 修改的文件
-- `src/graspkit/grasp_data_extractor/ASF_data_collection.py`
+- `src/graspkit/grasp_data_extractor/asfs_data_processor.py`
   - 将 `ConfigurationFormatter` 类转换为 `format_configuration()` 函数
   - 将 `LevelsASFComposition` 类转换为函数集合
 
