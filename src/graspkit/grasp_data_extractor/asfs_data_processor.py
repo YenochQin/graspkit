@@ -454,14 +454,15 @@ def iterative_levels_collection(
     energy_data = EnergyFileLoader(level_file_paths[0]).load()
     energy_data = format_energy_configurations(energy_data, show_full_charged_subshell)
 
-    # 重命名列
+    # 重命名列 - 所有非键列都需要添加 mark 后缀
     mark = marks[0]
-    energy_data = energy_data.rename(
-        {
-            "EnergyTotal": f"EnergyTotal_{mark}",
-            "EnergyLevel": f"EnergyLevel_{mark}",
-        }
-    )
+    key_cols = ["Pos", "J", "Parity"]
+    rename_mapping = {
+        col: f"{col}_{mark}"
+        for col in energy_data.columns
+        if col not in key_cols
+    }
+    energy_data = energy_data.rename(rename_mapping)
 
     # 合并其他文件数据
     for i in range(1, len(level_file_paths)):
@@ -472,21 +473,21 @@ def iterative_levels_collection(
         temp_df = EnergyFileLoader(file_path).load()
         temp_df = format_energy_configurations(temp_df, show_full_charged_subshell)
 
-        # 重命名列
-        temp_df = temp_df.rename(
-            {
-                "EnergyTotal": f"EnergyTotal_{mark}",
-                "EnergyLevel": f"EnergyLevel_{mark}",
-            }
-        )
+        # 重命名列 - 所有非键列都需要添加 mark 后缀
+        rename_mapping = {
+            col: f"{col}_{mark}"
+            for col in temp_df.columns
+            if col not in key_cols
+        }
+        temp_df = temp_df.rename(rename_mapping)
 
         # 合并（只保留用于匹配的键列一次）
         cols_to_join = [
-            col for col in temp_df.columns if col not in ["Pos", "J", "Parity"]
+            col for col in temp_df.columns if col not in key_cols
         ]
         energy_data = energy_data.join(
-            temp_df.select(["Pos", "J", "Parity"] + cols_to_join),
-            on=["Pos", "J", "Parity"],
+            temp_df.select(key_cols + cols_to_join),
+            on=key_cols,
             how="outer",
             coalesce=True,
         )

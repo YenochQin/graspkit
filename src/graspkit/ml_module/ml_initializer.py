@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, Tuple
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import rtoml
 
 from ..data_IO import (
@@ -22,9 +22,8 @@ from ..data_IO import (
     save_descriptors,
     scan_descriptors_polars,
 )
-from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
 from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
-from ..grasp_data_extractor import format_energy_configurations
+from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
 from ..utils.data_modules import MixCoefficientData
 from ..utils.environment_config import get_environment_config
 
@@ -73,10 +72,12 @@ def _setup_config_paths(config):
 
     # 设置全量CSF集合文件的完整路径
     full_CSFs_set_path = root_path / config.target.full_CSFs_set_file
-    full_CSFs_path = full_CSFs_set_path.with_suffix("")
+    full_CSFs_path_without_suffix = full_CSFs_set_path.with_suffix("")
     config.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
     # 设置CSF二进制和头文件的路径
-    config.cal_path.full_CSFs_set_parquet_path = full_CSFs_path.with_suffix(".parquet")
+    config.cal_path.full_CSFs_set_parquet_path = (
+        full_CSFs_path_without_suffix.with_suffix(".parquet")
+    )
     config.cal_path.full_CSFs_set_desc_path = root_path / f"{config.target.conf}_desc"
     config.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(
         f"{full_CSFs_set_path.stem}_header"
@@ -176,11 +177,8 @@ def setup_logging(log_dir: Path):
 
 
 def training_data_loader(
-    paths_cfg,
-    cal_method: str,
-    logger: logging.Logger,
-    descriptor_file_type: Literal["h5", "parquet"] = "parquet",
-) -> tuple:
+    paths_cfg, cal_method: str, logger: logging.Logger
+) -> tuple[pl.LazyFrame, int, pl.DataFrame, MixCoefficientData, np.ndarray, int]:
     """加载数据文件
 
     Args:
@@ -193,34 +191,24 @@ def training_data_loader(
 
     Returns:
         tuple: (
-                energy_level_data_pd,
-                rmix_file_data,
-                raw_csfs_descriptors,
-                total_csfs_count,
-                cal_csfs_data,
-                caled_csfs_idxs_array
-                )
+            raw_csfs_descriptors,
+            total_csfs_count,
+            energy_level_data,
+            rmix_file_data,
+            caled_csfs_idxs_array,
+            cal_csfs_count,
+        )
     """
 
     # 加载初始 CSFs 描述符文件
-    if descriptor_file_type == "h5":
-        # 使用C++生成的HDF5文件
-        raw_desc_file_path = paths_cfg.full_CSFs_set_desc_path.with_suffix(".h5")
+    # 使用 rcsfs 生成的 parquet 文件
+    raw_desc_file_path = paths_cfg.full_CSFs_set_desc_path.with_suffix(".parquet")
 
-        hdf5_data = load_hdf5_descriptors(str(raw_desc_file_path))
-        raw_csfs_descriptors = hdf5_data["descriptors"]
-        logger.info(f"加载 hdf5 raw_CSFs 描述符: {raw_desc_file_path}")
-        raw_csfs_desc_count = raw_csfs_descriptors.shape[0]
-
-    elif descriptor_file_type == "parquet":
-        # 使用 rcsfs 生成的 parquet 文件
-        raw_desc_file_path = paths_cfg.full_CSFs_set_desc_path.with_suffix(".parquet")
-
-        raw_csfs_descriptors, parquet_meta_data = scan_descriptors_polars(
-            raw_desc_file_path
-        )
-        logger.info(f"加载 parquet raw_CSFs 描述符: {raw_desc_file_path}")
-        raw_csfs_desc_count = parquet_meta_data["n_rows"]
+    raw_csfs_descriptors, parquet_meta_data = scan_descriptors_polars(
+        raw_desc_file_path
+    )
+    logger.info(f"加载 parquet raw_CSFs 描述符: {raw_desc_file_path}")
+    raw_csfs_desc_count = parquet_meta_data["n_rows"]
 
     raw_csfs_header_file = paths_cfg.full_CSFs_set_header_path
     csfs_header = rtoml.load(raw_csfs_header_file)
@@ -243,8 +231,6 @@ def training_data_loader(
     )
     energy_level_file_load = EnergyFileLoader(energy_level_file_path)
     energy_level_data = energy_level_file_load.load()
-    # 转换为 pandas DataFrame 以兼容现有代码
-    energy_level_data_pd = energy_level_data.to_pandas()
     logger.info(f"加载能级数据: {energy_level_file_path}")
 
     # 加载rmix文件
@@ -279,7 +265,7 @@ def training_data_loader(
     return (
         raw_csfs_descriptors,
         total_csfs_count,
-        energy_level_data_pd,
+        energy_level_data,
         rmix_file_data,
         caled_csfs_idxs_array,
         cal_csfs_count,
@@ -288,7 +274,7 @@ def training_data_loader(
 
 def check_configuration_coupling(
     paths_cfg,
-    energy_level_data_pd: pd.DataFrame,
+    energy_level_data: pl.DataFrame,
     rmix_file_data: MixCoefficientData,
     spectral_term: list,
     cal_loop_num: int,
@@ -298,7 +284,7 @@ def check_configuration_coupling(
 
     优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
     """
-    cal_configuration_list = energy_level_data_pd["configuration"].tolist()
+    cal_configuration_list = energy_level_data["configuration"].to_list()
 
     # 优化1: 一次遍历同时构建计数和位置映射
     term_positions = {}
@@ -348,12 +334,12 @@ def check_configuration_coupling(
         f"cal_loop {cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
     )
 
-    selected_energy_data = energy_level_data_pd.iloc[spectral_term_positions]
+    selected_energy_data = energy_level_data[spectral_term_positions]
     correct_levels_ci = rmix_file_data.mix_coefficient_list[0][spectral_term_positions]
     correct_levels_csv_path = (
         paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_correct_levels.csv"
     )
-    selected_energy_data.to_csv(correct_levels_csv_path, index=False)
+    selected_energy_data.write_csv(correct_levels_csv_path)
     logger.info(f"正确的能级数据已保存到: {correct_levels_csv_path}")
 
     return True, selected_energy_data, correct_levels_ci
@@ -362,7 +348,7 @@ def check_configuration_coupling(
 def check_energy_convergence(
     config,
     logger: logging.Logger,
-    current_energy_data: pd.DataFrame,
+    current_energy_data: pl.DataFrame,
     convergence_threshold: float = 0.001,
 ) -> bool:
     """
@@ -392,7 +378,7 @@ def check_energy_convergence(
             return True
 
         # 加载上一轮能量数据
-        previous_energy_data = pd.read_csv(previous_energy_path)
+        previous_energy_data = pl.read_csv(previous_energy_path)
 
         # 检查数据一致性
         if len(current_energy_data) != len(previous_energy_data):
@@ -465,7 +451,7 @@ def evaluate_calculation_convergence(
         )
 
         if csv_path.exists():
-            df = pd.read_csv(csv_path)
+            df = pl.read_csv(csv_path)
             energy_data_list.append(df)
             logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
         else:
@@ -478,14 +464,14 @@ def evaluate_calculation_convergence(
 
     # 读取组态数量数据
     csfs_num = []  # 存储每轮的组态数量
-    iteration_df = pd.read_csv(config.cal_path.iteration_results)
+    iteration_df = pl.read_csv(config.cal_path.iteration_results)
     # 获取前两轮的组态数量
     for i in range(2):  # 只读取前两轮
         loop_num = config.cal_settings.cal_loop_num - 2 + i
         # 查找对应轮次的数据
-        loop_data = iteration_df[iteration_df["cal_loop_num"] == loop_num]
-        if not loop_data.empty:
-            current_count = loop_data["current_calculation_count"].iloc[0]
+        loop_data = iteration_df.filter(pl.col("cal_loop_num") == loop_num)
+        if loop_data.height > 0:
+            current_count = loop_data["current_calculation_count"][0]
             csfs_num.append(current_count)
             logger.info(f"读取第{loop_num}轮组态数量: {current_count}")
         else:
@@ -498,7 +484,7 @@ def evaluate_calculation_convergence(
     )
     # === 1. 能级标准差计算 ===
     # 获取所有configuration
-    configurations = energy_data_list[0]["configuration"].tolist()
+    configurations = energy_data_list[0]["configuration"].to_list()
 
     # 存储每个能级的标准差
     std_deviations = []
@@ -507,8 +493,10 @@ def evaluate_calculation_convergence(
         # 获取该configuration在3轮计算中的能级值
         energy_values = []
         for df in energy_data_list:
-            if level_cfg in df["configuration"].values:
-                energy = df[df["configuration"] == level_cfg]["EnergyTotal"].iloc[0]
+            if level_cfg in df["configuration"].to_list():
+                energy = df.filter(pl.col("configuration") == level_cfg)["EnergyTotal"][
+                    0
+                ]
                 energy_values.append(energy)
             else:
                 logger.warning(
