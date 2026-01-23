@@ -146,7 +146,7 @@ import graspkit as gk
 
 # 1. 加载 GRASP 计算结果
 loader = gk.GraspFileLoad("path/to/grasp/output")
-energy_data = gk.mcdhf_energy_data_collection(loader)
+energy_data = gk.iterative_levels_collection(loader)
 
 # 2. 使用 ML 驱动的选择处理 CSF
 # 从 CSF 配置生成描述符

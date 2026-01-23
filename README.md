@@ -146,7 +146,7 @@ import graspkit as gk
 
 # 1. Load GRASP calculation results
 loader = gk.GraspFileLoad("path/to/grasp/output")
-energy_data = gk.mcdhf_energy_data_collection(loader)
+energy_data = gk.iterative_levels_collection(loader)
 
 # 2. Process CSFs with ML-driven selection
 # Generate descriptors from CSF configurations

@@ -234,7 +234,7 @@ index 134575c..8d98e3d 100644
  
  #######################################################################
  
-@@ -429,13 +454,13 @@ def mcdhf_energy_data_collection(
+@@ -429,13 +454,13 @@ def iterative_levels_collection(
      """
      data_file_info["this_as"] = a_s_list[0]
      data_file_info["show_full_charged_subshell"] = show_full_charged_subshell
