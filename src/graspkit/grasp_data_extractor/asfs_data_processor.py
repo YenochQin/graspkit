@@ -424,97 +424,81 @@ def format_compositions(
 #######################################################################
 
 
-def mcdhf_energy_data_collection(
-    data_file_info: dict, a_s_list: list[int], show_full_charged_subshell: bool = False
+def iterative_levels_collection(
+    level_file_paths: list[str],
+    marks: list[str],
+    show_full_charged_subshell: bool = False,
 ) -> pl.DataFrame:
-    """合并不同AS循环的能级数据
+    """合并多个能级数据文件
 
     Args:
-        data_file_info: 文件信息字典
-        a_s_list: AS循环列表
+        level_file_paths: 能级数据文件路径列表
+        marks: 每个文件对应的标记列表（用于列重命名）
         show_full_charged_subshell: 是否显示满电子子轨道
 
     Returns:
-        合并后的DataFrame
-    """
-    file_dir = data_file_info.get("file_dir", "")
-    atom = data_file_info.get("atom", "")
-    level_parameter = data_file_info.get("level_parameter", "")
+        合并后的DataFrame，包含重命名后的列和能量差值列
 
-    # 加载第一个AS数据
-    file_path = f"{file_dir}/{atom}{level_parameter}{a_s_list[0]}"
-    energy_data = EnergyFileLoader(file_path).load()
+    Raises:
+        ValueError: 当文件路径数量与标记数量不匹配时
+    """
+    if len(level_file_paths) != len(marks):
+        raise ValueError(
+            f"文件路径数量({len(level_file_paths)})与标记数量({len(marks)})不匹配"
+        )
+
+    if not level_file_paths:
+        raise ValueError("文件路径列表不能为空")
+
+    # 加载第一个文件数据
+    energy_data = EnergyFileLoader(level_file_paths[0]).load()
     energy_data = format_energy_configurations(energy_data, show_full_charged_subshell)
 
     # 重命名列
+    mark = marks[0]
     energy_data = energy_data.rename(
         {
-            "EnergyTotal": f"Energy_Total_{level_parameter}{a_s_list[0]}",
-            "EnergyLevel": f"E_as{a_s_list[0]}",
-            "splitting": f"Splitting_{a_s_list[0]}",
+            "EnergyTotal": f"EnergyTotal_{mark}",
+            "EnergyLevel": f"EnergyLevel_{mark}",
         }
     )
 
-    # 合并其他AS数据
-    for a_s in a_s_list[1:]:
-        file_path = f"{file_dir}/{atom}{level_parameter}{a_s}"
+    # 合并其他文件数据
+    for i in range(1, len(level_file_paths)):
+        file_path = level_file_paths[i]
+        mark = marks[i]
+        prev_mark = marks[i - 1]
+
         temp_df = EnergyFileLoader(file_path).load()
         temp_df = format_energy_configurations(temp_df, show_full_charged_subshell)
 
+        # 重命名列
         temp_df = temp_df.rename(
             {
-                "EnergyTotal": f"Energy_Total_{level_parameter}{a_s}",
-                "EnergyLevel": f"E_as{a_s}",
-                "splitting": f"Splitting_{a_s}",
+                "EnergyTotal": f"EnergyTotal_{mark}",
+                "EnergyLevel": f"EnergyLevel_{mark}",
             }
         )
 
-        # 合并
+        # 合并（只保留用于匹配的键列一次）
+        cols_to_join = [
+            col for col in temp_df.columns if col not in ["Pos", "J", "Parity"]
+        ]
         energy_data = energy_data.join(
-            temp_df, on=["Pos", "J", "Parity"], how="outer", coalesce=True
+            temp_df.select(["Pos", "J", "Parity"] + cols_to_join),
+            on=["Pos", "J", "Parity"],
+            how="outer",
+            coalesce=True,
         )
 
-        # 计算能量差
+        # 计算能量差（当前 mark 减去前一个 mark）
         energy_data = energy_data.with_columns(
-            (pl.col(f"E_as{a_s}") - pl.col(f"E_as{a_s - 1}")).alias(f"dE{a_s}")
+            (pl.col(f"EnergyLevel_{mark}") - pl.col(f"EnergyLevel_{prev_mark}")).alias(
+                f"DeltaE{prev_mark}_to_{mark}"
+            )
         )
 
     return energy_data.fill_null(0)
-
-
-def ci_energy_data_collection(
-    energy_data: pl.DataFrame | None,
-    data_file_info: dict,
-    show_full_charged_subshell: bool = False,
-) -> pl.DataFrame:
-    """收集单个能级数据或合并CI计算的能级数据
-
-    Args:
-        energy_data: 现有能级数据，如果为None则创建新的
-        data_file_info: 文件信息字典
-        show_full_charged_subshell: 是否显示满电子子轨道
-
-    Returns:
-        合并后的DataFrame
-    """
-    file_dir = data_file_info.get("file_dir", "")
-    atom = data_file_info.get("atom", "")
-    level_parameter = data_file_info.get("level_parameter", "")
-    this_as = data_file_info.get("this_as", 0)
-
-    file_path = f"{file_dir}/{atom}{level_parameter}{this_as}"
-    temp_df = EnergyFileLoader(file_path).load()
-    temp_df = format_energy_configurations(temp_df, show_full_charged_subshell)
-
-    if energy_data is None:
-        return temp_df
-
-    # 合并
-    result = energy_data.join(
-        temp_df, on=["Pos", "J", "Parity"], how="outer", coalesce=True
-    )
-
-    return result.fill_null(0).sort("No")
 
 
 def level_energy_collector(
