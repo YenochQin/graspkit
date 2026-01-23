@@ -7,7 +7,6 @@
 
 import csv
 import logging
-from typing import Tuple
 
 import joblib
 import numpy as np
@@ -92,7 +91,7 @@ def select_csfs_for_coverage(
     descriptors: np.ndarray,
     uncovered_orbitals: list[int],
     candidate_descriptors: np.ndarray,
-) -> Tuple[np.ndarray, list[int]]:
+) -> tuple[np.ndarray, list[int]]:
     """
     当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
 
