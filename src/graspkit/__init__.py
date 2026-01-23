@@ -65,15 +65,14 @@ from .data_IO import (
     write_sorted_CSFs_to_cfile,
 )
 from .grasp_data_extractor import (
-    ci_energy_data_collection,
     format_compositions,
     format_configuration,
     format_energy_configurations,
+    iterative_levels_collection,
     level_energy_collector,
     level_transition_data_processing,
     lsj_transition_data_level_location,
     merge_lsj_compositions,
-    mcdhf_energy_data_collection,
     transition_data_level_location,
 )
 from .ml_module import (
@@ -206,8 +205,7 @@ __all__ = [
     "format_configuration",
     "format_energy_configurations",
     "format_compositions",
-    "mcdhf_energy_data_collection",
-    "ci_energy_data_collection",
+    "iterative_levels_collection",
     "level_energy_collector",
     "merge_lsj_compositions",
     "lsj_transition_data_level_location",

@@ -170,7 +170,7 @@ import graspkit as gk
 
 # Load GRASP calculation results
 data_loader = gk.GraspFileLoad("path/to/grasp/output")
-energy_data = gk.mcdhf_energy_data_collection(data_loader)
+energy_data = gk.iterative_levels_collection(data_loader)
 
 # Process CSFs with ML-driven selection
 selected_csfs = gk.radom_choose_csfs(csf_processor, n_select=1000)
