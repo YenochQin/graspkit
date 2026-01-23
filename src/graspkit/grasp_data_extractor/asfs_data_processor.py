@@ -16,7 +16,6 @@ import polars as pl
 
 from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
 from ..data_IO.loaders.lsj_comp_loader import LSJCompLoader
-from ..data_IO.loaders.radial_wavefunction_loader import RadialWavefunctionLoader
 from ..utils.tool_function import LS_shell_full_charged
 
 #######################################################################
@@ -382,8 +381,6 @@ def format_compositions(
             weight = comp.get("weight", 0.0)
             configuration = comp.get("configuration", "")
 
-            weight_percent = weight * 100
-
             # 格式化配置
             formatted_conf, formatted_ls = format_configuration(
                 configuration, show_full_charged_subshell, format_to_word_document
@@ -391,11 +388,11 @@ def format_compositions(
 
             # 构建LaTeX字符串
             if formatted_conf and formatted_ls:
-                part = rf"${weight_percent:.3f}\;{formatted_conf}\,{formatted_ls}$"
+                part = rf"${weight:.3f}\;{formatted_conf}\,{formatted_ls}$"
             elif formatted_conf:
-                part = rf"${weight_percent:.3f}\;{formatted_conf}$"
+                part = rf"${weight:.3f}\;{formatted_conf}$"
             elif formatted_ls:
-                part = rf"${weight_percent:.3f}\;{formatted_ls}$"
+                part = rf"${weight:.3f}\;{formatted_ls}$"
             else:
                 continue
 
@@ -541,23 +538,118 @@ def level_energy_collector(
 
 
 #######################################################################
-# Radial wavefunction collection (polars)
+# LSJ composition merging functions
 #######################################################################
 
 
-def asf_radial_wavefunction_collection(data_file_info: dict) -> pl.DataFrame:
-    """读取ASF径向波函数数据
+def merge_lsj_compositions(
+    energy_df: pl.DataFrame,
+    lsj_file_paths: list[str],
+    min_comp: float = 0.01,
+    show_comp_num: int = 0,
+    show_full_charged_subshell: bool = False,
+    format_to_word_document: bool = False,
+) -> pl.DataFrame:
+    """将LSJ组成文件合并到能级DataFrame
+
+    读取所有LSJ文件，合并为一个DataFrame，然后按 "Pos", "J", "Parity" 匹配并 join 到能级 DataFrame
 
     Args:
-        data_file_info: 文件信息字典
+        energy_df: 能级DataFrame，必须包含 Pos, J, Parity 列
+        lsj_file_paths: LSJ组成文件路径列表
+        min_comp: 最小权重阈值（当show_comp_num=0时使用，默认 0.0001）
+        show_comp_num: 显示的组成数量（0表示按权重过滤，默认 0）
+        show_full_charged_subshell: 是否显示满电子子轨道
+        format_to_word_document: 是否格式化为Word文档兼容的LaTeX
 
     Returns:
-        径向波函数DataFrame
+        合并后的能级DataFrame，包含 CompOfAsf 列
     """
-    file_dir = data_file_info.get("file_dir", "")
-    file_name = data_file_info.get("file_name", "")
-    rwfn_file_path = f"{file_dir}/{file_name}"
-    loader = RadialWavefunctionLoader(rwfn_file_path)
+    # 收集所有LSJ数据到一个列表
+    all_lsj_data: list[dict[str, str]] = []
 
-    # 假设 loader.load() 返回 polars DataFrame
-    return loader.load()
+    for lsj_path in lsj_file_paths:
+        # 加载LSJ文件（只负责读取）
+        lsj_loader = LSJCompLoader(lsj_path)
+
+        # 获取格式化后的组成字符串（在这里做过滤和格式化）
+        for level in lsj_loader.get_levels():
+            # 过滤组成
+            level_comps = []
+            count = 0
+            for comp in level.compositions:
+                # 过滤逻辑
+                if show_comp_num == 0:
+                    if comp.weight <= min_comp:
+                        continue
+                else:
+                    if count >= show_comp_num:
+                        continue
+                    count += 1
+                level_comps.append(comp)
+
+            # 格式化为LaTeX字符串
+            if not level_comps:
+                comp_str = ""
+            else:
+                parts = []
+                for comp in level_comps:
+                    weight = comp.weight
+                    configuration = comp.configuration
+
+                    # 格式化配置
+                    formatted_conf, formatted_ls = format_configuration(
+                        configuration,
+                        show_full_charged_subshell=show_full_charged_subshell,
+                        format_to_word_document=format_to_word_document,
+                    )
+
+                    # 构建LaTeX字符串
+                    if formatted_conf and formatted_ls:
+                        part = rf"${weight:.3f}\;{formatted_conf}\,{formatted_ls}$"
+                    elif formatted_conf:
+                        part = rf"${weight:.3f}\;{formatted_conf}$"
+                    elif formatted_ls:
+                        part = rf"${weight:.3f}\;{formatted_ls}$"
+                    else:
+                        continue
+
+                    parts.append(part)
+
+                comp_str = " + ".join(parts)
+
+            # 添加到总列表
+            all_lsj_data.append(
+                {
+                    "Pos": str(level.pos),
+                    "J": level.j,
+                    "Parity": level.parity,
+                    "CompOfAsf": comp_str,
+                }
+            )
+
+    # 创建合并后的LSJ DataFrame
+    if all_lsj_data:
+        lsj_df = pl.DataFrame(all_lsj_data)
+    else:
+        # 如果没有数据，返回空DataFrame（只有列名）
+        lsj_df = pl.DataFrame(
+            schema={
+                "Pos": pl.Utf8,
+                "J": pl.Utf8,
+                "Parity": pl.Utf8,
+                "CompOfAsf": pl.Utf8,
+            }
+        )
+
+    # 确保类型匹配
+    lsj_df = lsj_df.with_columns(
+        pl.col("Pos").cast(pl.Utf8),
+        pl.col("J").cast(pl.Utf8),
+        pl.col("Parity").cast(pl.Utf8),
+    )
+
+    # 一次性 join 到能级 DataFrame
+    result_df = energy_df.join(lsj_df, on=["Pos", "J", "Parity"], how="left")
+
+    return result_df
