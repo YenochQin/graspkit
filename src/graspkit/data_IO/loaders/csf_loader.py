@@ -33,6 +33,13 @@ class CSFLoader(BaseLoader[CSFs]):
         with open(self.file_path, "r", encoding="utf-8") as f:
             lines = [line.rstrip() for line in f.readlines()]
 
+        # 查找 "CSF(s):" 行来确定CSF数据的起始位置
+        csf_start_idx = 4  # 默认从第5行开始
+        for idx, line in enumerate(lines):
+            if "CSF(s):" in line or "CSFs:" in line:
+                csf_start_idx = idx + 1
+                break
+
         subshell_info_raw = lines[:4]
 
         # 查找所有包含星号的行
@@ -79,8 +86,12 @@ class CSFLoader(BaseLoader[CSFs]):
             CSFs_block_length.append(len(block_csfs))
 
         # 处理最后一个块（最后一个星号后到文件结尾）
-        last_star_idx = star_idxs[-1] if star_idxs else 0
-        last_block_lines = lines[last_star_idx + 1 :]
+        if star_idxs:
+            # 有星号分隔符：从最后一个星号后到文件结尾
+            last_block_lines = lines[star_idxs[-1] + 1:]
+        else:
+            # 没有星号分隔符：从CSF(s):后到文件结尾
+            last_block_lines = lines[csf_start_idx:]
 
         if len(last_block_lines) % 3 != 0:
             raise ValueError(

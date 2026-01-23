@@ -65,7 +65,6 @@ from .data_IO import (
     write_sorted_CSFs_to_cfile,
 )
 from .grasp_data_extractor import (
-    asf_radial_wavefunction_collection,
     ci_energy_data_collection,
     format_compositions,
     format_configuration,
@@ -73,6 +72,7 @@ from .grasp_data_extractor import (
     level_energy_collector,
     level_transition_data_processing,
     lsj_transition_data_level_location,
+    merge_lsj_compositions,
     mcdhf_energy_data_collection,
     transition_data_level_location,
 )
@@ -209,7 +209,7 @@ __all__ = [
     "mcdhf_energy_data_collection",
     "ci_energy_data_collection",
     "level_energy_collector",
-    "asf_radial_wavefunction_collection",
+    "merge_lsj_compositions",
     "lsj_transition_data_level_location",
     "transition_data_level_location",
     "level_transition_data_processing",

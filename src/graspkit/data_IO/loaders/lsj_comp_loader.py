@@ -8,7 +8,6 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import polars as pl
 
@@ -50,9 +49,7 @@ class LevelComposition:
     composition_asf: str
     compositions: list[CompositionUnit]
 
-    def format_composition(
-        self, min_comp: float = 0.03, show_comp_num: int = 0
-    ) -> str:
+    def format_composition(self, min_comp: float = 0.01, show_comp_num: int = 0) -> str:
         """格式化组成为字符串
 
         Args:
@@ -66,19 +63,17 @@ class LevelComposition:
         count = 0
 
         for comp in self.compositions:
-            weight_percent = comp.weight * 100
-
             # 过滤逻辑
             if show_comp_num == 0:
-                if weight_percent <= min_comp * 100:
+                if comp.weight <= min_comp:
                     continue
             else:
                 if count >= show_comp_num:
                     continue
                 count += 1
 
-            # 格式: 权重% 配置
-            parts.append(f"{weight_percent:.3f}% {comp.configuration}")
+            # 格式: 权重 配置
+            parts.append(f"{comp.weight:.3f} {comp.configuration}")
 
         return " + ".join(parts)
 
@@ -256,127 +251,22 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
                 return level
         return None
 
-    def format_all_compositions(
-        self, min_comp: float = 0.03, show_comp_num: int = 0
-    ) -> list[str]:
-        """格式化所有能级的组成
-
-        Args:
-            min_comp: 最小权重阈值
-            show_comp_num: 显示的组成数量
-
-        Returns:
-            格式化的组成字符串列表
-        """
-        return [
-            level.format_composition(min_comp, show_comp_num)
-            for level in self._levels
-        ]
-
     def to_dataframe_with_formatted_composition(
-        self, min_comp: float = 0.03, show_comp_num: int = 0
+        self, min_comp: float = 0.01, show_comp_num: int = 0
     ) -> pl.DataFrame:
         """返回包含格式化组成字符串的DataFrame
 
         Args:
-            min_comp: 最小权重阈值
-            show_comp_num: 显示的组成数量
+            min_comp: 最小权重阈值，默认 0.01
+            show_comp_num: 显示的组成数量，0表示按权重过滤，默认 0
 
         Returns:
             包含格式化组成列的DataFrame
         """
-        formatted_compositions = self.format_all_compositions(min_comp, show_comp_num)
+        formatted_compositions = [
+            level.format_composition(min_comp, show_comp_num) for level in self._levels
+        ]
 
         return self.df.with_columns(
             pl.Series("formatted_composition", formatted_compositions)
         )
-
-    def _get_filtered_compositions(
-        self, min_comp: float = 0.03, show_comp_num: int = 0
-    ) -> list[list[dict[str, Any]]]:
-        """获取过滤后的组成数据（原始结构）
-
-        Args:
-            min_comp: 最小权重阈值
-            show_comp_num: 显示的组成数量
-
-        Returns:
-            每个能级的过滤后组成列表，每个元素为字典
-        """
-        filtered = []
-        for level in self._levels:
-            level_comps = []
-            count = 0
-
-            for comp in level.compositions:
-                weight_percent = comp.weight * 100
-
-                # 过滤逻辑
-                if show_comp_num == 0:
-                    if weight_percent <= min_comp * 100:
-                        continue
-                else:
-                    if count >= show_comp_num:
-                        continue
-                    count += 1
-
-                level_comps.append(
-                    {
-                        "ci_coeff": comp.coefficient,
-                        "weight": comp.weight,
-                        "configuration": comp.configuration,
-                    }
-                )
-
-            filtered.append(level_comps)
-
-        return filtered
-
-    def merge_with_energy_dataframe(
-        self,
-        energy_df: pl.DataFrame,
-        min_comp: float = 0.03,
-        show_comp_num: int = 0,
-        suffix: str = "",
-    ) -> pl.DataFrame:
-        """将LSJ组成数据合并到能级DataFrame
-
-        根据Pos, J, Parity匹配能级，并添加组成信息。
-
-        Args:
-            energy_df: 能级DataFrame
-            min_comp: 最小权重阈值
-            show_comp_num: 显示的组成数量
-            suffix: 列名后缀，用于区分不同组态的LSJ数据（如 "_conf1", "_as2"）
-
-        Returns:
-            合并后的DataFrame，包含 compositions_raw{suffix} 列（结构化数据）
-        """
-        # 获取过滤后的原始组成数据
-        filtered_comps = self._get_filtered_compositions(min_comp, show_comp_num)
-
-        # 构建 compositions_raw 列名
-        comp_col_name = f"compositions_raw{suffix}"
-
-        # 创建LSJ DataFrame用于合并，只包含连接键和组成数据
-        lsj_df = pl.DataFrame(
-            {
-                "Pos": [level.pos for level in self._levels],
-                "J": [level.j for level in self._levels],
-                "Parity": [level.parity for level in self._levels],
-                comp_col_name: filtered_comps,
-            }
-        )
-
-        # 转换类型以确保匹配
-        lsj_df = lsj_df.with_columns(
-            pl.col("Pos").cast(pl.Int64),
-            pl.col("J").cast(pl.Utf8),
-            pl.col("Parity").cast(pl.Utf8),
-        )
-
-        # 与energy_df进行左连接
-        # 只选择 energy_df 中不包含 comp_col_name 的列，避免冲突
-        result = energy_df.join(lsj_df, on=["Pos", "J", "Parity"], how="left")
-
-        return result

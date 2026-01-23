@@ -6,12 +6,12 @@
 """
 
 from .asfs_data_processor import (
-    asf_radial_wavefunction_collection,
     ci_energy_data_collection,
     format_compositions,
     format_configuration,
     format_energy_configurations,
     level_energy_collector,
+    merge_lsj_compositions,
     mcdhf_energy_data_collection,
 )
 from .transition_data_processor import (
@@ -28,7 +28,7 @@ __all__ = [
     "mcdhf_energy_data_collection",
     "ci_energy_data_collection",
     "level_energy_collector",
-    "asf_radial_wavefunction_collection",
+    "merge_lsj_compositions",
     # transition_data_processor
     "lsj_transition_data_level_location",
     "transition_data_level_location",
