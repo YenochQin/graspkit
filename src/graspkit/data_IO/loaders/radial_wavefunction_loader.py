@@ -8,7 +8,7 @@
 import struct
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from numpy.typing import NDArray
 
 from ...utils.tool_function import align_2d_list_columns, int_nl_2_str_nl
@@ -27,11 +27,11 @@ class RadialWavefunctionLoader(BinaryFileLoader):
         write (3) (rg(j,i), j=1, npts)
     """
 
-    def load(self) -> pd.DataFrame:
+    def load(self) -> pl.DataFrame:
         """加载径向波函数数据
 
         Returns:
-            DataFrame对象，包含：
+            Polars DataFrame对象，包含：
                 - r(a.u): 径向坐标
                 - P(nl): 各轨道的大分量
                 - Q(nl): 各轨道的小分量
@@ -102,8 +102,8 @@ class RadialWavefunctionLoader(BinaryFileLoader):
             columns_data[f"P({str_nl})"] = pg_aligned_list[n]
             columns_data[f"Q({str_nl})"] = qg_aligned_list[n]
 
-        # 一次性创建 DataFrame
-        rwfn_df = pd.DataFrame(columns_data)
+        # 一次性创建 Polars DataFrame
+        rwfn_df = pl.DataFrame(columns_data)
 
         return rwfn_df
 
@@ -136,7 +136,7 @@ class RadialWavefunctionLoader(BinaryFileLoader):
         else:
             raise ValueError(
                 f"Orbital data not found: n={orbital_n}, l={orbital_l}. "
-                f"Available columns: {list(df.columns)}"
+                f"Available columns: {df.columns}"
             )
 
     def get_grid(self) -> NDArray[np.float64]:
