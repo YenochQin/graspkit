@@ -15,7 +15,7 @@ from ...utils.tool_function import align_2d_list_columns, int_nl_2_str_nl
 from .binary_file_loader import BinaryFileLoader
 
 
-class RadialWavefunctionLoader(BinaryFileLoader):
+class RWFNFileLoader(BinaryFileLoader):
     """径向波函数二进制文件加载器 (.w文件）
 
     用于加载 GRASP2018 生成的径向波函数二进制文件。

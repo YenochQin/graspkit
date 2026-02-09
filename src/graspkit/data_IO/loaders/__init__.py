@@ -18,7 +18,7 @@ from .csf_loader import CSFLoader
 from .energy_file_loader import EnergyFileLoader
 from .lsj_comp_loader import LSJCompLoader
 from .mix_coef_loader import MixCoefLoader
-from .radial_wavefunction_loader import RadialWavefunctionLoader
+from .radial_wavefunction_loader import RWFNFileLoader
 from .transition_loader import TransitionLoader
 
 __all__ = [
@@ -29,5 +29,5 @@ __all__ = [
     "LSJCompLoader",
     "CSFLoader",
     "TransitionLoader",
-    "RadialWavefunctionLoader",
+    "RWFNFileLoader",
 ]
