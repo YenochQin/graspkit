@@ -31,7 +31,7 @@ csf = loader.load_csf_data("path/to/file.c")
 
 ```python
 from graspkit.data_IO.loaders import (
-    RadialWavefunctionLoader,
+    RWFNFileLoader,
     MixCoefLoader,
     CSFLoader,
     EnergyFileLoader,
@@ -40,7 +40,7 @@ from graspkit.data_IO.loaders import (
 )
 
 # 每种文件类型有专用的加载器
-rwfn_loader = RadialWavefunctionLoader("path/to/file.w")
+rwfn_loader = RWFNFileLoader("path/to/file.w")
 rwfn_df = rwfn_loader.load()
 
 mix_loader = MixCoefLoader("path/to/file.m")
@@ -101,9 +101,9 @@ rwfn_df = GraspFileLoad.load_rwfn_bin("path/to/file.w")
 
 #### 新方式
 ```python
-from graspkit.data_IO.loaders import RadialWavefunctionLoader
+from graspkit.data_IO.loaders import RWFNFileLoader
 
-rwfn_loader = RadialWavefunctionLoader("path/to/file.w")
+rwfn_loader = RWFNFileLoader("path/to/file.w")
 rwfn_df = rwfn_loader.load()
 # 实例方法，正确处理 Fortran 记录标记
 
@@ -181,7 +181,7 @@ from graspkit.data_IO import GraspFileLoad
 
 # 新导入
 from graspkit.data_IO.loaders import (
-    RadialWavefunctionLoader,  # 替代 load_rwfn_bin
+    RWFNFileLoader,  # 替代 load_rwfn_bin
     MixCoefLoader,              # 替代 load_rmix_data
     CSFLoader,                  # 替代 load_csf_data
     EnergyFileLoader,           # 替代 EnergyFile2csv
@@ -203,7 +203,7 @@ config = {
 loader = GraspFileLoad(config)
 
 # 新方式：直接传入文件路径
-loader = RadialWavefunctionLoader("/path/to/files/example_001_001.w")
+loader = RWFNFileLoader("/path/to/files/example_001_001.w")
 ```
 
 ### 步骤 4：更新方法调用
@@ -213,7 +213,7 @@ loader = RadialWavefunctionLoader("/path/to/files/example_001_001.w")
 rwfn_df = GraspFileLoad.load_rwfn_bin("path/to/file.w")
 
 # 新方式：实例方法
-loader = RadialWavefunctionLoader("path/to/file.w")
+loader = RWFNFileLoader("path/to/file.w")
 rwfn_df = loader.load()
 ```
 
@@ -258,10 +258,10 @@ for col in rwfn_df.columns:
 
 #### 新代码
 ```python
-from graspkit.data_IO.loaders import RadialWavefunctionLoader
+from graspkit.data_IO.loaders import RWFNFileLoader
 
 # 直接实例化
-loader = RadialWavefunctionLoader("/data/grasp/run1/atom_001_001.w")
+loader = RWFNFileLoader("/data/grasp/run1/atom_001_001.w")
 
 # 加载波函数
 rwfn_df = loader.load()
@@ -356,14 +356,14 @@ loader.get_blocks_count() -> int
 loader.get_peel_subshells() -> list[str]
 ```
 
-### RadialWavefunctionLoader
+### RWFNFileLoader
 
 加载 GRASP2018 径向波函数文件（.w）。
 
 ```python
-from graspkit.data_IO.loaders import RadialWavefunctionLoader
+from graspkit.data_IO.loaders import RWFNFileLoader
 
-loader = RadialWavefunctionLoader("path/to/file.w")
+loader = RWFNFileLoader("path/to/file.w")
 rwfn_df = loader.load()
 
 # 方法
