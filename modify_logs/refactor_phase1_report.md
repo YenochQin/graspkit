@@ -106,7 +106,7 @@
 │   │   EnergyFileLoader             │
 │   │   MixCoefLoader                │
 │   │   LSJCompLoader                  │
-│   │   RadialWavefunctionLoader      │
+│   │   RWFNFileLoader      │
 │   │   CSFLoader                   │
 │   │   TransitionLoader              │
 │   └────────────────▼─────────────────────┘       │

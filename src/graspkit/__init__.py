@@ -41,7 +41,7 @@ from .data_IO import (
     EnergyFileLoader,
     LSJCompLoader,
     MixCoefLoader,
-    RadialWavefunctionLoader,
+    RWFNFileLoader,
     TransitionLoader,
     batch_process_csfs_with_multi_block_cpp,
     continue_calculate,
@@ -137,7 +137,7 @@ __all__ = [
     "EnergyFileLoader",
     "LSJCompLoader",
     "MixCoefLoader",
-    "RadialWavefunctionLoader",
+    "RWFNFileLoader",
     "TransitionLoader",
     ## produced_data_write
     "write_sorted_CSFs_to_cfile",
