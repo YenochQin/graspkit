@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 """
 @Id :data_modules.py
@@ -33,7 +32,9 @@ class CSFs:
     subshell_info_raw: list[str]
     CSFs_block_j_value: list[str]
     parity: str
-    CSFs_block_data: list[list[list[str]]]  # list of blocks, each block is list of CSFs (3 lines each)
+    CSFs_block_data: list[
+        list[list[str]]
+    ]  # list of blocks, each block is list of CSFs (3 lines each)
     CSFs_block_length: list[int] | NDArray[np.integer]  # 兼容列表或ndarray
     block_num: int
 

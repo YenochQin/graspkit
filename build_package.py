@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 GraspKit Package Build Script
 
@@ -15,11 +14,11 @@ Options:
     --dev      Build development version (default: production build)
 """
 
+import argparse
 import os
-import sys
 import shutil
 import subprocess
-import argparse
+import sys
 from pathlib import Path
 
 
@@ -29,13 +28,7 @@ def run_command(cmd, cwd=None, check=True):
     if cwd:
         print(f"Working directory: {cwd}")
 
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        check=check,
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
 
     if result.stdout:
         print(f"Output: {result.stdout}")
@@ -49,11 +42,11 @@ def clean_build_artifacts():
     """Clean previous build artifacts."""
     print("Cleaning previous build artifacts...")
 
-    artifacts = ['build', 'dist', '*.egg-info']
+    artifacts = ["build", "dist", "*.egg-info"]
     project_root = Path(__file__).parent
 
     for artifact in artifacts:
-        if artifact.startswith('*.'):
+        if artifact.startswith("*."):
             # Handle glob patterns
             for path in project_root.glob(artifact):
                 if path.is_dir():
@@ -90,10 +83,7 @@ def detect_environment_manager():
         # Try to find pixi command
         try:
             result = subprocess.run(
-                ["pixi", "--version"],
-                capture_output=True,
-                text=True,
-                check=True
+                ["pixi", "--version"], capture_output=True, text=True, check=True
             )
             return "pixi", "pixi"
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -179,10 +169,12 @@ def move_packages_to_target(dist_dir, target_dir):
 def main():
     """Main function."""
     parser = argparse.ArgumentParser(description="Build GraspKit package")
-    parser.add_argument("--clean", action="store_true",
-                       help="Clean previous build artifacts before building")
-    parser.add_argument("--dev", action="store_true",
-                       help="Build development version")
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Clean previous build artifacts before building",
+    )
+    parser.add_argument("--dev", action="store_true", help="Build development version")
 
     args = parser.parse_args()
 
