@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 """
 @Id :fig_settings.py
@@ -28,9 +27,8 @@
 import re
 import warnings
 
-import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
+import numpy as np
 from cycler import cycler
 
 
@@ -439,9 +437,7 @@ def optimize_for_plot_type(plot_type):
 
 
 def create_publication_figure(
-    figsize="single_column",
-    color_scheme="default",
-    legend_size="medium"
+    figsize="single_column", color_scheme="default", legend_size="medium"
 ):
     """
     创建适合发表的图表
@@ -532,11 +528,7 @@ def get_subplot_layout(layout_name):
         return (1, 1)
 
 
-def calculate_subplot_figure_size(
-    base_size,
-    layout_name,
-    spacing="normal"
-):
+def calculate_subplot_figure_size(base_size, layout_name, spacing="normal"):
     """
     计算多子图的整体尺寸
 
