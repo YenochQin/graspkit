@@ -165,7 +165,7 @@ Rydberg constant is  {Rydberg}
             nelec, ncftot, nw, ncmin, nvecsiz, nblock = header_data
 
             print(
-                f" nblock = {nblock},       ncftot =   {ncftot},          nw =  {nw},            nelec =   {nelec}"
+                f"  {nblock=},  {ncftot=},  {nw=}\n  {nelec=},  {ncmin=},  {nvecsiz=}"
             )
 
             idx_block_list = []
