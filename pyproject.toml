@@ -14,7 +14,8 @@ requires-python = ">= 3.13,<3.14"
 dependencies = [
     # 核心数据处理库
     "numpy>=2.0.0",
-    "pandas>=2.2.2",
+    "polars>=1.35.0",
+    "pyarrow>=22.0.0",
     "matplotlib>=3.8.4",
     "tqdm>=4.66.4",
     # 机器学习库
@@ -34,8 +35,6 @@ dependencies = [
     "rtoml>=0.9.0",
     # HDF5 支持
     "h5py>=3.8.0",
-    "pyarrow>=22.0.0",
-    "polars>=1.36.1",
 ]
 
 # Optional dependencies for different environments
@@ -69,8 +68,6 @@ dev = [
     "build>=1.3.0",
     "twine>=6.2.0",
     "wheel>=0.40.0",
-    "polars>=1.35.0",
-    "pyarrow>=22.0.0",
     # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
@@ -104,8 +101,8 @@ classifiers = [
     # How mature is this project? Common values are
     #   3 - Alpha
     #   4 - Beta
-    "Development Status :: 5 - Production/Stable",
-    # "Development Status :: 4 - Beta",
+    # "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
 
     # Specify the Python versions you support here.
     "Programming Language :: Python :: 3",
