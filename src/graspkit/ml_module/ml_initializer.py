@@ -569,7 +569,7 @@ def evaluate_calculation_convergence(
 
 def merge_historical_ci_data(
     previous_idxs_ci_dict: dict, current_idxs_ci_dict: dict, logger: logging.Logger
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     合并历史CI系数数据，取索引并集并以当前数据更新共有索引的CI系数
 
