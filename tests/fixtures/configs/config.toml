@@ -1,0 +1,63 @@
+[target]
+atom = "Ni_I"
+conf = "3d8_4s2"
+full_CSFs_set_file = "3d8_4s2_j2as6raw.c"
+presampled_csfs_file = "eI3dS4sSDas6_even3.c"
+presampled_csfs_mix_file = "eI3dS4sSDas6_even3.cm"
+
+[cal_settings]
+continue_cal = true
+cal_loop_num = 1
+cal_error_num = 0
+backward_loop_needed = false
+target_backward_loop = 0
+cutoff_value = 0.00000000001
+sampling_ratio = 0.025
+expansion_ratio = 2
+energy_std_threshold = 2e-5
+csfs_num_relative_std_threshold = 0.002
+cal_method = "rci"
+cal_rwfn_file = "eI3dS4sSDas6.w"
+rci_n_quantum_for_self_energy = 4
+root_path = "/home/workstation3/caldata/Ni/ml_cal/3d8_4s2/j2/1D"
+cal_levels = "1-6"
+spectral_term = [
+    "2s(2).2p(6).3s(2).3p(6).3d(8)1D.4s(2)_1D",
+]
+
+[server_settings]
+slurm_partition = "batch"
+tasks_per_node = 46
+mpi_tmp_path = "/home/workstation3/caltmp"
+cpu_threads = 32
+python_source = "uv"
+uv_env_path = "/path/to/project/.venv"
+graspkit_tools_path = "/home/workstation3/AppFiles/graspkit-tools"
+module_load = ["mpi/openmpi-x86_64", "grasp/grasp_raw"]
+
+[rnucleus]
+atomic_number = 28
+mass_number = 58
+atomic_mass = 57.935342
+nuclear_spin = 1
+nuclear_dipole = 1
+nuclear_quadrupole = 1
+
+[step_control]
+enable_step_control = false
+target_loop = 0
+start_step = "auto"
+end_step = "auto"
+skip_completed_steps = true
+
+[ml_config]
+use_rcsfs = true
+high_prob_percentile = 95
+overfitting_threshold = 0.1
+underfitting_threshold = -0.05
+include_wrong_level_negatives = true
+feature_selection = true
+
+[model_params]
+n_estimators = 1000
+random_state = 42
