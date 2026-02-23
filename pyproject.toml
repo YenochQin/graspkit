@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-version = '3.0.dev3'
+version = '3.1.dev1'
 # version = '2.9.1'
 description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
 keywords = ["GRASP", "atomic physics", "quantum mechanics", "machine learning", "CSF selection", "data processing"]
 
-requires-python = ">= 3.13,<3.14"
+requires-python = ">= 3.14"
 
 dependencies = [
     # 核心数据处理库
@@ -36,6 +36,7 @@ dependencies = [
     "pydantic>=2.0",
     # HDF5 支持
     "h5py>=3.15.1",
+    "rich>=14.3.3",
 ]
 
 # Optional dependencies for different environments
@@ -127,9 +128,23 @@ select = ["NPY201"]
 quote-style = "double"
 [tool.mypy]
 # mypy 配置
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 disallow_untyped_defs = true
+
+[tool.basedpyright]
+include = ["src"]
+exclude = ["**/node_modules",
+    "**/__pycache__",
+    "src/experimental",
+    "src/typestubs"
+]
+defineConstant = { DEBUG = true }
+stubPath = "src/stubs"
+
+reportMissingImports = "error"
+reportMissingTypeStubs = false
+
 
 [project.urls]
 Homepage = "https://github.com/YenochQin/graspkit.git"
