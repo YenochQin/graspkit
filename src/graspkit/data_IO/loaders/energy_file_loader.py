@@ -65,11 +65,11 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
                 break
 
         # 提取数据行（直到遇到 "-----"）
-        data_lines = []
+        data_lines: list[list[str]] = []
         for line in lines[data_start_line:]:
             if "-----" in line:
                 break
-            stripped_line = line.strip()
+            stripped_line: str = line.strip()
             if stripped_line:
                 data_lines.append(stripped_line.split())
 
@@ -77,14 +77,14 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         data_dict: dict[str, list[str | float]] = {col: [] for col in self.COLUMN_NAMES}
 
         for line_parts in data_lines:
-            for i, col in enumerate(self.COLUMN_NAMES):
+            for i, col in enumerate[str](self.COLUMN_NAMES):
                 if i < len(line_parts):
                     data_dict[col].append(line_parts[i])
                 else:
                     data_dict[col].append("")
 
         # 创建 DataFrame - polars 会自动推断类型
-        df = pl.DataFrame(data_dict)
+        df: pl.DataFrame = pl.DataFrame(data_dict)
 
         # 转换数值列 - polars 方式
         int_columns = ["No"]  # Pos 保留为字符串类型

@@ -5,10 +5,12 @@
 @author :YenochQin (秦毅)
 """
 
+from graspkit.data_IO.ml_cal_config_module import MLCalConfig
+
+
 import logging
 from collections import Counter
 from pathlib import Path
-from typing import Literal, Tuple
 
 import numpy as np
 import polars as pl
@@ -16,7 +18,6 @@ import rtoml
 
 from ..data_IO import (
     load_config,
-    load_hdf5_descriptors,
     pkl_loader,
     pkl_storage,
     save_descriptors,
@@ -28,7 +29,7 @@ from ..utils.data_modules import MixCoefficientData
 from ..utils.environment_config import get_environment_config
 
 
-def setup_config(config_path: str | Path):
+def setup_config(config_path: str | Path) -> MLCalConfig:
     """
     初始化机器学习配置并设置相关路径
 
@@ -40,85 +41,14 @@ def setup_config(config_path: str | Path):
 
     该函数执行以下步骤：
     1. 从指定路径加载配置文件
-    2. 调用内部函数设置所有相关文件路径
+    2. 调用配置对象的 setup_paths() 方法设置所有相关文件路径
     3. 返回完整的配置对象
     """
     # 从配置文件路径加载配置信息
     config = load_config(config_path)
 
-    # 设置配置对象中的所有相关路径
-    return _setup_config_paths(config)
-
-
-def _setup_config_paths(config):
-    """
-    为配置对象设置所有必需的文件路径
-
-    Args:
-        config: 包含基本配置信息的对象，应包含root_path、target和cal_settings属性
-
-    Returns:
-        config: 更新后的配置对象，包含所有路径信息
-
-    该函数设置以下路径：
-    1. 全量CSF集合相关文件路径
-    2. 压缩的二进制CSF文件路径
-    3. 当前计算循环的路径
-    4. 结果文件存储路径
-    5. 如果是后续循环，设置前一轮的重要索引和ML结果路径
-    """
-    # 获取根目录路径，确保是Path对象类型
-    root_path = Path(config.cal_settings.root_path)
-
-    # 设置全量CSF集合文件的完整路径
-    full_CSFs_set_path = root_path / config.target.full_CSFs_set_file
-    full_CSFs_path_without_suffix = full_CSFs_set_path.with_suffix("")
-    config.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
-    # 设置CSF二进制和头文件的路径
-    config.cal_path.full_CSFs_set_parquet_path = (
-        full_CSFs_path_without_suffix.with_suffix(".parquet")
-    )
-    config.cal_path.full_CSFs_set_desc_path = root_path / f"{config.target.conf}_desc"
-    config.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(
-        f"{full_CSFs_set_path.stem}_header"
-    ).with_suffix(".toml")
-
-    config.cal_path.loop_file_name = (
-        f"{config.target.conf}_{config.cal_settings.cal_loop_num}"
-    )
-
-    # 设置当前计算循环的工作目录路径，格式：{配置名}_{循环编号}
-    config.cal_path.cal_loop_path = root_path / config.cal_path.loop_file_name
-
-    # 设置计算结果文件的存储路径
-    config.cal_path.results_path = root_path / "results"
-    config.cal_path.test_data_path = root_path / "test_data"
-    config.cal_path.models_path = root_path / "models"
-    config.cal_path.roc_curves_path = root_path / "roc_curves"
-    config.cal_path.log_dir = root_path / "logs"
-
-    config.cal_path.iteration_results = (
-        config.cal_path.results_path / "iteration_results.csv"
-    )
-    config.cal_path.training_results = (
-        config.cal_path.results_path / "training_results.csv"
-    )
-    config.cal_path.accumulated_idxs_ci_path = (
-        config.cal_path.results_path / f"{config.target.conf}_merged_ci_squared.pkl"
-    )
-
-    # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
-    if config.cal_settings.cal_loop_num > 1:
-        # 前一轮计算保存的重要索引文件路径
-        config.cal_path.previous_important_idxs_file = (
-            config.cal_path.results_path
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_important_idxs"
-        )
-        # 前一轮机器学习生成的最终采样索引文件路径
-        config.cal_path.ml_results_path = (
-            config.cal_path.results_path
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_final_sampled_idxs"
-        )
+    # 调用配置对象的 setup_paths() 方法设置所有相关路径
+    config.setup_paths()
 
     return config
 
@@ -585,7 +515,7 @@ def merge_historical_ci_data(
         logger: 日志记录器
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
+        tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
     """
 
     # 获取历史数据和当前数据

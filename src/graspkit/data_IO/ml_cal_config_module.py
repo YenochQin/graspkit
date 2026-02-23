@@ -6,8 +6,7 @@
 '''
 
 from pathlib import Path
-from typing import ClassVar
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 # Target model
@@ -150,11 +149,34 @@ class ModelParams(BaseModel):
     random_state: int = 42
 
 
-# CalPath model - supports dynamic attributes
+# CalPath model - 所有路径属性
 class CalPath(BaseModel):
-    """Calculation paths with dynamic attribute support"""
-    # 显式添加类型注解
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+    """Calculation paths with all file/directory paths"""
+    # 全量CSF集合相关路径
+    full_CSFs_set_file_path: Path | None = None
+    full_CSFs_set_parquet_path: Path | None = None
+    full_CSFs_set_desc_path: Path | None = None
+    full_CSFs_set_header_path: Path | None = None
+
+    # 循环相关路径
+    loop_file_name: str | None = None
+    cal_loop_path: Path | None = None
+
+    # 结果目录路径
+    results_path: Path | None = None
+    test_data_path: Path | None = None
+    models_path: Path | None = None
+    roc_curves_path: Path | None = None
+    log_dir: Path | None = None
+
+    # 结果文件路径
+    iteration_results: Path | None = None
+    training_results: Path | None = None
+    accumulated_idxs_ci_path: Path | None = None
+
+    # 历史数据路径（第二轮及之后）
+    previous_important_idxs_file: Path | None = None
+    ml_results_path: Path | None = None
 
 
 # Root MLCalConfig model
@@ -178,6 +200,69 @@ class MLCalConfig(BaseModel):
         if missing_sections:
             raise ValueError(f"配置文件缺少必需的节: {missing_sections}")
         return data
+
+    def setup_paths(self) -> None:
+        """
+        为配置对象设置所有必需的文件路径
+
+        该函数设置以下路径：
+        1. 全量CSF集合相关文件路径
+        2. 压缩的二进制CSF文件路径
+        3. 当前计算循环的路径
+        4. 结果文件存储路径
+        5. 如果是后续循环，设置前一轮的重要索引和ML结果路径
+        """
+        root_path: Path = Path(self.cal_settings.root_path)
+
+        # 设置全量CSF集合文件的完整路径
+        full_CSFs_set_path: Path = root_path / self.target.full_CSFs_set_file
+        full_CSFs_path_without_suffix: Path = full_CSFs_set_path.with_suffix("")
+        self.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
+        # 设置CSF二进制和头文件的路径
+        self.cal_path.full_CSFs_set_parquet_path = (
+            full_CSFs_path_without_suffix.with_suffix(".parquet")
+        )
+        self.cal_path.full_CSFs_set_desc_path = root_path / f"{self.target.conf}_desc"
+        self.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(
+            f"{full_CSFs_set_path.stem}_header"
+        ).with_suffix(".toml")
+
+        self.cal_path.loop_file_name = (
+            f"{self.target.conf}_{self.cal_settings.cal_loop_num}"
+        )
+
+        # 设置当前计算循环的工作目录路径，格式：{配置名}_{循环编号}
+        self.cal_path.cal_loop_path = root_path / self.cal_path.loop_file_name
+
+        # 设置计算结果文件的存储路径
+        self.cal_path.results_path = root_path / "results"
+        self.cal_path.test_data_path = root_path / "test_data"
+        self.cal_path.models_path = root_path / "models"
+        self.cal_path.roc_curves_path = root_path / "roc_curves"
+        self.cal_path.log_dir = root_path / "logs"
+
+        self.cal_path.iteration_results = (
+            self.cal_path.results_path / "iteration_results.csv"
+        )
+        self.cal_path.training_results = (
+            self.cal_path.results_path / "training_results.csv"
+        )
+        self.cal_path.accumulated_idxs_ci_path = (
+            self.cal_path.results_path / f"{self.target.conf}_merged_ci_squared.pkl"
+        )
+
+        # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
+        if self.cal_settings.cal_loop_num > 1:
+            # 前一轮计算保存的重要索引文件路径
+            self.cal_path.previous_important_idxs_file = (
+                self.cal_path.results_path
+                / f"{self.target.conf}_{self.cal_settings.cal_loop_num - 1}_important_idxs"
+            )
+            # 前一轮机器学习生成的最终采样索引文件路径
+            self.cal_path.ml_results_path = (
+                self.cal_path.results_path
+                / f"{self.target.conf}_{self.cal_settings.cal_loop_num - 1}_final_sampled_idxs"
+            )
 
 # Export all models
 __all__ = [
