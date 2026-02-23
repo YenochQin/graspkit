@@ -45,10 +45,10 @@ class CSFLoader(BaseLoader[CSFs]):
         # 查找所有包含星号的行
         star_idxs = [idx for idx, line in enumerate(lines) if "*" in line]
 
-        CSFs_block_j_value = []
-        CSFs_block_parity = []
-        CSFs_block_data = []
-        CSFs_block_length = []
+        CSFs_block_j_value: list[str] = []
+        CSFs_block_parity: list[str] = []
+        CSFs_block_data: list[list[list[str]]] = []
+        CSFs_block_length: list[int] = []
 
         # 处理每个块
         for i, idx in enumerate(star_idxs):
@@ -80,7 +80,7 @@ class CSFLoader(BaseLoader[CSFs]):
                 )
 
             # 将CSF块分成每3行一组
-            block_csfs = [block_lines[i : i + 3] for i in range(0, len(block_lines), 3)]
+            block_csfs: list[list[str]] = [block_lines[i : i + 3] for i in range(0, len(block_lines), 3)]
 
             CSFs_block_data.append(block_csfs)
             CSFs_block_length.append(len(block_csfs))

@@ -25,7 +25,7 @@ class FileLocator:
         Raises:
             ValueError: 目录不存在
         """
-        self.base_dir = Path(base_dir)
+        self.base_dir: Path = Path(base_dir)
 
         if not self.base_dir.exists():
             raise ValueError(f"Base directory does not exist: {self.base_dir}")

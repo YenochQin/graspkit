@@ -5,12 +5,7 @@
 @author :YenochQin (秦毅)
 """
 
-# New loader classes
-from .cpp_descriptor_wrapper import (
-    CppDescriptorGenerator,
-    batch_process_csfs_with_multi_block_cpp,
-)
-from .h5_descriptor_loader import load_hdf5_descriptors
+
 from .loaders.base_loader import BaseLoader  # noqa: F401
 from .loaders.binary_file_loader import BinaryFileLoader  # noqa: F401
 from .loaders.csf_loader import CSFLoader  # noqa: F401
@@ -73,9 +68,4 @@ __all__ = [
     "load_descriptors",
     "load_descriptors_with_multi_block",
     "scan_descriptors_polars",
-    # cpp_descriptor_wrapper
-    "CppDescriptorGenerator",
-    "batch_process_csfs_with_multi_block_cpp",
-    # h5_descriptor_load
-    "load_hdf5_descriptors",
 ]

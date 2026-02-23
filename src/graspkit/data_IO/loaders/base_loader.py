@@ -29,7 +29,7 @@ class BaseLoader(ABC, Generic[T]):
             FileNotFoundError: 文件不存在
             ValueError: 文件路径无效
         """
-        self.file_path = Path(file_path)
+        self.file_path: Path = Path(file_path)
 
         if not self.file_path.exists():
             raise FileNotFoundError(f"File not found: {self.file_path}")
@@ -117,7 +117,4 @@ class BaseLoader(ABC, Generic[T]):
 
         ext = self.get_file_extension().lower()
         if ext not in expected_extensions:
-            raise ValueError(
-                f"Invalid file extension: {ext}. "
-                f"Expected: {', '.join(expected_extensions)}"
-            )
+            raise ValueError(f"Invalid file extension: {ext}. ")
