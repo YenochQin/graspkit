@@ -274,7 +274,7 @@ def format_energy_configurations(
 
     # 应用 format_configuration 函数
     def _format_conf(config_str: str) -> tuple[str, str]:
-        if config_str is None or config_str == "":
+        if config_str == "":
             return "", ""
         return format_configuration(
             config_str, show_full_charged_subshell, format_to_word_document
@@ -331,7 +331,7 @@ def format_compositions(
         # 如果没有组成列，返回原DataFrame
         return energy_df
 
-    def _merge_compositions(row: dict, row_idx: int) -> list[dict[str, Any]]:
+    def _merge_compositions(row: dict[str, Any], row_idx: int) -> list[dict[str, Any]]:
         """合并多个组成列表为一个
 
         Args:
@@ -344,8 +344,8 @@ def format_compositions(
         Raises:
             ValueError: 如果同一行有多个 compositions_raw_* 列包含数据
         """
-        non_empty_cols = []
-        merged = []
+        non_empty_cols: list[Any] = []
+        merged: list[Any] = []
 
         for col in comp_columns:
             comp_data = row.get(col)
@@ -376,7 +376,7 @@ def format_compositions(
         if comp_data is None or len(comp_data) == 0:
             return ""
 
-        parts = []
+        parts: list[Any] = []
         for comp in comp_data:
             weight = comp.get("weight", 0.0)
             configuration = comp.get("configuration", "")
@@ -402,7 +402,7 @@ def format_compositions(
 
     # 1. 合并所有 compositions_raw_* 列为一个新的 compositions_raw 列
     # 先收集所有行的合并数据
-    merged_data = []
+    merged_data: list[Any] = []
     for idx, row in enumerate(energy_df.iter_rows(named=True)):
         merged_data.append(_merge_compositions(row, idx))
 
@@ -560,7 +560,7 @@ def merge_lsj_compositions(
         # 获取格式化后的组成字符串（在这里做过滤和格式化）
         for level in lsj_loader.get_levels():
             # 过滤组成
-            level_comps = []
+            level_comps: list[Any] = []
             count = 0
             for comp in level.compositions:
                 # 过滤逻辑
@@ -577,7 +577,7 @@ def merge_lsj_compositions(
             if not level_comps:
                 comp_str = ""
             else:
-                parts = []
+                parts: list[Any] = []
                 for comp in level_comps:
                     weight = comp.weight
                     configuration = comp.configuration

@@ -4,8 +4,8 @@
 @date :2026/02/20 15:48:54
 @author :YenochQin (秦毅)
 '''
-
 from pathlib import Path
+from dataclasses import dataclass, field as dc_field
 from pydantic import BaseModel, field_validator, model_validator
 
 
@@ -149,47 +149,54 @@ class ModelParams(BaseModel):
     random_state: int = 42
 
 
-# CalPath model - 所有路径属性
-class CalPath(BaseModel):
-    """Calculation paths with all file/directory paths"""
+# CalPath dataclass - 所有路径属性（由 MLCalConfig.setup_paths() 计算，不来自 TOML）
+@dataclass
+class CalPath:
+    """Calculation paths populated by MLCalConfig.setup_paths() after config load."""
+
     # 全量CSF集合相关路径
-    full_CSFs_set_file_path: Path | None = None
-    full_CSFs_set_parquet_path: Path | None = None
-    full_CSFs_set_desc_path: Path | None = None
-    full_CSFs_set_header_path: Path | None = None
+    full_CSFs_set_file_path: Path = dc_field(init=False)
+    full_CSFs_set_parquet_path: Path = dc_field(init=False)
+    full_CSFs_set_desc_path: Path = dc_field(init=False)
+    full_CSFs_set_header_path: Path = dc_field(init=False)
 
     # 循环相关路径
-    loop_file_name: str | None = None
-    cal_loop_path: Path | None = None
+    loop_file_name: str = dc_field(init=False)
+    cal_loop_path: Path = dc_field(init=False)
 
     # 结果目录路径
-    results_path: Path | None = None
-    test_data_path: Path | None = None
-    models_path: Path | None = None
-    roc_curves_path: Path | None = None
-    log_dir: Path | None = None
+    results_path: Path = dc_field(init=False)
+    test_data_path: Path = dc_field(init=False)
+    models_path: Path = dc_field(init=False)
+    roc_curves_path: Path = dc_field(init=False)
+    log_dir: Path = dc_field(init=False)
 
     # 结果文件路径
-    iteration_results: Path | None = None
-    training_results: Path | None = None
-    accumulated_idxs_ci_path: Path | None = None
+    iteration_results: Path = dc_field(init=False)
+    training_results: Path = dc_field(init=False)
+    accumulated_idxs_ci_path: Path = dc_field(init=False)
 
-    # 历史数据路径（第二轮及之后）
-    previous_important_idxs_file: Path | None = None
-    ml_results_path: Path | None = None
+    # 历史数据路径（仅 cal_loop_num > 1 时赋值）
+    previous_important_idxs_file: Path | None = dc_field(init=False, default=None)
+    ml_results_path: Path | None = dc_field(init=False, default=None)
 
 
 # Root MLCalConfig model
 class MLCalConfig(BaseModel):
     """Root ML calculation configuration model"""
+
+    model_config = {"arbitrary_types_allowed": True}
+
     target: Target
     cal_settings: CalSettings
     ml_config: MlConfig
-    cal_path: CalPath = CalPath()  # Always initialized
-    rnucleus: Rnucleus 
+    rnucleus: Rnucleus
     server_settings: ServerSettings
-    model_params: ModelParams 
+    model_params: ModelParams
     step_control: StepControl
+
+    # cal_path 不来自 TOML，由 model_post_init 计算后赋值
+    cal_path: CalPath  # type: ignore[assignment]
 
     @model_validator(mode="before")
     @classmethod
@@ -200,6 +207,11 @@ class MLCalConfig(BaseModel):
         if missing_sections:
             raise ValueError(f"配置文件缺少必需的节: {missing_sections}")
         return data
+
+    def model_post_init(self, __context: object) -> None:
+        """模型构建完成后自动初始化所有文件路径"""
+        object.__setattr__(self, "cal_path", CalPath())
+        self.setup_paths()
 
     def setup_paths(self) -> None:
         """
@@ -219,9 +231,7 @@ class MLCalConfig(BaseModel):
         full_CSFs_path_without_suffix: Path = full_CSFs_set_path.with_suffix("")
         self.cal_path.full_CSFs_set_file_path = full_CSFs_set_path
         # 设置CSF二进制和头文件的路径
-        self.cal_path.full_CSFs_set_parquet_path = (
-            full_CSFs_path_without_suffix.with_suffix(".parquet")
-        )
+        self.cal_path.full_CSFs_set_parquet_path = full_CSFs_path_without_suffix.with_suffix(".parquet")
         self.cal_path.full_CSFs_set_desc_path = root_path / f"{self.target.conf}_desc"
         self.cal_path.full_CSFs_set_header_path = full_CSFs_set_path.with_stem(
             f"{full_CSFs_set_path.stem}_header"

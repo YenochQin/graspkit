@@ -10,26 +10,41 @@ import logging
 
 import joblib
 import numpy as np
+from numpy.typing import NDArray
 import polars as pl
 
 from ..grasp_data_extractor.asfs_data_processor import format_configuration
 from ..utils.data_modules import MLDataCounts
 from .neural_network import ANNClassifier
-
+from ..data_IO import MLCalConfig
 
 def validate_csf_desc_coverage(
-    final_sampled_idxs: np.ndarray,
-    raw_csfs_descriptors: np.ndarray,
+    final_sampled_idxs: NDArray[np.int64],
+    raw_csfs_descriptors: NDArray[np.float64],
     logger: logging.Logger,
-) -> np.ndarray:
+) -> NDArray[np.int64]:
     """
-    验证选取的CSFs描述符子集是否满足覆盖条件:
-    对于每个轨道,至少有一个CSF在其对应的电子填充数位置不为零
+    验证已选取的 CSF 描述符子集是否满足轨道覆盖条件。
+
+    覆盖条件：对于描述符中涉及的每个轨道，至少存在一个 CSF，
+    其对应的电子填充数（descriptor 中每隔 3 列取一次的位置）不为零。
+    若存在未覆盖的轨道，则从剩余候选 CSF 中自动补选，直至所有轨道均被覆盖。
+
     Args:
-        descriptors (np.ndarray): 选取出的CSFs描述符数组,形状为 (n_csfs, n_features)
+        final_sampled_idxs (NDArray[np.int64]): 已选取的 CSF 在原始描述符数组中的索引，
+            形状为 (n_selected,)，不得为空。
+        raw_csfs_descriptors (NDArray[np.float64]): 全量 CSF 描述符数组，
+            形状为 (n_total_csfs, n_features)，每个轨道占 3 列，
+            第 0 列为电子填充数。
+        logger (logging.Logger): 日志记录器，用于输出覆盖检验及补选过程信息。
 
     Returns:
-        tuple[bool, list[int]]: (是否满足覆盖条件, 未覆盖的轨道索引列表)
+        NDArray[np.int64]: 满足覆盖条件后的 CSF 索引数组（已排序、去重），
+            形状为 (n_final,)。若初始选取已满足覆盖条件则直接返回原索引；
+            否则追加补选索引后返回。
+
+    Raises:
+        RuntimeError: 若 final_sampled_idxs 为空数组。
     """
     # 检查输入参数
 
@@ -44,10 +59,11 @@ def validate_csf_desc_coverage(
     electron_idx_in_orbital = 0
 
     # 直接通过切片获取每个轨道的电子填充
-    electron_idxs = np.arange(
+    electron_idxs: NDArray[np.int64] = np.arange(
         electron_idx_in_orbital,
         current_sampled_descriptors.shape[1],
         values_per_orbital,
+        dtype=np.int64,
     )
 
     # 提取所有CSF的电子数信息
@@ -66,7 +82,7 @@ def validate_csf_desc_coverage(
     if not is_covered:
         logger.info(f"检测到未覆盖的轨道索引: {uncovered_orbitals_idxs}")
         logger.info(f"开始补充选择以满足轨道覆盖条件")
-        all_csfs_idxs = np.arange(raw_csfs_descriptors.shape[0])
+        all_csfs_idxs = np.arange(raw_csfs_descriptors.shape[0], dtype=np.int64)
         remaining_candidates_idxs = np.setdiff1d(all_csfs_idxs, final_sampled_idxs)
         remaining_descriptors = raw_csfs_descriptors[remaining_candidates_idxs]
         # 修复：使用正确的参数顺序调用select_csfs_for_coverage函数
@@ -88,62 +104,72 @@ def validate_csf_desc_coverage(
 
 
 def select_csfs_for_coverage(
-    descriptors: np.ndarray,
+    descriptors: NDArray[np.float64],
     uncovered_orbitals: list[int],
-    candidate_descriptors: np.ndarray,
-) -> tuple[np.ndarray, list[int]]:
+    candidate_descriptors: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """
-    当覆盖验证失败时,从给定的候选描述符中按顺序选取包含缺少轨道的CSF描述符
+    当覆盖验证失败时，从候选 CSF 中选取能覆盖所有缺失轨道的最小子集。
+
+    等价性：对每个未覆盖轨道 o，令 f(o) 为候选数组中第一个覆盖 o 的行索引，
+    则贪心顺序遍历所选出的集合恒等于 {f(o) | o ∈ uncovered_orbitals}。
+    因此可用 np.argmax 逐列定位第一个 True，再 np.unique 去重，
+    完全替代原有的 Python 循环与列表操作。
 
     Args:
-        descriptors (np.ndarray): 当前的CSFs描述符数组,形状为 (n_csfs, n_features)
-        uncovered_orbitals (list[int]): 未覆盖的轨道索引列表
-        candidate_descriptors (np.ndarray): 候选CSFs描述符数组,形状为 (n_candidates, n_features)
+        descriptors (NDArray[np.float64]): 当前已选取的 CSF 描述符数组，
+            形状为 (n_csfs, n_features)，允许为空数组。
+        uncovered_orbitals (list[int]): 未覆盖的轨道索引列表，索引对应
+            candidate_electron_counts 的列（即 electron_idxs 的位置序号）。
+        candidate_descriptors (NDArray[np.float64]): 候选 CSF 描述符数组，
+            形状为 (n_candidates, n_features)，每个轨道占 3 列，第 0 列为电子填充数。
 
     Returns:
-        tuple[np.ndarray, list[int]]: (更新后的描述符数组, 选取的CSF索引列表)
-            - 更新后的描述符数组包含原有描述符和新选取的描述符
-            - 选取的CSF索引列表对应于candidate_descriptors中的相对索引
+        tuple[NDArray[np.float64], NDArray[np.int64]]:
+            - 更新后的描述符数组：将新选取的行追加到 descriptors 之后，
+            形状为 (n_csfs + n_selected, n_features)。
+            - 选取的相对索引数组：对应 candidate_descriptors 中被选行的索引，形状为 (n_selected,)，已排序、去重；若无可选则为空数组。
     """
+    empty_idxs: NDArray[np.int64] = np.empty(0, dtype=np.int64)
+
     if not uncovered_orbitals:
-        return descriptors, []
+        return descriptors, empty_idxs
 
     if candidate_descriptors.size == 0:
-        return descriptors, []
+        return descriptors, empty_idxs
 
-    # 确定每个轨道的电子填充位置索引
     values_per_orbital = 3
     electron_idx_in_orbital = 0
 
-    # 获取每个轨道的电子填充位置索引
-    electron_idxs = np.arange(
-        electron_idx_in_orbital, candidate_descriptors.shape[1], values_per_orbital
+    electron_idxs: NDArray[np.int64] = np.arange(
+        electron_idx_in_orbital,
+        candidate_descriptors.shape[1],
+        values_per_orbital,
+        dtype=np.int64,
     )
 
-    # 提取候选描述符中的电子数信息
+    # shape: (n_candidates, n_orbitals)
     candidate_electron_counts = candidate_descriptors[:, electron_idxs]
 
-    selected_relative_idxs = []
-    remaining_uncovered = set(uncovered_orbitals)
+    uncovered_arr = np.array(uncovered_orbitals, dtype=np.int64)
 
-    # 按顺序遍历候选描述符
-    for idx in range(len(candidate_descriptors)):
-        # 检查当前CSF是否包含任何剩余未覆盖的轨道
-        csf_electrons = candidate_electron_counts[idx]
-        covers_orbitals = [orb for orb in remaining_uncovered if csf_electrons[orb] > 0]
+    # coverage_matrix[i, j] = True 表示候选 CSF i 覆盖第 j 个未覆盖轨道
+    # shape: (n_candidates, n_uncovered)
+    coverage_matrix = candidate_electron_counts[:, uncovered_arr] > 0
 
-        if covers_orbitals:
-            selected_relative_idxs.append(idx)
-            remaining_uncovered -= set(covers_orbitals)
+    # 过滤掉完全没有候选覆盖的轨道（避免 argmax 在全 False 列返回 0 的歧义）
+    has_coverage = coverage_matrix.any(axis=0)  # shape: (n_uncovered,)
+    if not has_coverage.any():
+        return descriptors, empty_idxs
 
-            # 如果所有轨道都已覆盖，提前退出
-            if not remaining_uncovered:
-                break
+    # 对每个可覆盖轨道，取第一个覆盖它的候选行索引
+    # argmax 在 bool 数组上返回第一个 True 的位置
+    first_covering_idxs = np.argmax(coverage_matrix[:, has_coverage], axis=0)
 
-    if not selected_relative_idxs:
-        return descriptors, []
+    selected_relative_idxs: NDArray[np.int64] = np.unique(first_covering_idxs).astype(
+        np.int64
+    )
 
-    # 构建更新后的描述符数组
     new_descriptors = candidate_descriptors[selected_relative_idxs]
 
     if descriptors.size == 0:
@@ -154,7 +180,11 @@ def select_csfs_for_coverage(
     return updated_descriptors, selected_relative_idxs
 
 
-def save_training_results(config, evaluation_results: dict, logger: logging.Logger):
+def save_training_results(
+    config: MLCalConfig,
+    evaluation_results: dict, # type: ignore
+    logger: logging.Logger
+    ) -> None:
     """
     保存训练结果到CSV文件
 
@@ -226,7 +256,9 @@ def save_training_results(config, evaluation_results: dict, logger: logging.Logg
 
 
 def save_iteration_results(
-    config, train_data_counts: MLDataCounts, logger: logging.Logger
+    config: MLCalConfig,
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger
 ):
     """
     保存迭代结果到CSV文件
@@ -290,16 +322,16 @@ def save_iteration_results(
 
 
 def save_and_plot_results(
-    config,
+    config: MLCalConfig,
     logger: logging.Logger,
-    evaluation_results,
-    model,
+    evaluation_results: dict[str, dict[str, np.ndarray | float | int | str]],
+    model: ANNClassifier,
     correct_levels_ci: np.ndarray,
-    y_current_cal_probability=None,
+    y_current_cal_probability: np.ndarray | None = None,
     save_model: bool = True,
     save_data: bool = True,
     plot_curves: bool = True,
-):
+) -> dict[str, str]:
     """
     保存模型预测结果、模型文件和绘制性能曲线
     使用setup_directories创建的标准目录结构
@@ -374,11 +406,11 @@ def save_and_plot_results(
         try:
             # 生成latex格式的谱项符号列表
             latex_form_spectral_term: list[str] = []
-            spectral_term = config.cal_settings.spectral_term
-            if spectral_term is not None:
-                for term in spectral_term:
-                    _, format_LS_coupling = format_configuration(term)
-                    latex_form_spectral_term.append(format_LS_coupling)
+            spectral_term: list[str] = config.cal_settings.spectral_term
+
+            for term in spectral_term:
+                _, format_LS_coupling = format_configuration(term)
+                latex_form_spectral_term.append(format_LS_coupling)
 
             # 确定能级数量
             if len(correct_levels_ci.shape) > 1:
@@ -471,7 +503,8 @@ def save_and_plot_results(
 
 
 def ml_results_statistics(
-    train_data_counts: MLDataCounts, logger: logging.Logger
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger
 ) -> MLDataCounts:
     """
     统计ML结果并返回完整的selection_results字典

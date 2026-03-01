@@ -5,18 +5,21 @@
 @author :YenochQin (秦毅)
 """
 
-import random
-from pathlib import Path
-from typing import Literal
-from typing import Tuple
-from collections import Counter, defaultdict
-import math
-import numpy as np
 
-from ..data_IO.processing_data_loader import load_large_hash
+from numpy import intp
+import logging
+import random
+import math
+from typing import Literal, TypedDict
+from collections import Counter
+
+logger = logging.getLogger(__name__)
+
+import numpy as np
+from numpy.typing import NDArray
+
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
-from .CSFs_compress_extract import CSF_item_2_dict
 
 """
     csfs data dictionary:
@@ -59,7 +62,7 @@ from .CSFs_compress_extract import CSF_item_2_dict
 #######################################################################
 def single_asf_mix_square_above_threshold(
     asf_mix_data_array: np.ndarray, threshold: float = 0.1
-) -> list[Tuple[int]]:
+) -> list[tuple[int]]:
     """
     获取一维数组中平方值超过阈值的元素的索引，并按绝对值降序排序
 
@@ -94,7 +97,9 @@ def single_asf_mix_square_above_threshold(
 
 # 测试使用新的流程
 def batch_asfs_mix_square_above_threshold(
-    asfs_mix_data: MixCoefficientData, asfs_position: list = [], threshold: float = 0.1
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: list[int] | list[NDArray[np.int32]] = [],
+    threshold: float = 0.1
 ) -> dict[int, np.ndarray]:
     """
     批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
@@ -109,7 +114,7 @@ def batch_asfs_mix_square_above_threshold(
         字典，键是block编号，值是该块中所有超过阈值的系数索引(已去重)
         如果没有满足条件的索引，对应的值为空数组
     """
-    result = {}
+    result: dict[int, NDArray[np.int64]] = {}
 
     # 1. 如果调用者没给，就用数据自带的
     if not asfs_position:  # 空列表 / 空元组
@@ -124,7 +129,7 @@ def batch_asfs_mix_square_above_threshold(
             f"与 block_levels_idx_list({len(all_asfs_position)}) 不一致。"
         )
 
-    # 3. 逐层做“子集”检查
+    # 3. 逐层做"子集"检查
     for lvl, (usr, gold) in enumerate(zip(asfs_position, all_asfs_position)):
         # 统一转成 np.ndarray，再判子集
         usr = np.asarray(usr, dtype=gold.dtype)
@@ -151,52 +156,10 @@ def batch_asfs_mix_square_above_threshold(
     return result
 
 
-#### batch_blocks_mix_square_above_threshold 重复了，以后不再使用
-def batch_blocks_mix_square_above_threshold(
-    asfs_mix_data: MixCoefficientData, threshold=0.1
-):
-    block_csfs_mix_square_data_above_threshold = {}
-    for block in range(asfs_mix_data.block_num):
-        block_level_num = len(asfs_mix_data.mix_coefficient_list[block])
-
-        temp_block_coeff = []
-        for level in range(block_level_num):
-            temp_coeff = single_asf_mix_square_above_threshold(
-                asfs_mix_data.mix_coefficient_list[block][level], threshold
-            )
-            # block_csfs_mix_square_data_above_threshold[(block, level)] = temp_coeff
-            temp_block_coeff.extend(temp_coeff)
-
-        unique_idxs = union_lists_with_order(temp_block_coeff)
-
-        block_csfs_mix_square_data_above_threshold[(block,)] = unique_idxs
-
-    return block_csfs_mix_square_data_above_threshold
-
-
-def asf_mix_square_above_threshold_coupling_info(
-    mix_square_data_above_threshold: dict, 
-    csf_data_list: list
-):
-    csf_list = []
-    csf_mid_coupling_info = []
-    csf_coupling_info = []
-
-    for key, value in mix_square_data_above_threshold.items():
-        temp_csf_data = CSFs_block_get_CSF(csf_data_list, key)
-        csf_list.append(temp_csf_data[0])
-        temp_csf_data_dict = CSF_item_2_dict(temp_csf_data)
-
-        csf_mid_coupling_info.append(temp_csf_data_dict["temp_coupled_j"])
-        csf_coupling_info.append(temp_csf_data_dict["final_coupled_j_parity"])
-
-    return csf_list, csf_mid_coupling_info, csf_coupling_info
-
-
 #######################################################################
 
 
-def CSFs_block_get_CSF(CSFs_block: list, CSf_idx: list | np.ndarray) -> list:
+def CSFs_block_get_CSF(CSFs_block: list[list[str]], CSf_idx: list[int] | np.ndarray) -> list[list[str]]:
     """
     根据CSF的索引获取对应的CSF
 
@@ -207,68 +170,75 @@ def CSFs_block_get_CSF(CSFs_block: list, CSf_idx: list | np.ndarray) -> list:
     返回：
         对应的CSF，如果索引无效则返回None
     """
-    selected_data = [CSFs_block[i] for i in CSf_idx]
+    selected_data: list[list[str]] = [CSFs_block[i] for i in CSf_idx]
 
     return selected_data
 
 
 #######################################################################
 
+class CouplingJInfo(TypedDict):
+    count: int
+    idxs: list[int]
 
-def single_block_csfs_final_coupling_J_collection(
-    block_csfs: list, coupling_level: int = -1
-) -> dict:
+
+class CouplingJInfoWithSumCi(TypedDict):
+    count: int
+    idxs: list[int]
+    sum_ci: float
+
+
+class CouplingJInfoWithSumCiList(TypedDict):
+    count: int
+    idxs: list[int]
+    sum_ci: list[float]
+
+
+def single_block_csfs_final_coupling_J_collector(
+    block_csfs: list[list[str]], coupling_level: int | None = None
+) -> dict[tuple[str, ...], CouplingJInfo]:
     """
     从CSF块中提取耦合J值集合
 
     参数：
-        CSFs_asf: 包含CSF的列表
+        block_csfs: 包含CSF的列表，每个CSF是长度为3的list[str]，
+                    第三个元素（索引2）为空格分隔的耦合信息字符串。
+        coupling_level: 取最后N个token；None表示取全部token。
+                        若CSF的token数少于coupling_level，则取全部（降级）。
 
     返回：
-        耦合J值集合和对应索引
+        dict，键为tuple[str, ...]（耦合模式），值为 {"count": int, "idxs": list[int]}
     """
-    CSFs_coupling_info_list = [
-        tuple(block_csfs[i][2].lstrip().split()) for i in range(0, len(block_csfs))
-    ]
-    CSFs_choosed_coupling_info = [
-        CSF_coupling_info[-coupling_level:]
-        if len(CSF_coupling_info) >= coupling_level
-        else CSF_coupling_info
-        for CSF_coupling_info in CSFs_coupling_info_list
+    all_tokens: list[tuple[str, ...]] = [
+        tuple(csf[2].lstrip().split()) for csf in block_csfs
     ]
 
-    coupling_J_collection = {}
-    if coupling_level == -1:
-        coupling_J_counts = Counter(CSFs_coupling_info_list)
-        for element in coupling_J_counts:
-            coupling_J_collection[element] = {
-                "count": coupling_J_counts[element],
-                "idxs": [],
-            }
-
-        for idx, element in enumerate(CSFs_coupling_info_list):
-            coupling_J_collection[element]["idxs"].append(idx)
+    if coupling_level is None:
+        selected_tokens = all_tokens
     else:
-        coupling_J_counts = Counter(CSFs_choosed_coupling_info)
-        for element in coupling_J_counts:
-            coupling_J_collection[element] = {
-                "count": coupling_J_counts[element],
-                "idxs": [],
-            }
+        selected_tokens = [
+            tokens[-coupling_level:] if len(tokens) >= coupling_level else tokens
+            for tokens in all_tokens
+        ]
 
-        for idx, element in enumerate(CSFs_choosed_coupling_info):
-            coupling_J_collection[tuple(element)]["idxs"].append(idx)
+    coupling_J_counts = Counter(selected_tokens)
+    coupling_J_collection: dict[tuple[str, ...], CouplingJInfo] = {
+        pattern: {"count": cnt, "idxs": []}
+        for pattern, cnt in coupling_J_counts.items()
+    }
+    for idx, pattern in enumerate(selected_tokens):
+        coupling_J_collection[pattern]["idxs"].append(idx)
 
     return coupling_J_collection
 
 
 def batch_blocks_csfs_final_coupling_J_collection(
-    blocks_csfs_list: list[list], coupling_level: int = -1
-) -> dict:
-    blocks_coupling_J_collection = {}
+    blocks_csfs_list: list[list[list[str]]], coupling_level: int | None = None
+) -> dict[int, dict[tuple[str, ...], CouplingJInfo]]:
+    blocks_coupling_J_collection: dict[int, dict[tuple[str, ...], CouplingJInfo]] = {}
     for block, block_csfs in enumerate(blocks_csfs_list):
-        print(f"第{block + 1}个block包含{len(block_csfs)}个csf")
-        block_coupling_J_collection = single_block_csfs_final_coupling_J_collection(
+        logger.info("Block {block + 1}: 包含 {len(block_csfs)} 个 CSF")
+        block_coupling_J_collection = single_block_csfs_final_coupling_J_collector(
             block_csfs, coupling_level
         )
         blocks_coupling_J_collection[block] = block_coupling_J_collection
@@ -276,64 +246,60 @@ def batch_blocks_csfs_final_coupling_J_collection(
 
 
 def single_asf_csfs_final_coupling_J_mix_coefficient_sum(
-    block_csfs_coupling_J_collection_dict: dict, mix_coefficient_list: list
-) -> dict:
-    for idx, element in enumerate(block_csfs_coupling_J_collection_dict):
-        print(
-            f"元素 {element} 出现次数: {block_csfs_coupling_J_collection_dict[element]['count']}"
-        )
-        sum_ci = 0
-        for ci in block_csfs_coupling_J_collection_dict[element]["idxs"]:
-            sum_ci += mix_coefficient_list[ci] ** 2
-        print(f"元素 {element} 对应的索引之和: {sum_ci}")
-        block_csfs_coupling_J_collection_dict[element]["sum_ci"] = sum_ci
-        print(
-            f"元素 {element} 对应的索引之和: {block_csfs_coupling_J_collection_dict[element]['sum_ci']}"
-        )
-
-    # 按sum_ci值从大到小排序
-    # sorted_block_csfs_coupling_J_collection_dict = dict(sorted(block_csfs_coupling_J_collection_dict.items(), key=lambda x: x[1]['sum_ci'], reverse=True))
-
-    # return sorted_block_csfs_coupling_J_collection_dict
-    return block_csfs_coupling_J_collection_dict
+    block_csfs_coupling_J_collection_dict: dict[tuple[str, ...], CouplingJInfo],
+    mix_coefficient_list: list[float] | np.ndarray,
+) -> dict[tuple[str, ...], CouplingJInfoWithSumCi]:
+    coeff_array = np.asarray(mix_coefficient_list)
+    result: dict[tuple[str, ...], CouplingJInfoWithSumCi] = {}
+    for pattern, info in block_csfs_coupling_J_collection_dict.items():
+        idxs = info["idxs"]
+        sum_ci = float(np.sum(coeff_array[idxs] ** 2))
+        logger.debug(f"{pattern=}  count={info["count"]}  sum_ci={sum_ci}")
+        result[pattern] = {"count": info["count"], "idxs": idxs, "sum_ci": sum_ci}
+    return result
 
 
 def single_block_batch_asfs_CSFs_final_coupling_J_collection(
-    block_CSFs: list,
-    block_asfs_mix_coefficient_list: list | np.ndarray,
-    block_asfs_position: list | np.ndarray = [],
-    coupling_level: int = -1,
-) -> dict:
-    # 获取初始耦合信息
-    base_coupling_dict = single_block_csfs_final_coupling_J_collection(
+    block_CSFs: list[list[str]],
+    block_asfs_mix_coefficient_list: list[np.ndarray] | np.ndarray,
+    block_asfs_position: list[int] | np.ndarray | None = None,
+    coupling_level: int | None = None,
+) -> dict[tuple[str, ...], CouplingJInfoWithSumCiList]:
+    # 修复可变默认参数
+    if block_asfs_position is None:
+        block_asfs_position = list(range(len(block_asfs_mix_coefficient_list)))
+
+    # 用 set 将 O(n) 查找降为 O(1)
+    position_set: set[int] = {int(i) for i in block_asfs_position}
+
+    # 将系数统一转成 numpy 数组以便向量化
+    coeff_matrix = np.asarray(block_asfs_mix_coefficient_list)
+
+    base_coupling_dict = single_block_csfs_final_coupling_J_collector(
         block_CSFs, coupling_level
     )
-    if len(block_asfs_position) == 0:
-        block_asfs_position = [i for i in range(len(block_asfs_mix_coefficient_list))]
-    for idx, element in enumerate(base_coupling_dict):
-        base_coupling_dict[element]["sum_ci"] = []
-        for asf_idx, asf_mix_coefficient in enumerate(
-            block_asfs_mix_coefficient_list
-        ):
-            sum_ci = 0
-            if asf_idx in block_asfs_position:
-                for csf_idx in base_coupling_dict[element]["idxs"]:
-                    sum_ci += asf_mix_coefficient[csf_idx] ** 2
+    result: dict[tuple[str, ...], CouplingJInfoWithSumCiList] = {}
+    for pattern, info in base_coupling_dict.items():
+        idxs = np.asarray(info["idxs"])
+        sum_ci_list: list[float] = []
+        for asf_idx, asf_coeff in enumerate(coeff_matrix):
+            if asf_idx in position_set:
+                sum_ci_list.append(float(np.sum(asf_coeff[idxs] ** 2)))
+            else:
+                sum_ci_list.append(0.0)
+        result[pattern] = {"count": info["count"], "idxs": info["idxs"], "sum_ci": sum_ci_list}
 
-            base_coupling_dict[element]["sum_ci"].append(sum_ci)
-
-    # return block_asfs_coupling_J_sum_ci
-    return base_coupling_dict
+    return result
 
 
 def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
-    blocks_CSFs_list: list,
+    blocks_CSFs_list: list[list[list[str]]],
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[np.ndarray] = [],
-    coupling_level: int = -1,
-) -> dict:
+    asfs_position: list[np.ndarray] | None = None,
+    coupling_level: int | None = None,
+) -> dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]]:
     # 1. 如果调用者没给，就用数据自带的
-    if len(asfs_position) == 0:  # 空列表
+    if asfs_position is None:
         asfs_position = asfs_mix_data.block_levels_idx_list
 
     all_asfs_position = asfs_mix_data.block_levels_idx_list  # list[np.ndarray]
@@ -341,27 +307,29 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
     # 2. 第一层长度必须一致
     if len(asfs_position) != len(all_asfs_position):
         raise ValueError(
-            f"asfs_position 第一层长度({len(asfs_position)}) "
-            f"与 block_levels_idx_list({len(all_asfs_position)}) 不一致。"
+            f"asfs_position 第一层长度 {len(asfs_position)} "
+            f"与 block_levels_idx_list {len(all_asfs_position)} 不一致。"
         )
 
-    # 3. 逐层做“子集”检查
+    # 3. 逐层做"子集"检查
     for lvl, (usr, gold) in enumerate(zip(asfs_position, all_asfs_position)):
-        # 统一转成 np.ndarray，再判子集
-        usr = np.asarray(usr, dtype=gold.dtype)
-        if not np.isin(usr, gold).all():
+        usr_arr = np.asarray(usr, dtype=gold.dtype)
+        if not np.isin(usr_arr, gold).all():
             raise ValueError(
-                f"asfs_position 第 {lvl} 层元素 {usr} "
+                f"asfs_position 第 {lvl} 层元素 {usr_arr} "
                 f"不是 block_levels_idx_list 对应层 {gold} 的子集。"
             )
-    blocks_asfs_coupling_J_sum_ci = {}
-    # block_data = asfs_mix_data.mix_coefficient_list[block][asfs_position[block]]
+
+    blocks_asfs_coupling_J_sum_ci: dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]] = {}
     for block, (block_csfs, block_asfs_mix) in enumerate(
         zip(blocks_CSFs_list, asfs_mix_data.mix_coefficient_list)
     ):
-        print(f"第{block + 1}个block包含{len(block_asfs_mix)}个asf")
+        logger.info(f"Block {block + 1}: 包含 {len(block_asfs_mix)} 个 ASF")
         if any(len(asf_mix) != len(block_csfs) for asf_mix in block_asfs_mix):
-            raise ValueError("block_CSFs和block_asfs_mix_coefficient长度不匹配")
+            raise ValueError(
+                f"Block {block}: block_CSFs 长度 {len(block_csfs)} 与 "
+                f"block_asfs_mix_coefficient 长度不匹配。"
+            )
 
         block_asfs_coupling_J_collection = (
             single_block_batch_asfs_CSFs_final_coupling_J_collection(
@@ -378,28 +346,9 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
 
 
 #######################################################################
-def block_csfs_coupling_J_chosen(block_asfs_coupling_J_sum_ci: dict) -> list:
-    """
-    Selects the most significant CSF idxs for each ASF based on coupling J values.
-
-    Args:
-        block_asfs_coupling_J_sum_ci: dictionary containing coupling information for multiple ASFs,
-        where each ASF has a dictionary of coupling configurations
-        with their sum of squared mix coefficients ('sum_ci')
-
-    Returns:
-        list of lists containing idxs of CSFs with the strongest coupling for each ASF
-    """
-    chosen_csfs_idxs = []
-    for key, inner_dict in block_asfs_coupling_J_sum_ci.items():
-        if inner_dict:
-            first_key, first_value = next(iter(inner_dict.items()))
-            chosen_csfs_idxs.append(first_value["idxs"])
-
-    return chosen_csfs_idxs
 
 
-def union_lists_with_order(*lists):
+def union_lists_with_order(*lists: list[int | str]) -> list[int | str]:
     """
     计算多个列表的并集，保留元素首次出现的顺序。
 
@@ -410,71 +359,20 @@ def union_lists_with_order(*lists):
         包含所有列表元素并去重，且保留元素首次出现顺序的列表
     """
     # 使用 dict.fromkeys 保留元素顺序并去重
-    all_elements = []
+    all_elements: list[int | str] = []
     for lst in lists:
         all_elements.extend(lst)
     return list(dict.fromkeys(all_elements))
 
 
-def merge_multiple_dicts_with_ordered_union(*dicts: dict[Tuple[int], list]) -> dict:
-    """
-    合并多个字典中相同键对应的列表，保持顺序并去重
-
-    参数:
-        *dicts: 可变数量的字典参数，每个字典的值应为列表
-
-    返回:
-        合并后的字典，包含所有输入字典中相同键的合并列表
-    """
-    if not dicts:
-        return {}
-
-    # 获取所有字典共有的键
-    common_keys = set(dicts[0].keys())
-    for d in dicts[1:]:
-        common_keys.intersection_update(d.keys())
-
-    merged_result = {}
-    for key in common_keys:
-        print(f"Processing block {key}")
-        # 收集所有字典中该键对应的列表
-        lists_to_merge = [d[key] for d in dicts]
-        # 使用union_lists_with_order合并列表
-        merged_result[key] = union_lists_with_order(*lists_to_merge)
-
-    return merged_result
-
-
 #######################################################################
 
 
-def merge_csfs_idxs_lists_by_block_key(
-    chosen_csfs_idxs: dict[Tuple[int, int], list],
-) -> dict[int, list]:
-    """
-    将字典中第一个数字相同的键对应的列表合并
-
-    参数：
-        chosen_csfs_idxs: 原始字典，键为(block, level)元组，值为CSF索引列表
-
-    返回：
-        按第一个数字(block)分组的字典，值为合并后的CSF索引列表（保持顺序并去重）
-    """
-    merged_dict = defaultdict(list)
-
-    for key, idxs_list in chosen_csfs_idxs.items():
-        first_num = key[0]  # 提取元组的第一个数字
-        merged_dict[first_num].extend(idxs_list)  # 合并列表
-
-    return {
-        group_key: union_lists_with_order(*group_lists)
-        for group_key, group_lists in merged_dict.items()
-    }
-
-
 def CSFs_sort_by_mix_coefficient(
-    CSFs_block: list, *mix_coefficients: np.ndarray, threshold=None
-):
+    CSFs_block: list[list[str]],
+    mix_coefficients: np.ndarray,
+    threshold: float | None = None
+) -> list[list[str]]:
     """
     根据多个混合系数的对应元素和来对CSF块进行排序，并可选择返回截断值对应的索引
 
@@ -505,16 +403,15 @@ def CSFs_sort_by_mix_coefficient(
     # 使用numpy的argsort进行排序（降序）
     sorted_idxs = np.argsort(-combined_coeff)
 
-    # 构建排序后的CSF块
-    sorted_csf_block = [item for i in sorted_idxs for item in CSFs_block[i]]
-
     # 根据threshold参数决定返回值
     if threshold is not None:
         # 找出组合系数大于阈值的原始索引
-        threshold_idxs = [
-            i for i in sorted_idxs if combined_coeff[i] > threshold**2
-        ]
-        return sorted_csf_block, threshold_idxs
+        threshold_idxs = sorted_idxs[combined_coeff[sorted_idxs] > threshold**2]
+    else:
+        threshold_idxs = sorted_idxs
+
+    # 构建排序后的CSF块
+    sorted_csf_block: list[list[str]] = [CSFs_block[idx] for idx in threshold_idxs]
 
     return sorted_csf_block
 
@@ -524,7 +421,7 @@ def CSFs_sort_by_mix_coefficient(
 #######################################################################
 
 
-def generate_unique_random_numbers(max_num: int, count: int) -> list:
+def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
     """
     生成指定数量不重复的随机正整数
 
@@ -534,29 +431,19 @@ def generate_unique_random_numbers(max_num: int, count: int) -> list:
 
     返回:
         包含不重复随机数的列表，按升序排列
+    使用下面的代码替代：
+    random.sample(range(1, max_num + 1), count)
     """
-    if count <= 0:
-        return []
-
-    if max_num <= 0:
-        raise ValueError("max_num必须大于0")
-
-    if count > max_num:
-        raise ValueError(f"无法生成{count}个不重复的1-{max_num}之间的数字")
-
-    # 使用sample方法确保不重复
-    numbers = random.sample(range(1, max_num + 1), count)
-    numbers.sort()  # 排序结果
-
-    return numbers
+    number: list[int]= random.sample(range(1, max_num + 1), count)
+    return number
 
 
 def radom_choose_csfs(
-    block_csfs_list: list,
+    block_csfs_list: list[list[str]],
     method: Literal["ratio", "quality"],
     ratio_or_quality: float,
-    selected_csfs_idxs: list = [],
-):
+    selected_csfs_idxs: list[list[str]] = [],
+) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
     """
     优化版的大规模CSF随机选择函数
 
@@ -573,13 +460,11 @@ def radom_choose_csfs(
     elif method == "quality":
         # 计算需要选择的总数
         total_needed = math.ceil(ratio_or_quality)
-    else:
-        raise ValueError("method must be 'ratio' or 'quality'")
     # 计算还需要补充的数量
     choose_csfs_num = max(0, total_needed - selected_csfs_num)
 
     # 使用numpy数组加速操作
-    all_idxs = np.arange(block_csfs_num)
+    all_idxs = np.arange(block_csfs_num, dtype=np.int64)
 
     if selected_csfs_num > 0:
         # 使用numpy的set操作
@@ -607,52 +492,6 @@ def radom_choose_csfs(
     unselected_idxs = np.setdiff1d(all_idxs, chosen_csfs_idxs)
 
     # 使用列表推导式获取CSF数据
-    chosen_csfs = [block_csfs_list[idx] for idx in chosen_csfs_idxs]
+    chosen_csfs:list[list[str]] = [block_csfs_list[idx] for idx in chosen_csfs_idxs]
 
     return chosen_csfs, chosen_csfs_idxs, unselected_idxs
-
-
-#######################################################################
-
-
-def process_block(args):
-    """Helper function for parallel processing moved to global scope"""
-    block_idx, small_data, large_data = args
-    # 预生成large数据的哈希映射
-    large_map = {
-        "".join(item for sublist in large_csf for item in sublist): idx
-        for idx, large_csf in enumerate(large_data[block_idx])
-    }
-
-    return [
-        large_map["".join(item for sublist in small_csf for item in sublist)]
-        for small_csf in small_data[block_idx]
-        if "".join(item for sublist in small_csf for item in sublist) in large_map
-    ]
-
-
-def maping_two_csfs_idxs(
-    small_as_csfs_data: list[list[list[str]]], large_hash_file: Path | str
-) -> dict[int, list[int]]:
-    """
-    将 small_as_csfs_data 映射到预计算的 large_hash
-
-    返回:
-        {small_block_idx: [matched_large_idxs]}
-    """
-    large_hash = load_large_hash(large_hash_file)  # dict[int, dict[str, int]]
-
-    results = []
-    for small_block_idx, small_block in enumerate(small_as_csfs_data):
-        matched_idxs = []
-        for small_csf in small_block:
-            csf_str = "".join(item for sublist in small_csf for item in sublist)
-            # 在所有 large block 中查找匹配
-            for large_block_idx, block_map in large_hash.items():
-                if csf_str in block_map:
-                    matched_idxs.append((large_block_idx, block_map[csf_str]))
-
-        # 仅保留匹配的 large_csf 全局索引（按需调整）
-        results.append([idx for (_, idx) in matched_idxs])
-
-    return {block_idx: idxs for block_idx, idxs in enumerate(results)}

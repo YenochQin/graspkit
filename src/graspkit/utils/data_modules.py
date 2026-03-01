@@ -6,7 +6,7 @@
 """
 
 from dataclasses import dataclass
-
+from typing import TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
@@ -26,6 +26,14 @@ class MixCoefficientData:
     level_list: list[float]
 
 
+class CSFsDict(TypedDict, total=False):
+    subshell_info_raw: list[str]
+    CSFs_block_j_value: list[str]
+    parity: str
+    CSFs_block_data: list[list[list[str]]]
+    CSFs_block_length: list[int]
+    block_num: int
+
 @dataclass
 class CSFs:
     subshell_info_raw: list[str]
@@ -34,20 +42,18 @@ class CSFs:
     CSFs_block_data: list[
         list[list[str]]
     ]  # list of blocks, each block is list of CSFs (3 lines each)
-    CSFs_block_length: list[int] | NDArray[np.integer]  # 兼容列表或ndarray
+    CSFs_block_length: list[int]
     block_num: int
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CSFs":
+    def from_dict(cls, data: CSFsDict) -> "CSFs":
         "从字典创建CSFs实例（自动处理NumPy数组转换）"
         return cls(
             subshell_info_raw=data.get("subshell_info_raw", []),
             CSFs_block_j_value=data.get("CSFs_block_j_value", []),
             parity=data.get("parity", ""),
             CSFs_block_data=data.get("CSFs_block_data", []),
-            CSFs_block_length=np.array(data["CSFs_block_length"])
-            if isinstance(data.get("CSFs_block_length", []), list)
-            else data.get("CSFs_block_length", np.array([])),
+            CSFs_block_length=data.get("CSFs_block_length", []),
             block_num=data.get("block_num", 0),
         )
 
