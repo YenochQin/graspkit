@@ -6,103 +6,76 @@
 """
 
 from pathlib import Path
-
-import gzip
-import pickle
-from typing import Any
+from typing import cast
 import rtoml
 
 import numpy as np
-import pandas as pd
+from numpy.typing import NDArray
 import polars as pl
-import h5py
 
-from ..utils.data_modules import CSFs
 from .ml_cal_config_module import MLCalConfig
 
 
-def load_csf_metadata(filepath: str | Path) -> dict:
-    # 转换为Path对象
-    filepath = Path(filepath)
-
-    with open(filepath, "rb") as f:
-        return pickle.load(f)
-
-
-#######################################################################
-
-
-def load_csfs_binary(filepath: str | Path) -> CSFs:
-    filepath = Path(filepath)
-
-    # 检查文件路径是否已经有正确的后缀
-    if not str(filepath).endswith(".pkl.gz"):
-        filepath = filepath.with_suffix(".pkl.gz")
-
-    with gzip.open(filepath, "rb") as f:
-        data = pickle.load(f)
-
-    return CSFs(
-        subshell_info_raw=data["metadata"]["subshell_info_raw"],
-        CSFs_block_j_value=data["metadata"]["CSFs_block_j_value"],
-        parity=data["metadata"]["parity"],
-        CSFs_block_data=data["block_data"],  # 原始嵌套结构
-        CSFs_block_length=data["metadata"]["CSFs_block_length"],
-        block_num=data["metadata"]["block_num"],
-    )
-
-
-#######################################################################
-
-
-def pkl_loader(load_csfs_idx_file_path) -> dict:
+def csfs_idxs_ci_loader(
+    csfs_id_ci_file_path: str | Path,
+) -> tuple[NDArray[np.int64], NDArray[np.float64]]:
     """
-    加载CSF索引文件（pickle格式）。
+    加载CSF索引文件（npz格式），并校验数据结构。
+
+    与 csfs_idxs_ci_storage 对应，读取其保存的 idxs / ci_squared 两个数组。
 
     Args:
-        load_csfs_idx_file_path: 索引文件路径
+        csfs_id_ci_file_path: 索引文件路径（无扩展名时自动补 .npz）
 
     Returns:
-        dict: 块索引到CSF索引列表/数组的映射
-        读取的pkl文件中可能会有ci系数
+        tuple: (csfs_idx, csfs_ci_squared)
+            csfs_idx:  NDArray[np.int64]   CSFs整数索引（一维，长度 n_csfs）
+            csfs_ci_squared:   NDArray[np.float64] CI系数平方值，二维 (n_levels, n_csfs)，
+                       shape[1] 与 csfs_idx 等长
+
     Raises:
-        TypeError: 如果加载的数据不是正确格式
-        FileNotFoundError: 如果文件不存在
+        FileNotFoundError: 文件不存在
+        ValueError: npz 缺少必要键，或数组维度/长度不一致
+        TypeError: 数组 dtype 不符合要求
     """
-
-    file_path = Path(load_csfs_idx_file_path)
-
-    # 自动添加.pkl扩展名（如果没有）
+    file_path = Path(csfs_id_ci_file_path)
     if not file_path.suffix:
-        file_path = file_path.with_suffix(".pkl")
+        file_path = file_path.with_suffix(".npz")
 
     if not file_path.exists():
         raise FileNotFoundError(f"CSF索引文件不存在: {file_path}")
 
-    # 直接加载pickle文件
-    with open(file_path, "rb") as f:
-        blocks_csfs_idx = pickle.load(f)
+    with np.load(file=file_path) as data_container:
+        missing = {"idxs", "ci_squared"} - set(data_container.files)
+        if missing:
+            raise ValueError(f"npz 文件缺少必要键: {missing}")
 
-    # 类型检查和转换
-    if not isinstance(blocks_csfs_idx, dict):
-        raise TypeError(f"Expected dict, got {type(blocks_csfs_idx)}")
+        idxs = data_container["idxs"]
+        ci_squared = data_container["ci_squared"]
 
-    return blocks_csfs_idx
+    # dtype 校验
+    if not np.issubdtype(idxs.dtype, np.integer):
+        raise TypeError(f"'idxs' 应为整数 dtype，实际为 {idxs.dtype}")
+    if not np.issubdtype(ci_squared.dtype, np.floating):
+        raise TypeError(f"'ci_squared' 应为浮点 dtype，实际为 {ci_squared.dtype}")
+
+    # 维度与长度校验
+    if idxs.ndim != 1:
+        raise ValueError(f"'idxs' 应为一维数组，实际维度为 {idxs.ndim}")
+    if ci_squared.ndim != 2:
+        raise ValueError(f"'ci_squared' 应为二维数组 (n_levels, n_csfs)，实际维度为 {ci_squared.ndim}")
+    if idxs.shape[0] != ci_squared.shape[1]:
+        raise ValueError(
+            f"'idxs' 与 'ci_squared' 的 CSF 数不一致: "
+            f"idxs.shape[0]={idxs.shape[0]} != ci_squared.shape[1]={ci_squared.shape[1]}"
+        )
+
+    return cast(NDArray[np.int64], idxs), cast(NDArray[np.float64], ci_squared)
 
 
 #######################################################################
 
 
-def load_large_hash(file_path: str | Path) -> dict[int, dict[str, int]]:
-    """从文件加载预计算的哈希映射"""
-    # 转换为Path对象
-    file_path = Path(file_path)
-
-    with open(file_path, "rb") as f:
-        return pickle.load(f)
-
-
-#######################################################################
 def load_config(config_path: str | Path) -> MLCalConfig:
     """加载TOML配置文件并进行类型转换和数据处理
 
@@ -124,270 +97,8 @@ def load_config(config_path: str | Path) -> MLCalConfig:
     # 使用 rtoml 读取TOML文件
     raw = rtoml.load(config_path)
 
-    # 运行时校验 + 静态窄化：确保顶层是 dict
-    if not isinstance(raw, dict):
-        raise TypeError("Top-level TOML must be a table")
-
     # 使用Pydantic的model_validate进行类型转换和验证
     return MLCalConfig.model_validate(raw)
-
-
-#######################################################################
-
-
-def load_descriptors(
-    load_path: str | Path,
-    file_format: str | None = None,
-    use_cpp: bool = False,
-) -> np.ndarray | None:
-    """
-    加载描述符数组
-
-    Args:
-        load_path ( str | Path): 加载路径（可含或不含扩展名）
-        file_format (str | None): 文件格式，如果为None则自动推断
-        use_cpp (bool): 是否使用C++生成的HDF5文件
-
-    Returns:
-        np.ndarray | None: 描述符数组，加载失败返回None
-
-    Example:
-        >>> descriptors = load_descriptors('output/csf_descriptors.npy')
-        >>> descriptors = load_descriptors(Path('output/csf_descriptors.npy'))
-        >>> descriptors = load_descriptors('output/csf_descriptors', use_cpp=True)
-    """
-
-    # 转换为Path对象
-    load_path = Path(load_path)
-
-    # 如果使用C++ HDF5文件
-    if use_cpp:
-        hdf5_path = load_path.with_suffix(".h5")
-        if hdf5_path.exists():
-            try:
-                with h5py.File(hdf5_path, "r") as f:
-                    if "descriptors" in f:
-                        # 检查descriptors是否是一个数据集，而不是数据类型
-                        descriptors_obj = f["descriptors"]
-                        if isinstance(descriptors_obj, h5py.Dataset):
-                            descriptors = descriptors_obj[:]
-                            print(f"Descriptors loaded from HDF5: {hdf5_path}")
-                            return descriptors
-                        else:
-                            print(f"Error: 'descriptors' is not a dataset but a {type(descriptors_obj)}")
-                    else:
-                        print(f"Error: 'descriptors' dataset not found in {hdf5_path}")
-            except Exception as e:
-                print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
-        else:
-            print(f"Error: HDF5 file not found: {hdf5_path}")
-
-    # 原有的文件格式支持
-    if file_format is None:
-        if load_path.suffix == ".npy":
-            file_format = "npy"
-            load_path = load_path.with_suffix("")  # 移除扩展名
-        elif load_path.suffix == ".csv":
-            file_format = "csv"
-            load_path = load_path.with_suffix("")
-        elif load_path.suffix == ".pkl":
-            file_format = "pkl"
-            load_path = load_path.with_suffix("")
-        else:
-            # 尝试自动检测（使用新的文件名格式）
-            if (load_path.parent / f"{load_path.name}_descriptors.npy").exists():
-                file_format = "npy"
-            elif (load_path.parent / f"{load_path.name}_descriptors.csv").exists():
-                file_format = "csv"
-            elif (load_path.parent / f"{load_path.name}_descriptors.pkl").exists():
-                file_format = "pkl"
-            else:
-                print(f"Error: Cannot find file with path: {load_path}")
-                return None
-
-    try:
-        if file_format.lower() == "npy":
-            file_path = load_path.parent / f"{load_path.name}_descriptors.npy"
-            if not file_path.exists():
-                print(f"Error: File not found: {file_path}")
-                return None
-            descriptors = np.load(file_path)
-            print(f"Descriptors loaded from: {file_path}")
-            return descriptors
-
-        elif file_format.lower() == "csv":
-            file_path = load_path.parent / f"{load_path.name}_descriptors.csv"
-            if not file_path.exists():
-                print(f"Error: File not found: {file_path}")
-                return None
-            df = pd.read_csv(file_path)
-            descriptors = df.values
-            print(f"Descriptors loaded from: {file_path}")
-            return descriptors
-
-        elif file_format.lower() == "pkl":
-            file_path = load_path.parent / f"{load_path.name}_descriptors.pkl"
-            if not file_path.exists():
-                print(f"Error: File not found: {file_path}")
-                return None
-            with open(file_path, "rb") as f:
-                descriptors = pickle.load(f)
-            print(f"Descriptors loaded from: {file_path}")
-            return descriptors
-
-        else:
-            print(f"Error: Unsupported file format: {file_format}")
-            return None
-
-    except Exception as e:
-        print(f"Error loading descriptors: {str(e)}")
-        return None
-
-
-def load_descriptors_with_multi_block(
-    load_path: str | Path,
-    file_format: str | None = None,
-    use_cpp: bool = False,
-) -> tuple[np.ndarray, np.ndarray] | None:
-    """
-    加载带标签的描述符数组
-
-    Args:
-        load_path (str | Path): 加载路径（不含扩展名）
-        file_format (str | None): 文件格式，如果为None则自动推断
-        use_cpp (bool): 是否使用C++生成的HDF5文件
-
-    Returns:
-        tuple[np.ndarray, np.ndarray] | None: (描述符数组, 标签数组)，加载失败返回None
-
-    Example:
-        >>> descriptors, labels = load_descriptors_with_block_idxs('ml_data/features')
-        >>> descriptors, labels = load_descriptors_with_block_idxs(Path('ml_data/features'))
-        >>> descriptors, labels = load_descriptors_with_block_idxs('ml_data/features', use_cpp=True)
-    """
-
-    # 转换为Path对象
-    load_path = Path(load_path)
-
-    # 如果使用C++ HDF5文件
-    if use_cpp:
-        hdf5_path = load_path.with_suffix(".h5")
-        if hdf5_path.exists():
-            try:
-                with h5py.File(hdf5_path, "r") as f:
-                    descriptors = np.array([])
-                    labels = np.array([])
-
-                    # 检查并加载descriptors
-                    if "descriptors" in f:
-                        desc_obj = f["descriptors"]
-                        if isinstance(desc_obj, h5py.Dataset):
-                            descriptors = desc_obj[:]
-                        else:
-                            print(f"Warning: 'descriptors' is not a dataset but a {type(desc_obj)}")
-
-                    # 检查并加载labels
-                    if "labels" in f:
-                        labels_obj = f["labels"]
-                        if isinstance(labels_obj, h5py.Dataset):
-                            labels = labels_obj[:]
-                        else:
-                            print(f"Warning: 'labels' is not a dataset but a {type(labels_obj)}")
-
-                    if descriptors is not None:
-                        print(f"Descriptors loaded from HDF5: {hdf5_path}")
-                        if labels is not None:
-                            print(f"Labels loaded from HDF5: {hdf5_path}")
-                        return descriptors, labels
-                    else:
-                        print(f"Error: 'descriptors' dataset not found or invalid in {hdf5_path}")
-                        return None
-            except Exception as e:
-                print(f"Error loading HDF5 file {hdf5_path}: {str(e)}")
-                return None
-        else:
-            print(f"Error: HDF5 file not found: {hdf5_path}")
-
-    # 原有的文件格式支持
-    if file_format is None:
-        if (
-            load_path.parent / f"{load_path.name}_descriptors_block_idxs.csv"
-        ).exists():
-            file_format = "csv"
-        elif (load_path.parent / f"{load_path.name}_descriptors.npy").exists() and (
-            load_path.parent / f"{load_path.name}_descriptors_block_idxs.npy"
-        ).exists():
-            file_format = "npy"
-        elif (
-            load_path.parent / f"{load_path.name}_descriptors_block_idxs.pkl"
-        ).exists():
-            file_format = "pkl"
-        else:
-            print(f"Error: Cannot find files with path: {load_path}")
-            return None
-
-    try:
-        if file_format.lower() == "csv":
-            file_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_idxs.csv"
-            )
-            if not file_path.exists():
-                print(f"Error: File not found: {file_path}")
-                return None
-
-            df = pd.read_csv(file_path)
-            # 最后一列是标签，其余是描述符
-            descriptors = df.iloc[:, :-1].to_numpy()
-            labels = df.iloc[:, -1].to_numpy()
-            print(f"Descriptors and labels loaded from: {file_path}")
-            return descriptors, labels
-
-        elif file_format.lower() == "npy":
-            data_path = load_path.parent / f"{load_path.name}_descriptors.npy"
-            labels_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_idxs.npy"
-            )
-
-            if not data_path.exists():
-                print(f"Error: Data file not found: {data_path}")
-                return None
-            if not labels_path.exists():
-                print(f"Error: Labels file not found: {labels_path}")
-                return None
-
-            descriptors = np.load(data_path)
-            labels = np.load(labels_path)
-            print(f"Descriptors loaded from: {data_path}")
-            print(f"Labels loaded from: {labels_path}")
-            return descriptors, labels
-
-        elif file_format.lower() == "pkl":
-            file_path = (
-                load_path.parent / f"{load_path.name}_descriptors_block_idxs.pkl"
-            )
-            if not file_path.exists():
-                print(f"Error: File not found: {file_path}")
-                return None
-
-            with open(file_path, "rb") as f:
-                data_dict = pickle.load(f)
-
-            if "descriptors" not in data_dict or "labels" not in data_dict:
-                print(f"Error: Invalid data format in {file_path}")
-                return None
-
-            descriptors = data_dict["descriptors"]
-            labels = data_dict["labels"]
-            print(f"Descriptors and labels loaded from: {file_path}")
-            return descriptors, labels
-
-        else:
-            print(f"Error: Unsupported file format: {file_format}")
-            return None
-
-    except Exception as e:
-        print(f"Error loading descriptors with labels: {str(e)}")
-        return None
 
 
 #######################################################################
@@ -429,7 +140,7 @@ def load_descriptors_by_scan(
     # 记录原始索引用于恢复顺序
     original_order = np.argsort(np.argsort(idxs))
 
-    result = []
+    result: list[np.ndarray] = []
     total_batches = (len(sorted_idxs) + batch_size - 1) // batch_size
 
     for i in range(0, len(sorted_idxs), batch_size):
@@ -463,7 +174,7 @@ def load_descriptors_by_scan(
 
 def scan_descriptors_polars(
     parquet_path: str | Path
-) -> tuple[pl.LazyFrame, dict]:
+) -> tuple[pl.LazyFrame, dict[str, int]]:
     """
     使用 Polars 加载 parquet 描述符文件
 
@@ -483,12 +194,12 @@ def scan_descriptors_polars(
 
     df = pl.scan_parquet(parquet_path)
 
-    meta: dict[Any, Any] = _get_parquet_metadata(df)
+    meta: dict[str, int] = _get_parquet_metadata(df)
 
     return df, meta
 
 
-def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict:
+def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict[str, int]:
     """
     获取 parquet 文件的元数据（无需加载全部数据）
 
@@ -496,7 +207,7 @@ def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict:
         scan_parquet: polars scan_parquet 对象
 
     Returns:
-        dict: 包含 n_rows, n_columns, columns, dtypes 等信息
+        dict: 包含 n_rows, n_columns, columns信息
 
     """
 
@@ -509,7 +220,5 @@ def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict:
     return {
         "n_rows": n_rows,
         "n_columns": len(schema),
-        "columns": list(schema.names()),
-        "dtypes": {name: str(dtype) for name, dtype in schema.items()},
     }
 

@@ -5,52 +5,30 @@
 @author :YenochQin (秦毅)
 """
 
-from graspkit.data_IO.ml_cal_config_module import MLCalConfig
-
-
 import logging
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
+from numpy._typing._array_like import NDArray
+
 import polars as pl
 import rtoml
 
 from ..data_IO import (
-    load_config,
-    pkl_loader,
-    pkl_storage,
+    CalPath,
+    EnergyFileLoader,
+    MLCalConfig,
+    MixCoefLoader,
+    csfs_idxs_ci_loader,
+    csfs_idxs_ci_storage,
     save_descriptors,
     scan_descriptors_polars,
 )
-from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
-from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
-from ..utils.data_modules import MixCoefficientData
-from ..utils.environment_config import get_environment_config
-
-
-def setup_config(config_path: str | Path) -> MLCalConfig:
-    """
-    初始化机器学习配置并设置相关路径
-
-    Args:
-        config_path (str | Path): 配置文件的路径
-
-    Returns:
-        config: 配置对象，包含所有初始化后的路径和参数
-
-    该函数执行以下步骤：
-    1. 从指定路径加载配置文件
-    2. 调用配置对象的 setup_paths() 方法设置所有相关文件路径
-    3. 返回完整的配置对象
-    """
-    # 从配置文件路径加载配置信息
-    config = load_config(config_path)
-
-    # 调用配置对象的 setup_paths() 方法设置所有相关路径
-    config.setup_paths()
-
-    return config
+from ..utils import (
+    MixCoefficientData,
+    get_environment_config,
+)
 
 
 def setup_directories(root_path: Path):
@@ -60,8 +38,6 @@ def setup_directories(root_path: Path):
 
     for dir in directories:
         (root_path / dir).mkdir(parents=True, exist_ok=True)
-
-    return "目录创建成功"
 
 
 def setup_logging(log_dir: Path):
@@ -76,7 +52,7 @@ def setup_logging(log_dir: Path):
     log_level = getattr(logging, log_config["level"])
 
     # 创建处理器列表
-    handlers = []
+    handlers: list[logging.Handler] = []
     handlers.append(logging.FileHandler(log_dir / "ml_training.log", encoding="utf-8"))
 
     # 在调试模式下添加控制台输出
@@ -107,7 +83,9 @@ def setup_logging(log_dir: Path):
 
 
 def training_data_loader(
-    paths_cfg, cal_method: str, logger: logging.Logger
+    paths_cfg: CalPath,
+    cal_method: str,
+    logger: logging.Logger
 ) -> tuple[pl.LazyFrame, int, pl.DataFrame, MixCoefficientData, np.ndarray, int]:
     """加载数据文件
 
@@ -203,10 +181,10 @@ def training_data_loader(
 
 
 def check_configuration_coupling(
-    paths_cfg,
+    paths_cfg: CalPath,
     energy_level_data: pl.DataFrame,
     rmix_file_data: MixCoefficientData,
-    spectral_term: list,
+    spectral_term: list[str],
     cal_loop_num: int,
     logger: logging.Logger,
 ):
@@ -214,11 +192,11 @@ def check_configuration_coupling(
 
     优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
     """
-    cal_configuration_list = energy_level_data["configuration"].to_list()
+    cal_configuration_list: list[str] = energy_level_data["configuration"].to_list()
 
     # 优化1: 一次遍历同时构建计数和位置映射
-    term_positions = {}
-    actual_counts = Counter()
+    term_positions: dict[str, list[int]] = {}
+    actual_counts: Counter[str] = Counter()
 
     for idx, term in enumerate(cal_configuration_list):
         if term in spectral_term:
@@ -229,8 +207,8 @@ def check_configuration_coupling(
     expected_counts = Counter(spectral_term)
 
     # 检查并收集位置
-    spectral_term_positions = []
-    errors = []
+    spectral_term_positions: list[int] = []
+    errors: list[str] = []
 
     for term in expected_counts:
         expected = expected_counts[term]
@@ -276,7 +254,7 @@ def check_configuration_coupling(
 
 
 def check_energy_convergence(
-    config,
+    config: MLCalConfig,
     logger: logging.Logger,
     current_energy_data: pl.DataFrame,
     convergence_threshold: float = 0.001,
@@ -299,7 +277,7 @@ def check_energy_convergence(
         # 获取上一轮的能量数据文件路径
         previous_energy_path = (
             config.cal_settings.root_path
-            / f"{config.target.conf}_{config.loop_num}"
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}"
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_correct_levels.csv"
         )
 
@@ -348,15 +326,17 @@ def check_energy_convergence(
 
 
 def evaluate_calculation_convergence(
-    config, logger: logging.Logger, cal_loop_csfs_count: int
-):
+    config: MLCalConfig,
+    logger: logging.Logger,
+    cal_loop_csfs_count: int,
+) -> bool:
     """
     检查GRASP计算的收敛性
 
     使用最近三次计算结果的能级数据和组态数量数据，通过计算：
-    1. 每个能级的标准差
-    2. 组态数量的相对标准差
-    来判定收敛。
+    1. 三轮共有能级的跨轮次标准差均值（能级收敛）
+    2. 组态数量的相对标准差（CSF数量稳定性）
+    来判定收敛。两个条件同时满足才停止计算。
 
     Args:
         config: 配置对象
@@ -364,221 +344,163 @@ def evaluate_calculation_convergence(
         cal_loop_csfs_count: 当前轮的CSFs数量
 
     Returns:
-        bool: True表示继续计算, False表示已收敛停止计算
+        bool: True 表示继续计算，False 表示已收敛停止计算
     """
+    try:
+        current_loop = config.cal_settings.cal_loop_num
 
-    # 读取最近3次计算的能级数据
-    energy_data_list = []
+        # === 1. 加载最近三轮能级数据，取列 configuration 和 EnergyTotal ===
+        energy_frames: list[pl.DataFrame] = []
+        for i, loop_num in enumerate(range(current_loop - 2, current_loop + 1)):
+            csv_path = (
+                config.cal_settings.root_path
+                / f"{config.target.conf}_{loop_num}"
+                / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+            )
+            if not csv_path.exists():
+                logger.warning(f"未找到第{loop_num}轮能级数据: {csv_path}")
+                return True
+            energy_frames.append(
+                pl.read_csv(csv_path)
+                .select(["configuration", "EnergyTotal"])
+                .rename({"EnergyTotal": f"E{i}"})
+            )
+            logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
 
-    for i in range(3):
-        loop_num = (
-            config.cal_settings.cal_loop_num - 2 + i
-        )  # 前3次：当前-2, 当前-1, 当前
-        csv_path = (
-            config.cal_settings.root_path
-            / f"{config.target.conf}_{loop_num}"
-            / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+        # === 2. 三轮内连接取共有能级，向量化计算跨轮标准差均值 ===
+        merged = (
+            energy_frames[0]
+            .join(energy_frames[1], on="configuration", how="inner")
+            .join(energy_frames[2], on="configuration", how="inner")
+        )
+        if merged.height < energy_frames[0].height:
+            logger.warning(
+                f"部分 configuration 在某轮数据中缺失，"
+                f"仅对 {merged.height}/{energy_frames[0].height} 个共有能级计算收敛性"
+            )
+        energies: NDArray[np.float64] = np.asarray(merged.select(["E0", "E1", "E2"]).to_numpy(), dtype=np.float64)
+        per_level_std: NDArray[np.float64] = np.std(energies, axis=1)
+        avg_energy_std: float = np.mean(per_level_std).item()
+
+        # === 3. 加载三轮 CSF 数量（前两轮来自文件，当前轮来自参数）===
+        iteration_df = pl.read_csv(config.cal_path.iteration_results)
+        csfs_num: list[int] = []
+        for loop_num in range(current_loop - 2, current_loop):
+            row = iteration_df.filter(pl.col("cal_loop_num") == loop_num)
+            if row.height == 0:
+                logger.warning(f"未在 iteration_results.csv 中找到第{loop_num}轮数据")
+                return True
+            count = int(row["current_calculation_count"][0])
+            csfs_num.append(count)
+            logger.info(f"读取第{loop_num}轮组态数量: {count}")
+        csfs_num.append(cal_loop_csfs_count)
+        logger.info(f"读取第{current_loop}轮组态数量: {cal_loop_csfs_count}")
+
+        # === 4. 计算 CSF 数量相对标准差 ===
+        csfs_mean = float(np.mean(csfs_num))
+        csfs_std = float(np.std(csfs_num))
+        csfs_relative_std = csfs_std / csfs_mean if csfs_mean > 0 else csfs_std
+
+        # === 5. 读取阈值并判断收敛 ===
+        energy_threshold = config.cal_settings.energy_std_threshold
+        csfs_threshold = config.cal_settings.csfs_num_relative_std_threshold
+
+        energy_converged = avg_energy_std < energy_threshold
+        csfs_converged = csfs_relative_std < csfs_threshold
+
+        logger.info("收敛性统计:")
+        logger.info(f"  最近3轮组态数量: {csfs_num}")
+        logger.info(
+            f"  组态数量相对标准差: {csfs_relative_std:.4f}"
+            f" (阈值: {csfs_threshold:.4f}) → {'收敛' if csfs_converged else '未收敛'}"
+        )
+        logger.info(
+            f"  能级平均标准差:     {avg_energy_std:.5e}"
+            f" (阈值: {energy_threshold:.5e}) → {'收敛' if energy_converged else '未收敛'}"
         )
 
-        if csv_path.exists():
-            df = pl.read_csv(csv_path)
-            energy_data_list.append(df)
-            logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
-        else:
-            logger.warning(f"未找到第{loop_num}轮能级数据文件: {csv_path}")
-            return True  # 文件不存在，继续计算
+        if energy_converged and csfs_converged:
+            logger.info("能级和组态数量均已收敛，停止计算")
+            return False
 
-    if len(energy_data_list) < 3:
-        logger.warning("无法读取完整的3轮能级数据，继续计算")
-        return True
-
-    # 读取组态数量数据
-    csfs_num = []  # 存储每轮的组态数量
-    iteration_df = pl.read_csv(config.cal_path.iteration_results)
-    # 获取前两轮的组态数量
-    for i in range(2):  # 只读取前两轮
-        loop_num = config.cal_settings.cal_loop_num - 2 + i
-        # 查找对应轮次的数据
-        loop_data = iteration_df.filter(pl.col("cal_loop_num") == loop_num)
-        if loop_data.height > 0:
-            current_count = loop_data["current_calculation_count"][0]
-            csfs_num.append(current_count)
-            logger.info(f"读取第{loop_num}轮组态数量: {current_count}")
-        else:
-            logger.warning(f"在iteration_results.csv中未找到第{loop_num}轮的数据")
-            return True  # 数据不完整，继续计算
-    # 添加当前轮的CSFs数量
-    csfs_num.append(cal_loop_csfs_count)
-    logger.info(
-        f"读取第{config.cal_settings.cal_loop_num}轮组态数量: {cal_loop_csfs_count}"
-    )
-    # === 1. 能级标准差计算 ===
-    # 获取所有configuration
-    configurations = energy_data_list[0]["configuration"].to_list()
-
-    # 存储每个能级的标准差
-    std_deviations = []
-
-    for level_cfg in configurations:
-        # 获取该configuration在3轮计算中的能级值
-        energy_values = []
-        for df in energy_data_list:
-            if level_cfg in df["configuration"].to_list():
-                energy = df.filter(pl.col("configuration") == level_cfg)["EnergyTotal"][
-                    0
-                ]
-                energy_values.append(energy)
-            else:
-                logger.warning(
-                    f"在第{len(energy_values) + 1}轮数据中未找到configuration: {level_cfg}"
-                )
-                return True  # 数据不完整，继续计算
-
-        if len(energy_values) == 3:
-            # 计算标准差
-            energy_std = np.std(energy_values)
-            std_deviations.append(energy_std)
-
-            logger.info(
-                f"Configuration {level_cfg}: "
-                f"能级值={energy_values}, "
-                f"标准差={energy_std:.5e}"
-            )
-
-    # 计算所有能级的平均标准差
-    avg_energy_std = np.mean(std_deviations)
-
-    # === 2. 组态数量相对标准差计算 ===
-    # 计算组态数量的标准差和相对标准差
-    csfs_num_std = np.std(csfs_num)
-    csfs_num_mean = np.mean(csfs_num)
-
-    if csfs_num_mean > 0:
-        csfs_num_relative_std = csfs_num_std / csfs_num_mean
-    else:
-        csfs_num_relative_std = csfs_num_std  # 如果平均值为零，直接使用标准差
-
-    # 从配置文件读取收敛阈值（如果没有设置则使用默认值）
-    energy_std_threshold = getattr(
-        config.cal_settings, "energy_std_threshold", 1e-5
-    )  # 能级标准差阈值
-    csfs_num_relative_std_threshold = getattr(
-        config.cal_settings, "csfs_num_relative_std_threshold", 1e-3
-    )  # 组态数量相对标准差阈值（5%）
-
-    logger.info(f"收敛性统计:")
-    logger.info(f"  最近3轮组态数量: {csfs_num}")
-    logger.info(f"  组态数量平均值: {csfs_num_mean:.1f}")
-    logger.info(f"  组态数量标准差: {csfs_num_std:.2f}")
-    logger.info(
-        f"  组态数量相对标准差: {csfs_num_relative_std:.4f} (阈值: {csfs_num_relative_std_threshold:.4f})"
-    )
-    logger.info(
-        f"  能级平均标准差: {avg_energy_std:.5e} (阈值: {energy_std_threshold:.5e})"
-    )
-    logger.info(f"  能级标准差收敛: {avg_energy_std < energy_std_threshold}")
-    logger.info(
-        f"  组态数量相对标准差收敛: {csfs_num_relative_std < csfs_num_relative_std_threshold}"
-    )
-
-    # 判断收敛性：两个条件都满足才算收敛
-    energy_converged = avg_energy_std < energy_std_threshold
-    csfs_num_converged = csfs_num_relative_std < csfs_num_relative_std_threshold
-    is_converged = energy_converged and csfs_num_converged
-
-    if is_converged:
-        logger.info("能级和组态数量都已收敛，停止计算")
-        return False
-    else:
         if not energy_converged:
             logger.info("能级未完全收敛，继续计算")
-        if not csfs_num_converged:
+        if not csfs_converged:
             logger.info("组态数量未稳定收敛，继续计算")
+        return True
+
+    except Exception as e:
+        logger.error(f"收敛性检查过程中发生错误: {e}")
         return True
 
 
 def merge_historical_ci_data(
-    previous_idxs_ci_dict: dict, current_idxs_ci_dict: dict, logger: logging.Logger
+    previous_idxs: NDArray[np.int64],
+    previous_ci_squared: NDArray[np.float64],
+    current_idxs: NDArray[np.int64],
+    current_ci_squared: NDArray[np.float64], 
+    logger: logging.Logger
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    合并历史CI系数数据，取索引并集并以当前数据更新共有索引的CI系数
+    将历史轮次与当前轮次的 CI 系数平方数据合并为累积数据集。
 
     合并规则：
-    1. 取idxs的并集
-    2. 两个字典idxs中的交集对应的ci_squared使用当前数据中的值（更新制）
+    - 索引取并集，覆盖写入：先写历史数据，再用当前数据覆盖，
+      交集 CSF 的 CI 系数以当前轮次为准（反映最新自洽场收敛结果）。
+    - 并集索引经 np.union1d 排序，保证输出有序。
 
     Args:
-        previous_idxs_ci_dict: 历史CI数据字典，格式为
-        {"idxs": np.ndarray[...], "ci_squared": np.ndarray[...]}
-        current_idxs_ci_dict: 当前CI数据字典，格式为
-        {"idxs": np.ndarray[...], "ci_squared": np.ndarray[...]}
-        logger: 日志记录器
+        previous_idxs:      前序轮次累积的 CSF 索引，一维，shape (n_prev,)
+        previous_ci_squared: 前序轮次对应的 CI 系数平方，二维，shape (n_levels, n_prev)
+        current_idxs:       当前轮次参与计算的 CSF 索引，一维，shape (n_curr,)
+        current_ci_squared: 当前轮次对应的 CI 系数平方，二维，shape (n_levels, n_curr)
+        logger:             日志记录器
 
     Returns:
-        tuple[np.ndarray, np.ndarray]: 合并后的索引数组和CI系数平方数组
+        tuple:
+            merged_idxs:      合并后的 CSF 索引，一维，shape (n_merged,)，已排序
+            merged_ci_squared: 合并后的 CI 系数平方，二维，shape (n_levels, n_merged)
     """
 
-    # 获取历史数据和当前数据
-    previous_idxs = np.array(previous_idxs_ci_dict["idxs"])
-    previous_ci_squared = np.array(previous_idxs_ci_dict["ci_squared"])
+    # 取索引并集，np.union1d 保证结果升序且无重复
+    merged_idxs = np.union1d(previous_idxs, current_idxs)
 
-    current_idxs = np.array(current_idxs_ci_dict["idxs"])
-    current_ci_squared = np.array(current_idxs_ci_dict["ci_squared"])
+    # 用 searchsorted 在有序 merged_idxs 中定位历史/当前 CSF 各自的落点
+    prev_pos = np.searchsorted(merged_idxs, previous_idxs)
+    curr_pos = np.searchsorted(merged_idxs, current_idxs)
 
-    # 创建索引到CI系数的映射
-    # 注意：ci_squared的shape是(n_correct_levels, n_csfs)，需要转置使每个CSF对应一行
-    previous_ci_squared_t = previous_ci_squared.T
-    current_ci_squared_t = current_ci_squared.T
-    previous_dict = dict(zip(previous_idxs, previous_ci_squared_t))
-    current_dict = dict(zip(current_idxs, current_ci_squared_t))
+    # 以转置视图 (n_merged, n_levels) 按行赋值，避免非连续切片
+    # 先填历史数据，再用当前数据逐行覆盖——交集位置自动取当前轮次值
+    merged_ci_t = np.empty(
+        (len(merged_idxs), previous_ci_squared.shape[0]),
+        dtype=previous_ci_squared.dtype,
+    )
+    merged_ci_t[prev_pos] = previous_ci_squared.T
+    merged_ci_t[curr_pos] = current_ci_squared.T
+    merged_ci_squared = merged_ci_t.T  # 转回 (n_levels, n_merged)
 
-    # 获取索引的并集
-    all_idxs = set(previous_idxs) | set(current_idxs)
+    # |交集| = |历史| + |当前| - |并集|，无需额外构建 set
+    n_repeated = len(previous_idxs) + len(current_idxs) - len(merged_idxs)
+    n_new = len(current_idxs) - n_repeated
 
-    # 合并CI系数：对于交集索引，使用当前数据中的值
-    merged_idxs = []
-    merged_ci_squared = []
-
-    for idx in sorted(all_idxs):
-        merged_idxs.append(idx)
-
-        # 如果索引在两个字典中都存在，使用当前数据的CI系数
-        if idx in previous_dict and idx in current_dict:
-            merged_ci_squared.append(current_dict[idx])
-        # 如果只在历史数据中存在
-        elif idx in previous_dict:
-            merged_ci_squared.append(previous_dict[idx])
-        # 如果只在当前数据中存在
-        else:  # idx in current_dict
-            merged_ci_squared.append(current_dict[idx])
-
-    merged_idxs = np.array(merged_idxs)
-    # 转置回原始shape: (n_correct_levels, n_csfs)
-    merged_ci_squared = np.array(merged_ci_squared).T
-
-    logger.info(f"历史数据合并统计:")
+    logger.info("历史数据合并统计:")
     logger.info(f"历史数据CSFs数量: {len(previous_idxs)}")
     logger.info(f"当前数据CSFs数量: {len(current_idxs)}")
     logger.info(f"合并后CSFs数量: {len(merged_idxs)}")
-    logger.info(f"新增CSFs数量: {len(all_idxs - set(previous_idxs))}")
-    logger.info(f"重复CSFs数量: {len(set(previous_idxs) & set(current_idxs))}")
+    logger.info(f"新增CSFs数量: {n_new}")
+    logger.info(f"重复CSFs数量: {n_repeated}")
 
     return merged_idxs, merged_ci_squared
 
 
 def ci_idx_data_processor(
-    correct_levels_ci: np.ndarray,
-    caled_csfs_idxs_array: np.ndarray,
-    config,
+    correct_levels_ci: NDArray[np.float64],
+    caled_csfs_idxs_array: NDArray[np.int64],
+    config: MLCalConfig,
     logger: logging.Logger,
 ) -> np.ndarray:
     """
     处理CI系数数据，并与历史数据合并后保存
-
-    优化说明：
-    - 本轮计算生成的数据直接与历史数据合并
-    - 合并后的数据保存到 previous_idxs_ci_path 供下次使用
-    - 避免在 generate_train_csfs_descriptors 中的冗余读写操作
 
     Args:
         correct_levels_ci: 正确能级位置的CI系数
@@ -591,51 +513,51 @@ def ci_idx_data_processor(
     """
 
     # 保存正确能级位置的CI系数平方对应CSF总池索引（用于历史数据累积）
-    correct_levels_ci_2d = np.atleast_2d(correct_levels_ci)
-    correct_levels_ci_squared = (
+    correct_levels_ci_2d: NDArray[np.float64] = np.atleast_2d(correct_levels_ci)
+    correct_levels_ci_squared: NDArray[np.float64] = (
         correct_levels_ci_2d**2
     )  # shape: (n_correct_levels, n_current_csfs)
-
-    current_ci_squared_data_dict = {
-        "idxs": caled_csfs_idxs_array,  # CSF索引（对应总池）
-        "ci_squared": correct_levels_ci_squared,  # 对应的CI系数平方（正确能级 × 当前计算CSF）
-    }
 
     accumulated_idxs_ci_path = config.cal_path.accumulated_idxs_ci_path
     # 如果是第二轮及之后，读取历史数据并合并
     if config.cal_settings.cal_loop_num > 1:
         if accumulated_idxs_ci_path.exists():
             logger.info("读取历史CI系数数据并进行合并")
-            previous_idxs_ci_dict = pkl_loader(accumulated_idxs_ci_path)
+
+            previous_idxs, previous_ci_squared = csfs_idxs_ci_loader(accumulated_idxs_ci_path)
+
             accumulated_idxs, accumulated_ci_squared = merge_historical_ci_data(
-                previous_idxs_ci_dict, current_ci_squared_data_dict, logger
+                previous_idxs,
+                previous_ci_squared,
+                caled_csfs_idxs_array,
+                correct_levels_ci_squared,
+                logger
             )
-            accumulated_ci_data = {
-                "idxs": accumulated_idxs,
-                "ci_squared": accumulated_ci_squared,
-            }
         else:
-            logger.warning(
-                f"历史数据文件不存在: {accumulated_idxs_ci_path}，仅使用当前轮次数据"
+            raise FileNotFoundError(
+                f"历史CI数据文件不存在: {accumulated_idxs_ci_path}，"
+                f"第 {config.cal_settings.cal_loop_num} 轮计算依赖前序轮次保存的累积数据"
             )
-            accumulated_ci_data = current_ci_squared_data_dict
+            
     else:
         # 第一轮直接使用当前数据
-        accumulated_ci_data = current_ci_squared_data_dict
+        accumulated_idxs: NDArray[np.int64] = caled_csfs_idxs_array
+        accumulated_ci_squared: NDArray[np.float64] = correct_levels_ci_squared
 
     # 保存合并后的累积数据到 accumulated_idxs_ci_path（供下次计算使用）
 
-    pkl_storage(accumulated_ci_data, accumulated_idxs_ci_path)
+    csfs_idxs_ci_storage(accumulated_idxs_ci_path, accumulated_idxs, accumulated_ci_squared)
     logger.info(
-        f"保存累积CI系数数据: {accumulated_idxs_ci_path} "
-        f"(包含{len(accumulated_ci_data['idxs'])}个CSFs)"
+        f"保存累积CI系数数据: {accumulated_idxs_ci_path}(包含{len(accumulated_idxs)}个CSFs)"
     )
 
     return correct_levels_ci_squared
 
 
 def generate_train_csfs_descriptors(
-    config, raw_csfs_descriptors: np.ndarray, logger: logging.Logger
+    config: MLCalConfig,
+    raw_csfs_descriptors: NDArray[np.float64],
+    logger: logging.Logger
 ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
@@ -662,19 +584,7 @@ def generate_train_csfs_descriptors(
     if config.cal_settings.cal_loop_num > 1 and not accumulated_idxs_ci_path.exists():
         raise FileNotFoundError(f"累积CI系数文件不存在: {accumulated_idxs_ci_path}")
 
-    accumulated_ci_data = pkl_loader(accumulated_idxs_ci_path)
-    try:
-        assert "idxs" in accumulated_ci_data, "缺少子键 idxs"
-        assert "ci_squared" in accumulated_ci_data, "缺少子键 ci_squared"
-        assert accumulated_ci_data["idxs"] is not None, "idxs 值为空"
-        assert accumulated_ci_data["ci_squared"] is not None, "ci_squared 值为空"
-        logger.info("所有键值验证通过")
-    except AssertionError as e:
-        logger.error(f"验证失败: {e}")
-        raise
-
-    accumulated_idxs = accumulated_ci_data["idxs"]
-    accumulated_ci_squared = accumulated_ci_data["ci_squared"]
+    accumulated_idxs, accumulated_ci_squared = csfs_idxs_ci_loader(accumulated_idxs_ci_path)
 
     logger.info(f"训练数据统计")
     logger.info(f"CSF总数（累积）: {len(accumulated_idxs)}")
@@ -722,8 +632,9 @@ def generate_train_csfs_descriptors(
 
 
 def get_stay_descriptors(
-    raw_csfs_descriptors: np.ndarray, sampled_csfs_idxs_array: np.ndarray
-) -> np.ndarray:
+    raw_csfs_descriptors: NDArray[np.float64],
+    sampled_csfs_idxs_array: NDArray[np.int64]
+) -> NDArray[np.float64]:
     """
     找出不在sampled_csfs_idxs_array索引中的描述符
 

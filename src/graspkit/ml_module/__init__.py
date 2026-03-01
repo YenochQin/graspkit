@@ -7,7 +7,6 @@
 
 from .neural_network import ANNClassifier
 from .ml_initializer import (
-    setup_config,
     setup_logging,
     setup_directories,
     training_data_loader,
@@ -35,11 +34,18 @@ from .ml_results_analyzer import (
     ml_results_statistics
 )
 
+from .ml_regression_model import ANNRegressor
+from .ml_regression_trainer import (
+    generate_regression_train_descriptors,
+    train_regression_model,
+    evaluate_regression_model,
+    predict_regression_model,
+)
+
 __all__ = [
     # neural_network
     "ANNClassifier",
     # ml_initializer
-    "setup_config",
     "setup_logging",
     "setup_directories",
     "training_data_loader",
@@ -59,5 +65,12 @@ __all__ = [
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",
-    "ml_results_statistics"
+    "ml_results_statistics",
+    # ml_regression_model
+    "ANNRegressor",
+    # ml_regression_trainer
+    "generate_regression_train_descriptors",
+    "train_regression_model",
+    "evaluate_regression_model",
+    "predict_regression_model",
 ]

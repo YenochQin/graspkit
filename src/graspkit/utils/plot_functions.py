@@ -1,4 +1,9 @@
+# -*- encoding: utf-8 -*-
 """
+@Id :plot_functions.py
+@date :2026/02/28 10:37:58
+@author :YenochQin (秦毅)
+
 图表可视化工具模块
 
 提供各种专业的数据可视化图表函数，包括：
@@ -9,17 +14,14 @@
 所有图表函数都集成了fig_settings.py中的专业发表级图表设置。
 """
 import warnings
-
+import re
 import numpy as np
 import matplotlib.pyplot as plt
-
 
 from .fig_settings import (
         configure_matplotlib_for_publication,
         set_figure_size,
         set_color_scheme,
-        set_legend_size,
-        save_figure,
         optimize_for_plot_type,
         create_multi_subplot_figure,
         add_reference_lines_to_subplots,
@@ -27,9 +29,16 @@ from .fig_settings import (
     )
 
 
-def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None,
-                        figsize='double_column', color_scheme='nature',
-                        min_threshold=10, fontsize_scale=1.0):
+def inter_coupling_channel_bar(
+        categories,
+        quantity,
+        sum_squared_ci,
+        colors=None,
+        figsize='double_column',
+        color_scheme='nature',
+        min_threshold=10,
+        fontsize_scale=1.0
+    ):
     """
     创建专业的双轴柱状图，展示占比和贡献值
 
@@ -148,10 +157,16 @@ def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None
                    color=colors, alpha=0.7, edgecolor='black', linewidth=0.8)
 
     # 创建折线图（贡献值）
-    line = ax2.plot(range(len(categories)), sum_squared_ci, 'o-',
-                   color='darkred', linewidth=2, markersize=6,
-                   alpha=0.8, label='Contribution Value', markerfacecolor='white',
-                   markeredgewidth=2, markeredgecolor='darkred')
+    line = ax2.plot(
+                range(len(categories)),
+                sum_squared_ci,
+                'o-',
+                color='darkred',
+                linewidth=2, markersize=6,
+                alpha=0.8,
+                label='Contribution Value', markerfacecolor='white',
+                markeredgewidth=2,
+                markeredgecolor='darkred')
 
     # 添加数据标签
     for i, (bar, pct, val, cat) in enumerate(zip(bars, quantity_percent, sum_squared_ci, categories)):
@@ -200,18 +215,35 @@ def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None
         ax.spines['bottom'].set_linewidth(1)
 
     # 确保Y轴刻度标签位置正确
-    ax1.tick_params(axis='y', which='both', left=True, right=False,
-                   labelleft=True, labelright=False)
-    ax2.tick_params(axis='y', which='both', left=False, right=True,
-                   labelleft=False, labelright=True)
+    ax1.tick_params(
+        axis='y',
+        which='both',
+        left=True,
+        right=False,
+        labelleft=True,
+        labelright=False)
+    ax2.tick_params(
+        axis='y',
+        which='both',
+        left=False,
+        right=True,
+        labelleft=False,
+        labelright=True)
 
     # 设置X轴标签
     ax1.set_xticks(range(len(categories)))
-    ax1.set_xticklabels(categories, rotation=45, ha='right', fontsize=tick_fontsize)
+    ax1.set_xticklabels(
+        categories,
+        rotation=45,
+        ha='right',
+        fontsize=tick_fontsize)
 
     # 设置图例
     legend_fontsize = int(10 * fontsize_scale)
-    ax1.legend(handles=line, loc='upper right', fontsize=legend_fontsize)
+    ax1.legend(
+        handles=line,
+        loc='upper right',
+        fontsize=legend_fontsize)
 
     # 添加网格
     ax1.grid(True, alpha=0.3, axis='y')
@@ -223,21 +255,21 @@ def inter_coupling_channel_bar(categories, quantity, sum_squared_ci, colors=None
 
 
 def auto_plot_wavefunction_comparison(
-                                    data_list: list,
-                                    column_names: list[str],
-                                    x_col: str = 'r(a.u)',
-                                    labels: list[str] | None = None,
-                                    layout: str = '2x4',
-                                    alpha: float = 0.75,
-                                    max_x: int | None = None,
-                                    xscale: str = 'symlog',
-                                    linthresh: int = 1,
-                                    suptitle: str = 'Wavefunction Comparison',
-                                    colors  = None,
-                                    linestyles: list[str] | None = None,
-                                    xlabel: str | None = None,
-                                    ylabel: str | None = None
-                                ):
+        data_list: list,
+        column_names: list[str],
+        x_col: str = 'r(a.u)',
+        labels: list[str] | None = None,
+        layout: str = '2x4',
+        alpha: float = 0.75,
+        max_x: int | None = None,
+        xscale: str = 'symlog',
+        linthresh: int = 1,
+        suptitle: str = 'Wavefunction Comparison',
+        colors  = None,
+        linestyles: list[str] | None = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None
+    ):
     """
     自动绘制波函数对比图的通用函数，支持多个DataFrame对比
 
@@ -271,7 +303,6 @@ def auto_plot_wavefunction_comparison(
         Returns:
             str: 轨道名称，如 '4p-'
         """
-        import re
         match = re.search(r'\((.*?)\)', col_name)
         if match:
             return match.group(1)
@@ -321,10 +352,6 @@ def auto_plot_wavefunction_comparison(
         spacing='normal',
         color_scheme='nature'
     )
-
-    # 验证输入
-    if not isinstance(data_list, (list, tuple)):
-        raise ValueError("data_list must be a list or tuple of DataFrames")
 
     n_datasets = len(data_list)
 
@@ -432,11 +459,13 @@ def auto_plot_wavefunction_comparison(
             # 计算 P²+Q²
             p_squared_plus_q_squared = data[p_col]**2 + data[q_col]**2
 
-            axes[row, col].plot(np.sqrt(data[x_col]), p_squared_plus_q_squared,
-                               alpha=alpha,
-                               label=labels[j],
-                               color=colors[j],
-                               linestyle=linestyles[j])
+            axes[row, col].plot(
+                np.sqrt(data[x_col]), p_squared_plus_q_squared,
+                alpha=alpha,
+                label=labels[j],
+                color=colors[j],
+                linestyle=linestyles[j]
+                )
 
         # 设置x轴
         axes[row, col].set_xlim(0, max_x)
@@ -460,7 +489,9 @@ def auto_plot_wavefunction_comparison(
     # 配置子图网格，使用轨道名称作为标题
     orbital_titles = [group['orbital'] for group in orbital_groups[:nrows*ncols]]
     configure_subplot_grid(
-        fig, axes, layout=layout,
+        fig,
+        axes,
+        layout=layout,
         title=orbital_titles,
         suptitle=suptitle
     )

@@ -31,7 +31,7 @@ from sklearn.metrics import (
 
 def _set_random_seed(seed: int) -> None:
     """设置所有相关库的随机种子以保证可重复性"""
-    torch.manual_seed(seed)
+    torch.manual_seed(seed)# type: ignore[reportUnknownMemberType]
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
@@ -215,7 +215,7 @@ class ANNClassifier:
                 self.criterion = nn.CrossEntropyLoss()
 
         # 训练历史记录
-        self.training_history = {"train_loss": [], "val_loss": [], "val_accuracy": []}
+        self.training_history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "val_accuracy": []}
 
         self.logger = logging.getLogger(__name__)
 
@@ -252,7 +252,8 @@ class ANNClassifier:
         for module in model.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
+                if module.bias is not None:  # type: ignore[reportUnnecessaryComparison]
+                    #这是 PyTorch 类型存根的不准确之处——nn.Linear.bias 实际上可以是None（当 nn.Linear(..., bias=False) 时），但存根中将其标注为Parameter 而非 Parameter | None。代码逻辑本身是正确的。
                     nn.init.zeros_(module.bias)
 
     def fit(
@@ -349,7 +350,7 @@ class ANNClassifier:
                 if val_loss < best_val_loss - min_delta:
                     best_val_loss = val_loss
                     patience_counter = 0
-                    best_model_state = self.model.state_dict().copy()
+                    best_model_state = {k: v.clone() for k, v in self.model.state_dict().items()}
                 else:
                     patience_counter += 1
 
@@ -412,9 +413,14 @@ class ANNClassifier:
             outputs = self.model(X_val)
             loss = self.criterion(outputs, y_val)
 
-            _, predicted = torch.max(outputs.data, 1)
-            total = y_val.size(0)
-            correct = (predicted == y_val).sum().item()
+            if self.multi_label:
+                predicted = (torch.sigmoid(outputs) > 0.5).float()
+                total = y_val.numel()
+                correct = (predicted == y_val).sum().item()
+            else:
+                _, predicted = torch.max(outputs, 1)
+                total = y_val.size(0)
+                correct = (predicted == y_val).sum().item()
 
             total_loss = loss.item()
             accuracy = correct / total
@@ -465,7 +471,6 @@ class ANNClassifier:
 
         # 计算比例
         pos_ratios = pos_counts / n_samples
-        neg_ratios = 1.0 - pos_ratios
 
         if focus_on_recall:
             # --- 向量化逻辑开始 ---
@@ -623,7 +628,7 @@ class ANNClassifier:
         """
         self.model.eval()
         num_samples = X.shape[0]
-        all_proba = []
+        all_proba: list[np.ndarray] = []
 
         with torch.no_grad():
             for i in range(0, num_samples, batch_size):
@@ -656,7 +661,10 @@ class ANNClassifier:
         return (proba[:, 1] > threshold).astype(int)
 
     def evaluate(
-        self, X: np.ndarray, y: np.ndarray, verbose: bool = True
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        verbose: bool = True
     ) -> dict[str, float]:
         """
         评估模型性能
@@ -685,21 +693,21 @@ class ANNClassifier:
 
         if self.multi_label:
             # 多标签评估指标（使用 average='samples' 计算每个样本的平均指标）
-            metrics = {
-                "accuracy": accuracy_score(y.flatten(), y_pred.flatten()),
-                "f1_score": f1_score(y, y_pred, average="samples"),
-                "precision": precision_score(y, y_pred, average="samples"),
-                "recall": recall_score(y, y_pred, average="samples"),
+            metrics: dict[str, float] = {
+                "accuracy": float(accuracy_score(y.flatten(), y_pred.flatten())),
+                "f1_score": float(f1_score(y, y_pred, average="samples")),
+                "precision": float(precision_score(y, y_pred, average="samples")),
+                "recall": float(recall_score(y, y_pred, average="samples")),
             }
             # 注意：ROC AUC 在多标签情况下计算方式不同，这里简化处理
         else:
             # 单标签评估指标
             metrics = {
-                "accuracy": accuracy_score(y, y_pred),
-                "f1_score": f1_score(y, y_pred),
-                "precision": precision_score(y, y_pred),
-                "recall": recall_score(y, y_pred),
-                "roc_auc": roc_auc_score(y, y_probability),
+                "accuracy": float(accuracy_score(y, y_pred)),
+                "f1_score": float(f1_score(y, y_pred)),
+                "precision": float(precision_score(y, y_pred)),
+                "recall": float(recall_score(y, y_pred)),
+                "roc_auc": float(roc_auc_score(y, y_probability)),
             }
 
         if verbose:
@@ -710,43 +718,6 @@ class ANNClassifier:
             print(f"ROC AUC: {metrics['roc_auc']:.4f}")
 
         return metrics
-
-    def plot_roc_curve(self, X: np.ndarray, y: np.ndarray) -> None:
-        """
-        绘制ROC曲线
-
-        Args:
-            X: 输入数据
-            y: 真实标签
-        """
-        self.model.eval()
-        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
-
-        with torch.no_grad():
-            outputs = self.model(X_tensor)
-            if self.multi_label:
-                # 多标签分类：使用 sigmoid
-                y_probability = torch.sigmoid(outputs).cpu().numpy()
-            else:
-                # 单标签分类：使用 softmax
-                y_probability = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
-
-        if not self.multi_label:
-            fpr, tpr, _ = roc_curve(y, y_probability)
-            plt.figure()
-            plt.plot(
-                fpr,
-                tpr,
-                label=f"ROC Curve (AUC = {roc_auc_score(y, y_probability):.4f})",
-            )
-            plt.title("ROC Curve")
-            plt.xlabel("False Positive Rate")
-            plt.ylabel("True Positive Rate")
-            plt.legend(loc="lower right")
-            plt.show()
-        else:
-            # 多标签 ROC 曲线需要特殊处理，这里简化处理
-            self.logger.warning("多标签分类的 ROC 曲线绘制尚未实现")
 
     def save_model(self, path: str) -> None:
         """保存模型完整状态"""
@@ -766,7 +737,11 @@ class ANNClassifier:
         }
         torch.save(save_dict, path)
 
-    def load_model(self, path: str, device: str | None = None) -> "ANNClassifier":
+    def load_model(
+        self,
+        path: str,
+        device: str | None = None
+        ) -> ANNClassifier:
         """加载模型"""
         checkpoint = torch.load(path, map_location=device or self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
@@ -783,7 +758,7 @@ class ANNClassifier:
         y_probability: np.ndarray,
         filename: str,
         level_title: str = "Ci Values vs Predicted Probability",
-    ):
+    ) -> tuple[float, float]:
         """
         绘制评估曲线（支持多标签分类）
 
@@ -924,7 +899,7 @@ class ANNClassifier:
         plt.savefig(filename)
         plt.close()
 
-        return roc_auc, pr_auc
+        return float(roc_auc), float(pr_auc)
 
     @staticmethod
     def model_evaluation(
@@ -967,7 +942,9 @@ class ANNClassifier:
 
     @staticmethod
     def resampling(
-        X_train: np.ndarray, y_train: np.ndarray, weight: list[float]
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        weight: list[float]
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         数据重采样（上采样）- 增加少数类样本
@@ -1007,7 +984,9 @@ class ANNClassifier:
 
     @staticmethod
     def downsampling(
-        X_train: np.ndarray, y_train: np.ndarray, weight: list[float]
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        weight: list[float]
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         数据下采样 - 减少多数类样本
@@ -1050,28 +1029,8 @@ class ANNClassifier:
         return X_resampled, y_resampled
 
     @staticmethod
-    def print_gpu_memory() -> None:
-        """打印GPU内存使用情况"""
-        if not torch.cuda.is_available():
-            print("CUDA not available")
-            return
-
-        # 总内存
-        total_memory = torch.cuda.get_device_properties(0).total_memory
-        # 当前分配的内存
-        allocated_memory = torch.cuda.memory_allocated(0)
-        # 缓存的内存
-        cached_memory = torch.cuda.memory_reserved(0)
-
-        # 转换为 GiB 并打印
-        print(f"GPU 总内存: {total_memory / 1024**3:.2f} GiB")
-        print(f"已分配内存: {allocated_memory / 1024**3:.2f} GiB")
-        print(f"缓存内存: {cached_memory / 1024**3:.2f} GiB")
-        print(f"可用内存: {(total_memory - allocated_memory) / 1024**3:.2f} GiB")
-
-    @staticmethod
     def predict_in_batches(
-        model: "ANNClassifier",
+        model: ANNClassifier,
         X: np.ndarray,
         batch_size: int = 4000000,
         predict_proba: bool = False,
@@ -1091,7 +1050,7 @@ class ANNClassifier:
             完整的预测结果
         """
         n_samples = X.shape[0]
-        result = []
+        result: list[np.ndarray] = []
 
         # 确定预测方法
         predict_func = model.predict_proba if predict_proba else model.predict
@@ -1106,8 +1065,7 @@ class ANNClassifier:
             batch_X = X[i : i + batch_size]
             batch_pred = predict_func(batch_X)
 
-            # 如果是概率预测且需要提取特定列
-            if predict_proba and proba_index is not None:
+            if predict_proba:
                 batch_pred = batch_pred[:, proba_index]
 
             result.append(batch_pred)
@@ -1139,8 +1097,6 @@ class ANNClassifier:
             return self._permutation_importance(X, y)
         elif method == "gradient":
             return self._gradient_importance(X)
-        else:
-            raise ValueError("方法必须是 'permutation' 或 'gradient'")
 
     def _permutation_importance(
         self, X: np.ndarray, y: np.ndarray | None = None, n_repeats: int = 10
@@ -1157,10 +1113,10 @@ class ANNClassifier:
         else:
             baseline_score = self.evaluate(X, y, verbose=False)["accuracy"]
 
-        importance_scores = []
+        importance_scores: list[float] = []
 
         for feature_idx in range(X.shape[1]):
-            scores = []
+            scores: list[float] = []
             for _ in range(n_repeats):
                 X_permuted = X.copy()
                 X_permuted[:, feature_idx] = np.random.permutation(
@@ -1176,7 +1132,7 @@ class ANNClassifier:
                         "accuracy"
                     ]
                 scores.append(baseline_score - permuted_score)
-            importance_scores.append(np.mean(scores))
+            importance_scores.append(float(np.mean(scores)))
 
         return np.array(importance_scores)
 
@@ -1201,4 +1157,4 @@ class ANNClassifier:
             gradients = X_tensor.grad.abs().mean(dim=0)
             return gradients.cpu().numpy()
         else:
-            return np.zeros(X.shape[1])
+            return np.zeros(X.shape[1], dtype=np.float64)

@@ -5,11 +5,6 @@
 @author :YenochQin (秦毅)
 """
 
-from typing import Any
-
-
-######################################################################
-
 
 def str_subshell_2_kappa(str_subshell: str) -> int:
     r"""

@@ -30,9 +30,13 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 from cycler import cycler
+from matplotlib.axes import Axes
+from matplotlib.cm import ScalarMappable
+from matplotlib.colorbar import Colorbar
+from matplotlib.figure import Figure
 
 
-def configure_matplotlib_for_publication():
+def configure_matplotlib_for_publication() -> bool:
     """
     配置matplotlib用于科学发表的图表样式
 
@@ -102,7 +106,7 @@ def configure_matplotlib_for_publication():
         return False
 
 
-def disable_font_warnings():
+def disable_font_warnings() -> bool:
     """
     禁用matplotlib字体相关警告
     作为备用方案，在字体配置失败时使用
@@ -134,7 +138,7 @@ def disable_font_warnings():
         # 设置matplotlib日志级别
         import logging
 
-        mpl_logger = logging.getLogger("matplotlib")
+        mpl_logger: logging.Logger = logging.getLogger("matplotlib")
         mpl_logger.setLevel(logging.ERROR)
 
         return True
@@ -145,7 +149,7 @@ def disable_font_warnings():
 
 
 # 科学期刊配色方案
-JOURNAL_COLOR_SCHEMES = {
+JOURNAL_COLOR_SCHEMES: dict[str, list[str]] = {
     "nature": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"],
     "science": ["#0173b2", "#de8f05", "#029e73", "#cc78bc", "#ca9161", "#fbafe4"],
     "prl": ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33"],
@@ -154,7 +158,7 @@ JOURNAL_COLOR_SCHEMES = {
 }
 
 # 预设图表尺寸（单位：英寸）
-FIGURE_SIZES = {
+FIGURE_SIZES: dict[str, tuple[float, float]] = {
     "single_column": (3.5, 2.6),  # 单栏图
     "double_column": (7.2, 5.4),  # 双栏图
     "square": (5.0, 5.0),  # 正方形
@@ -165,7 +169,7 @@ FIGURE_SIZES = {
 }
 
 # 多子图布局预设
-SUBPLOT_LAYOUTS = {
+SUBPLOT_LAYOUTS: dict[str, tuple[int, int] | None] = {
     "1x1": (1, 1),  # 单图
     "1x2": (1, 2),  # 1行2列
     "2x1": (2, 1),  # 2行1列
@@ -182,7 +186,7 @@ SUBPLOT_LAYOUTS = {
 }
 
 # 多子图间距预设（单位：英寸）
-SUBPLOT_SPACING = {
+SUBPLOT_SPACING: dict[str, dict[str, float]] = {
     "tight": {"wspace": 0.1, "hspace": 0.1},  # 紧密间距
     "compact": {"wspace": 0.2, "hspace": 0.2},  # 紧凑间距
     "normal": {"wspace": 0.3, "hspace": 0.3},  # 正常间距
@@ -191,7 +195,7 @@ SUBPLOT_SPACING = {
 }
 
 # 多子图尺寸调整因子
-SUBPLOT_SIZE_FACTORS = {
+SUBPLOT_SIZE_FACTORS: dict[str, float] = {
     "1x1": 1.0,
     "1x2": 2.0,
     "2x1": 2.0,
@@ -207,7 +211,7 @@ SUBPLOT_SIZE_FACTORS = {
 }
 
 # 保存格式设置
-SAVE_FORMATS = {
+SAVE_FORMATS: dict[str, dict[str, int | str | None]] = {
     "publication": {"dpi": 600, "format": "pdf", "quality": 100},
     "presentation": {"dpi": 150, "format": "png", "quality": 90},
     "web": {"dpi": 100, "format": "png", "quality": 85},
@@ -216,7 +220,7 @@ SAVE_FORMATS = {
 }
 
 # 图例尺寸预设
-LEGEND_SIZE_PRESETS = {
+LEGEND_SIZE_PRESETS: dict[str, dict[str, int | float]] = {
     "small": {
         "fontsize": 8,
         "title_fontsize": 10,
@@ -257,7 +261,7 @@ LEGEND_SIZE_PRESETS = {
 
 
 # Legend parameter key mapping
-_LEGEND_KEY_MAPPING = {
+_LEGEND_KEY_MAPPING: dict[str, str] = {
     "fontsize": "legend.fontsize",
     "title_fontsize": "legend.title_fontsize",
     "handlelength": "legend.handlelength",
@@ -268,30 +272,54 @@ _LEGEND_KEY_MAPPING = {
 }
 
 
-def set_legend_size(preset="medium", **kwargs):
+def set_legend_size(
+    preset: str = "medium",
+    fontsize: int | None = None,
+    title_fontsize: int | None = None,
+    handlelength: float | None = None,
+    handletextpad: float | None = None,
+    borderpad: float | None = None,
+    labelspacing: float | None = None,
+    columnspacing: float | None = None,
+) -> bool:
     """
     设置图例大小和样式
 
     Args:
         preset (str): 预设名称 ('small', 'medium', 'large', 'poster')
-        **kwargs: 自定义图例参数，会覆盖预设值
+        fontsize: 覆盖预设的图例字体大小
+        title_fontsize: 覆盖预设的图例标题字体大小
+        handlelength: 覆盖预设的图例句柄长度
+        handletextpad: 覆盖预设的句柄与文字间距
+        borderpad: 覆盖预设的图例边框内边距
+        labelspacing: 覆盖预设的标签间距
+        columnspacing: 覆盖预设的列间距
 
     Returns:
         bool: 设置是否成功
     """
     try:
         if preset in LEGEND_SIZE_PRESETS:
-            settings = LEGEND_SIZE_PRESETS[preset]
+            settings: dict[str, int | float] = LEGEND_SIZE_PRESETS[preset]
 
             # 应用预设设置
             for key, value in settings.items():
                 if key in _LEGEND_KEY_MAPPING:
                     plt.rcParams[_LEGEND_KEY_MAPPING[key]] = value
 
-            # 应用自定义参数（覆盖预设）
-            for key, value in kwargs.items():
-                if key in _LEGEND_KEY_MAPPING:
-                    plt.rcParams[_LEGEND_KEY_MAPPING[key]] = value
+            # 应用显式覆盖参数（优先级高于预设）
+            overrides: dict[str, int | float | None] = {
+                "fontsize": fontsize,
+                "title_fontsize": title_fontsize,
+                "handlelength": handlelength,
+                "handletextpad": handletextpad,
+                "borderpad": borderpad,
+                "labelspacing": labelspacing,
+                "columnspacing": columnspacing,
+            }
+            for key, val in overrides.items():
+                if val is not None and key in _LEGEND_KEY_MAPPING:
+                    plt.rcParams[_LEGEND_KEY_MAPPING[key]] = val
 
             return True
         else:
@@ -302,7 +330,7 @@ def set_legend_size(preset="medium", **kwargs):
         return False
 
 
-def set_color_scheme(scheme="default"):
+def set_color_scheme(scheme: str = "default") -> bool:
     """
     设置配色方案
 
@@ -314,7 +342,7 @@ def set_color_scheme(scheme="default"):
     """
     try:
         if scheme in JOURNAL_COLOR_SCHEMES:
-            colors = JOURNAL_COLOR_SCHEMES[scheme]
+            colors: list[str] = JOURNAL_COLOR_SCHEMES[scheme]
             plt.rcParams["axes.prop_cycle"] = cycler(color=colors)
             return True
         else:
@@ -325,7 +353,7 @@ def set_color_scheme(scheme="default"):
         return False
 
 
-def set_figure_size(size_name="default"):
+def set_figure_size(size_name: str = "default") -> tuple[float, float]:
     """
     设置图表尺寸
 
@@ -342,7 +370,7 @@ def set_figure_size(size_name="default"):
         return FIGURE_SIZES["default"]
 
 
-def configure_for_latex():
+def configure_for_latex() -> bool:
     """
     配置LaTeX兼容性设置
 
@@ -362,7 +390,7 @@ def configure_for_latex():
         return False
 
 
-def save_figure(fig, filename, purpose="publication", **kwargs):
+def save_figure(fig: Figure, filename: str, purpose: str = "publication", **kwargs) -> bool:
     """
     保存图表，根据用途优化设置
 
@@ -377,8 +405,8 @@ def save_figure(fig, filename, purpose="publication", **kwargs):
     """
     try:
         if purpose in SAVE_FORMATS:
-            settings = SAVE_FORMATS[purpose]
-            save_kwargs = {
+            settings: dict[str, int | str | None] = SAVE_FORMATS[purpose]
+            save_kwargs: dict[str, str | int | float | bool | None] = {
                 "dpi": settings["dpi"],
                 "bbox_inches": "tight",
                 "pad_inches": 0.1,
@@ -400,7 +428,7 @@ def save_figure(fig, filename, purpose="publication", **kwargs):
         return False
 
 
-def optimize_for_plot_type(plot_type):
+def optimize_for_plot_type(plot_type: str) -> bool:
     """
     针对不同图表类型进行优化设置
 
@@ -437,8 +465,10 @@ def optimize_for_plot_type(plot_type):
 
 
 def create_publication_figure(
-    figsize="single_column", color_scheme="default", legend_size="medium"
-):
+    figsize: str | tuple[float, float] = "single_column",
+    color_scheme: str = "default",
+    legend_size: str = "medium",
+) -> tuple[Figure, Axes]:
     """
     创建适合发表的图表
 
@@ -466,7 +496,7 @@ def create_publication_figure(
     return fig, ax
 
 
-def _get_axes_at(axes, i, j):
+def _get_axes_at(axes: Axes | np.ndarray, i: int, j: int) -> Axes:
     """
     安全地获取axes数组中的特定位置的ax对象
 
@@ -495,7 +525,7 @@ def _get_axes_at(axes, i, j):
     return axes[i, j]
 
 
-def get_subplot_layout(layout_name):
+def get_subplot_layout(layout_name: str) -> tuple[int, int]:
     """
     获取多子图布局配置，支持正则匹配任意布局
 
@@ -514,8 +544,8 @@ def get_subplot_layout(layout_name):
     match = re.match(pattern, layout_name.strip())
 
     if match:
-        nrows = int(match.group(1))
-        ncols = int(match.group(2))
+        nrows: int = int(match.group(1))
+        ncols: int = int(match.group(2))
 
         # 检查行列数的合理性
         if nrows > 0 and ncols > 0 and nrows <= 20 and ncols <= 20:
@@ -528,7 +558,11 @@ def get_subplot_layout(layout_name):
         return (1, 1)
 
 
-def calculate_subplot_figure_size(base_size, layout_name, spacing="normal"):
+def calculate_subplot_figure_size(
+    base_size: str | tuple[float, float],
+    layout_name: str,
+    spacing: str = "normal",
+) -> tuple[float, float]:
     """
     计算多子图的整体尺寸
 
@@ -572,17 +606,17 @@ def calculate_subplot_figure_size(base_size, layout_name, spacing="normal"):
 
 
 def create_multi_subplot_figure(
-    layout="2x2",
-    base_size="single_column",
-    spacing="normal",
-    color_scheme="default",
-    legend_size="medium",
-    sharex=False,
-    sharey=False,
-    squeeze=False,
-    subplot_kw=None,
-    gridspec_kw=None,
-):
+    layout: str = "2x2",
+    base_size: str | tuple[float, float] = "single_column",
+    spacing: str = "normal",
+    color_scheme: str = "default",
+    legend_size: str = "medium",
+    sharex: bool | str = False,
+    sharey: bool | str = False,
+    squeeze: bool = False,
+    subplot_kw: dict[str, str | int | float | bool] | None = None,
+    gridspec_kw: dict[str, float] | None = None,
+) -> tuple[Figure, np.ndarray]:
     """
     创建多子图
 
@@ -609,7 +643,7 @@ def create_multi_subplot_figure(
 
     # 准备gridspec参数
     if gridspec_kw is None:
-        gridspec_kw = {}
+        gridspec_kw: dict[str, float] = {}
 
     # 添加间距设置
     if spacing in SUBPLOT_SPACING:
@@ -638,17 +672,17 @@ def create_multi_subplot_figure(
 
 
 def add_reference_lines_to_subplots(
-    axes,
-    layout="2x2",
-    y_values=None,
-    x_values=None,
-    y_styles=None,
-    x_styles=None,
-    y_colors=None,
-    x_colors=None,
-    y_labels=None,
-    x_labels=None,
-):
+    axes: Axes | np.ndarray,
+    layout: str = "2x2",
+    y_values: list[float] | None = None,
+    x_values: list[float] | None = None,
+    y_styles: str | list[str] | None = None,
+    x_styles: str | list[str] | None = None,
+    y_colors: str | list[str] | None = None,
+    x_colors: str | list[str] | None = None,
+    y_labels: str | list[str | None] | None = None,
+    x_labels: str | list[str | None] | None = None,
+) -> bool:
     """
     为所有子图添加参考线（如y=0的辅助线）
 
@@ -758,16 +792,16 @@ def add_reference_lines_to_subplots(
 
 
 def configure_subplot_grid(
-    fig,
-    axes,
-    layout="2x2",
-    title=None,
-    subtitle=None,
-    xlabel=None,
-    ylabel=None,
-    suptitle=None,
-    suptitle_fontsize=16,
-):
+    fig: Figure,
+    axes: Axes | np.ndarray,
+    layout: str = "2x2",
+    title: str | list[str | None] | None = None,
+    subtitle: str | list[str | None] | None = None,
+    xlabel: str | list[str | None] | None = None,
+    ylabel: str | list[str | None] | None = None,
+    suptitle: str | None = None,
+    suptitle_fontsize: int = 16,
+) -> bool:
     """
     配置多子图的网格属性
 
@@ -863,14 +897,14 @@ def configure_subplot_grid(
 
 
 def create_shared_colorbar(
-    fig,
-    mappable,
-    cbar_label=None,
-    orientation="vertical",
-    location="right",
-    shrink=0.8,
-    pad=0.05,
-):
+    fig: Figure,
+    mappable: ScalarMappable,
+    cbar_label: str | None = None,
+    orientation: str = "vertical",
+    location: str = "right",
+    shrink: float = 0.8,
+    pad: float = 0.05,
+) -> Colorbar | None:
     """
     为多子图创建共享的颜色条
 
@@ -925,8 +959,13 @@ def create_shared_colorbar(
 
 
 def save_multi_subplot_figure(
-    fig, filename, layout="2x2", purpose="publication", tight_layout=True, **kwargs
-):
+    fig: Figure,
+    filename: str,
+    layout: str = "2x2",
+    purpose: str = "publication",
+    tight_layout: bool = True,
+    **kwargs,
+) -> bool:
     """
     保存多子图
 
@@ -962,7 +1001,10 @@ def save_multi_subplot_figure(
         return False
 
 
-def optimize_for_multi_subplot(plot_types, layout="2x2"):
+def optimize_for_multi_subplot(
+    plot_types: str | list[str],
+    layout: str = "2x2",
+) -> bool:
     """
     为多子图的不同图表类型进行优化设置
 
@@ -980,7 +1022,7 @@ def optimize_for_multi_subplot(plot_types, layout="2x2"):
             plot_types = [plot_types] * (nrows * ncols)
 
         # 为多子图优化字体大小
-        font_scale = min(1.0, 2.0 / max(nrows, ncols))
+        font_scale: float = min(1.0, 2.0 / max(nrows, ncols))
         plt.rcParams["font.size"] = int(12 * font_scale)
         plt.rcParams["axes.labelsize"] = int(10 * font_scale)
         plt.rcParams["xtick.labelsize"] = int(8 * font_scale)
@@ -989,7 +1031,7 @@ def optimize_for_multi_subplot(plot_types, layout="2x2"):
         plt.rcParams["axes.titlesize"] = int(10 * font_scale)
 
         # 优化线条和标记大小
-        marker_scale = min(1.0, 1.5 / max(nrows, ncols))
+        marker_scale: float = min(1.0, 1.5 / max(nrows, ncols))
         plt.rcParams["lines.markersize"] = int(6 * marker_scale)
         plt.rcParams["lines.linewidth"] = max(0.5, 1.5 * marker_scale)
 
@@ -1000,11 +1042,11 @@ def optimize_for_multi_subplot(plot_types, layout="2x2"):
 
 
 def init_publication_style(
-    color_scheme="default",
-    figsize="single_column",
-    legend_size="medium",
-    use_latex=False,
-):
+    color_scheme: str = "default",
+    figsize: str = "single_column",
+    legend_size: str = "medium",
+    use_latex: bool = False,
+) -> tuple[float, float]:
     """
     一键初始化科学发表级别的matplotlib配置
 

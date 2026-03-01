@@ -8,7 +8,11 @@
 import math
 
 
-def calculate_deformation(Z, A, spin_I, Q_s):
+def calculate_deformation(
+    Z: int,
+    A: int,
+    spin_I: float,
+    Q_s: float):
     """
     根据原子核参数计算内禀电四极矩和四极形变参数。
 

@@ -167,3 +167,8 @@ gpu = { features = ["gpu"], solve-group = "default" }
 dev-gpu = { features = ["dev", "gpu"], solve-group = "default" }
 
 [tool.pixi.tasks]
+
+[dependency-groups]
+dev = [
+    "scikit-learn-stubs>=0.0.3",
+]
