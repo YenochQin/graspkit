@@ -8,20 +8,41 @@
 
 import os
 import sys
-from typing import Any
+from typing import NotRequired, TextIO, TypedDict
+
+
+class EnvironmentInfo(TypedDict):
+    is_slurm: bool
+    is_debug: bool
+    is_interactive: bool
+    is_production: bool
+    cpu_count: int
+    slurm_job_id: str | None
+    slurm_procid: str | None
+    slurm_localid: str | None
+    slurm_task_pid: str | None
+
+
+class ProgressConfig(TypedDict):
+    disable: bool
+    leave: bool
+    dynamic_ncols: bool
+    file: NotRequired[TextIO]
+    colour: NotRequired[str]
 
 
 class EnvironmentConfig:
     """环境配置管理器，用于检测运行环境和设置相应的配置"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._is_slurm = self._detect_slurm_environment()
+        self._is_interactive = self._detect_interactive()
         self._is_debug = self._detect_debug_mode()
         self._cpu_count = os.cpu_count() or 4
 
     def _detect_slurm_environment(self) -> bool:
         """检测是否在SLURM环境中运行"""
-        slurm_indicators = [
+        slurm_indicators: list[str] = [
             "SLURM_JOB_ID",
             "SLURM_PROCID",
             "SLURM_LOCALID",
@@ -38,14 +59,19 @@ class EnvironmentConfig:
             return True
 
         # 检查命令行参数
-        if "--debug" in sys.argv or "-d" in sys.argv:
-            return True
-
-        # 检查是否通过交互式环境运行
-        if hasattr(sys, "ps1") or sys.flags.interactive:
+        if "--debug" in sys.argv:
             return True
 
         return False
+
+    def _detect_interactive(self) -> bool:
+        """检测是否在交互式环境（REPL/Jupyter）中运行"""
+        return hasattr(sys, "ps1") or bool(sys.flags.interactive)
+
+    @property
+    def is_interactive(self) -> bool:
+        """是否在交互式环境（REPL/Jupyter）中运行"""
+        return self._is_interactive
 
     @property
     def is_slurm_environment(self) -> bool:
@@ -67,18 +93,21 @@ class EnvironmentConfig:
         """系统CPU核心数"""
         return self._cpu_count
 
-    def get_environment_info(self) -> dict[str, Any]:
+    def get_environment_info(self) -> EnvironmentInfo:
         """获取环境信息摘要"""
         return {
             "is_slurm": self.is_slurm_environment,
             "is_debug": self.is_debug_mode,
+            "is_interactive": self.is_interactive,
             "is_production": self.is_production_mode,
             "cpu_count": self.cpu_count,
             "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+            "slurm_procid": os.environ.get("SLURM_PROCID"),
+            "slurm_localid": os.environ.get("SLURM_LOCALID"),
             "slurm_task_pid": os.environ.get("SLURM_TASK_PID"),
         }
 
-    def get_progress_config(self) -> dict[str, Any]:
+    def get_progress_config(self) -> ProgressConfig:
         """获取进度条配置"""
         if self.is_production_mode:
             # 生产模式：关闭进度条
@@ -86,7 +115,6 @@ class EnvironmentConfig:
                 "disable": True,
                 "leave": False,
                 "dynamic_ncols": False,
-                "file": None,  # 不输出到任何地方
             }
         else:
             # 调试模式：启用进度条
@@ -98,45 +126,54 @@ class EnvironmentConfig:
                 "colour": "green",
             }
 
-    def get_logging_config(self) -> dict[str, Any]:
-        """获取日志配置"""
+    def get_logging_config(self) -> dict[str, str]:
+        """获取标准日志配置（兼容 logging.basicConfig）"""
         if self.is_production_mode:
-            # 生产模式：结构化日志，关注关键信息
             return {
                 "level": "INFO",
                 "format": "%(asctime)s [%(levelname)s] %(module)s:%(lineno)d - %(message)s",
+            }
+        else:
+            return {
+                "level": "DEBUG",
+                "format": "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+            }
+
+    def get_display_config(self) -> dict[str, bool]:
+        """获取应用层日志显示选项（非标准 logging 键）"""
+        if self.is_production_mode:
+            return {
                 "show_progress_logs": False,
                 "highlight_stages": True,
             }
         else:
-            # 调试模式：详细日志
             return {
-                "level": "DEBUG",
-                "format": "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
                 "show_progress_logs": True,
                 "highlight_stages": True,
             }
 
 
 # 全局环境配置实例
-_env_config = EnvironmentConfig()
-
+_env_config: EnvironmentConfig | None = None
 
 def get_environment_config() -> EnvironmentConfig:
     """获取全局环境配置实例"""
+    global _env_config
+    if _env_config is None:
+        _env_config = EnvironmentConfig()
     return _env_config
 
 
 def is_slurm_environment() -> bool:
     """快捷函数：检查是否在SLURM环境"""
-    return _env_config.is_slurm_environment
+    return get_environment_config().is_slurm_environment
 
 
 def is_debug_mode() -> bool:
     """快捷函数：检查是否在调试模式"""
-    return _env_config.is_debug_mode
+    return get_environment_config().is_debug_mode
 
 
 def is_production_mode() -> bool:
     """快捷函数：检查是否在生产模式"""
-    return _env_config.is_production_mode
+    return get_environment_config().is_production_mode

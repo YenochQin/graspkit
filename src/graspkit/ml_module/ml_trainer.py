@@ -23,7 +23,10 @@ import torch
 # from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-from ..data_IO.produced_data_writor import update_config
+from ..data_IO import (
+        MLCalConfig,
+        update_config
+    )
 from ..utils.data_modules import MLDataCounts
 from .ml_results_analyzer import save_training_results
 
@@ -32,7 +35,7 @@ from .neural_network import ANNClassifier
 
 
 def train_model(
-    config,
+    config: MLCalConfig,
     caled_csfs_descriptors: np.ndarray,
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
@@ -63,11 +66,10 @@ def train_model(
     # 统计所有能级的正负样本总数
     positive_count = np.sum(y_train == 1)
     negative_count = np.sum(y_train == 0)
-    total_labels = y_train.size
 
     # 计算每个能级的正样本比例
     per_level_positive_ratio = np.mean(y_train, axis=0)
-    avg_positive_ratio = np.mean(per_level_positive_ratio)
+    avg_positive_ratio: np.float64 = np.mean(per_level_positive_ratio)
 
     logger.info(f"多标签分类 - {n_correct_levels} 个能级")
     logger.info(
@@ -89,7 +91,7 @@ def train_model(
 
     if config.cal_settings.cal_loop_num == 1:
         # 第一轮：直接创建新模型
-        model = ANNClassifier(
+        model: ANNClassifier = ANNClassifier(
             input_size=X_train.shape[1],
             output_size=n_correct_levels,  # 自动根据 output_size>1 启用多标签分类
             hidden_size=hidden_size,
@@ -153,11 +155,18 @@ def train_model(
     # 原因：重采样导致数据分布过于极端，影响模型泛化能力
     X_resampled, y_resampled = X_train, y_train
 
+    # 从训练集切出验证集用于早停（避免用测试集，防止数据泄露）
+    X_fit, X_val, y_fit, y_val = cast(
+        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+        train_test_split(X_resampled, y_resampled, test_size=0.1, random_state=42)
+    )
+
     logger.info("使用原始数据训练 - 不进行重采样")
     logger.info(
         f"最终训练数据 - 正样本:{positive_count}, 负样本:{negative_count}, "
         f"平均正样本比例:{avg_positive_ratio:.4f}"
     )
+    logger.info(f"训练集:{len(X_fit)}, 验证集(早停用):{len(X_val)}, 测试集:{len(X_test)}")
     logger.info("使用类别权重和损失函数来处理数据不平衡问题")
 
     # Model training (只训练一次)
@@ -208,11 +217,13 @@ def train_model(
         max_epochs_optimized = 150
 
     logger.info(
-        f"开始训练 - 数据量:{len(X_resampled):,}, 特征维度:{X_resampled.shape[1]}"
+        f"开始训练 - 数据量:{len(X_fit):,}, 特征维度:{X_fit.shape[1]}"
     )
     model.fit(
-        X_resampled,
-        y_resampled,
+        X_fit,
+        y_fit,
+        X_val=X_val,
+        y_val=y_val,
         batch_size=batch_size_optimized,
         max_epochs=max_epochs_optimized,
     )
@@ -223,7 +234,6 @@ def train_model(
     # 多标签分类：predict_proba 返回 (n_samples, n_labels)，取平均概率用于分析
     y_probability = model.predict_proba(X_test).mean(axis=1)
     y_prediction_train = model.predict(X_train)
-    y_probability_train = model.predict_proba(X_train).mean(axis=1)
     y_probability_all = model.predict_proba(X).mean(axis=1)
 
     # 诊断预测概率分布
@@ -232,7 +242,6 @@ def train_model(
     )
     # 多标签：统计至少在一个能级上被预测为重要的样本数
     positive_samples_test = np.any(y_prediction == 1, axis=1)
-    positive_samples_train = np.any(y_prediction_train == 1, axis=1)
     positive_true_test = np.any(y_test == 1, axis=1)
 
     logger.info(
@@ -307,7 +316,7 @@ def train_model(
     y_probability_matrix_test = model.predict_proba(X_test)
     y_probability_matrix_train = model.predict_proba(X_train)
 
-    f1, roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
+    f1, _roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
         y_test, y_prediction, y_probability_matrix_test
     )
     logger.info("测试集预测结果:")
@@ -316,7 +325,7 @@ def train_model(
     )
 
     # Overfitting and underfitting monitoring
-    (f1_train, roc_auc_train, accuracy_train, precision_train, recall_train) = (
+    (f1_train, _roc_auc_train, accuracy_train, precision_train, recall_train) = (
         ANNClassifier.model_evaluation(
             y_train, y_prediction_train, y_probability_matrix_train
         )
@@ -333,7 +342,15 @@ def train_model(
     return model, X_train, X_test, y_train, y_test
 
 
-def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
+def evaluate_model(
+        model: ANNClassifier,
+        X_train: np.ndarray,
+        X_test: np.ndarray,
+        y_train: np.ndarray,
+        y_test: np.ndarray,
+        config: MLCalConfig,
+        logger: logging.Logger,
+    ) -> dict[str, dict[str, np.ndarray | float | int | str]]:
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -443,17 +460,17 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, config, logger):
 
 
 def predict_model(
-    model,
+    model: ANNClassifier,
     raw_csfs_descriptors: np.ndarray,
     caled_csfs_idxs_array: np.ndarray,
     correct_levels_ci_squared: np.ndarray,
-    config,
+    config: MLCalConfig,
     train_data_counts: MLDataCounts,
     logger: logging.Logger,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
-    all_csfs_idxs = np.arange(total_csfs_count)
+    all_csfs_idxs = np.arange(total_csfs_count, dtype=np.int64)
     current_calc_idxs = caled_csfs_idxs_array
 
     unselected_idxs = np.setdiff1d(all_csfs_idxs, current_calc_idxs)
@@ -571,7 +588,7 @@ def predict_model(
     )
 
 
-def handle_calculation_error(config, logger: logging.Logger):
+def handle_calculation_error(config: MLCalConfig, logger: logging.Logger):
     """处理计算错误的情况"""
     config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:

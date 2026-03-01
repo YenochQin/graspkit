@@ -15,7 +15,6 @@
 import numpy as np
 import polars as pl
 
-from ..utils.progress_manager import wrap_iterator
 
 #######################################################################
 # 跃迁数据分析函数

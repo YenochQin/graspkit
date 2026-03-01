@@ -5,15 +5,14 @@
 @author :YenochQin (秦毅)
 """
 
-import random
 import re
 
 import numpy as np
+from numpy.typing import NDArray
 import polars as pl
 
 from ..utils.data_modules import CSFs
-from ..utils.progress_manager import wrap_iterator
-from ..utils.tool_function import chunk_string, str_subshell_2_kappa
+from ..utils.tool_function import chunk_string
 
 #######################################################################
 # CSFs source data compress to a simplified form
@@ -38,7 +37,7 @@ def subshell_charged_state(subshell_CSF: str) -> dict[str, str]:
 
 
 def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> bool:
-    full_charged = {
+    full_charged: dict[str, int] = {
         "s ": 2,
         "p-": 2,
         "p ": 4,
@@ -56,10 +55,10 @@ def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> b
     return full_charged.get(subshell_name, 0) == subshell_charged_num
 
 
-def CSF_subshell_split(CSFs_configuration_raw: str) -> list:
+def CSF_subshell_split(CSFs_configuration_raw: str) -> list[str]:
     # CSFs_configuration_raw need drop '\n' first !!!
 
-    subshells_charged = [
+    subshells_charged: list[str] = [
         CSFs_configuration_raw[i : i + 9]
         for i in range(0, len(CSFs_configuration_raw), 9)
     ]
@@ -67,7 +66,7 @@ def CSF_subshell_split(CSFs_configuration_raw: str) -> list:
     return subshells_charged
 
 
-def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list:
+def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list[str]:
     """获取CSFs文件中的peel subshells列表
 
     Args:
@@ -77,122 +76,28 @@ def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list:
         list: 清理后的peel subshells列表，每个元素都已去除多余空格
     """
     # 获取原始字符串并去除前后的空白字符(包括换行符)
-    peel_subshells = CSFs_file_data.subshell_info_raw[-1].strip()
+    peel_subshells: str = CSFs_file_data.subshell_info_raw[-1].strip()
 
     # 分割字符串并过滤掉空字符串，同时对每个子串去除前后空格
     return [s.strip() for s in peel_subshells.split() if s.strip()]
 
 
-def CSF_subshell_transform(
-    subshells_charged: str, CSFs_file_Peel_subshells: list
-) -> list[int]:
-    ## 暂时用不了
-    subshells_charged_list = CSF_subshell_split(subshells_charged)
-
-    filled_dict = {}
-
-    for item in subshells_charged_list:
-        subshell, e_charges = re.findall(r"([0-9]*[s,p,d,f,g][\s,-])\( (\d+)\)", item)[
-            0
-        ]
-        filled_dict[subshell] = int(e_charges)
-
-    transform_subshells_charged = [
-        filled_dict.get(subshell, 0) for subshell in CSFs_file_Peel_subshells
-    ]
-
-    return transform_subshells_charged
-
-
 #######################################################################
 
 
-def CSF_subshell_compress(CSF_configuration_raw: str):
-    """
-    compress CSF subshell from
-      5s ( 2)  4d-( 4)  4d ( 6)  5p-( 2)  5p ( 4)  6s ( 2)  4f-( 1)  4f ( 6)  5d ( 1)
-    to
-    '5|-1|2;4|2|4;4|-3|6;5|1|2;5|-2|4;6|-1|2;4|3|1;4|-4|6;5|-3|1;'
-    """
-    subshells_charged = re.split(r"(\d*\w[\s|-]\(\s\d*\))", CSF_configuration_raw)
-    subshells_charged = [item for item in subshells_charged if item.strip()]
-
-    print(subshells_charged)
-    compressed_CSF = ""
-
-    for subshell in subshells_charged:
-        temp_subshell_charged_state = subshell_charged_state(subshell)
-        temp_subshell_kappa = str_subshell_2_kappa(
-            temp_subshell_charged_state["subshell_name"]
-        )
-        compressed_CSF += f"{temp_subshell_charged_state['subshell_main_quantum_num']}|{temp_subshell_kappa}|{temp_subshell_charged_state['subshell_charged_num']};"
-
-    return compressed_CSF
-
-
-def CSF_compress(CSF_raw: list) -> str:
-    """
-    compress CSF
-    """
-    if len(CSF_raw) != 3:
-        raise ValueError("CSF_raw need to be 3 line")
-
-    return CSF_subshell_compress(CSF_raw[0]) + "".join(CSF_raw[1:])
-
-
-def CSF_subshell_extract(simplified_str):
-    """
-    extract CSF subshell from
-    '5|-1|2;4|2|4;4|-3|6;5|1|2;5|-2|4;6|-1|2;4|3|1;4|-4|6;5|-3|1;'
-    to
-      5s ( 2)  4d-( 4)  4d ( 6)  5p-( 2)  5p ( 4)  6s ( 2)  4f-( 1)  4f ( 6)  5d ( 1)
-    """
-    reverse_kappa = {
-        -1: "s ",
-        1: "p-",
-        -2: "p ",
-        2: "d-",
-        -3: "d ",
-        3: "f-",
-        -4: "f ",
-        4: "g-",
-        -5: "g ",
-        5: "h-",
-        -6: "h ",
-        6: "i-",
-        -7: "i ",
-    }
-
-    items = simplified_str.split(";")
-    restored = []
-
-    for item in items:
-        try:
-            n, kappa, value = item.split("|")
-            orbital_key = reverse_kappa.get(int(kappa), "")
-            restored.append(f"{n}{orbital_key}({value})")
-        except:
-            continue
-
-    return "  ".join(restored)
-
-
-#######################################################################
-
-
-def csf_J(csf_3rd_line: str):
+def csf_J(csf_3rd_line: str) -> tuple[str, str]:
     """
     extract J from CSF 3rd line
     """
     # 按空格分割字符串
-    parts = csf_3rd_line.split()
+    parts: list[str] = csf_3rd_line.split()
 
     # 最后一个部分包含J值和宇称
-    j_parity_part = parts[-1]
+    j_parity_part: str = parts[-1]
 
     # 分离J值和宇称
-    j_str = j_parity_part[:-1]  # 去掉最后一个字符（宇称符号）
-    parity = j_parity_part[-1]  # 最后一个字符就是宇称符号
+    j_str: str = j_parity_part[:-1]  # 去掉最后一个字符（宇称符号）
+    parity: str = j_parity_part[-1]  # 最后一个字符就是宇称符号
 
     # 返回J字符串和宇称符号
     return j_str, parity
@@ -216,29 +121,9 @@ def J_to_doubleJ(J_str: str) -> int:
         return int(J_str) * 2
 
 
-def CSF_info_2_dict(CSF_item_list: list[str]) -> dict:
-    # 解析 subshell 信息
-    CSF_info_dict = {}  # 初始化为字典而不是调用CSF_subshell_split
-    CSF_info_dict["subshells"] = CSF_subshell_split(CSF_item_list[0])
 
-    # 添加 temp_coupled_j 和 final_coupled_j_parity
-    CSF_info_dict.update(
-        {
-            "temp_coupled_j": CSF_item_list[1],
-            "final_coupled_j_parity": CSF_item_list[2],
-        }
-    )
-
-    # 解析 final_coupled_j_parity 中的 J 和 parity
-    j_p = CSF_item_list[2].split()[-1]  # 提取 J 和 parity 部分
-    CSF_info_dict["parity"] = j_p[-1]  # parity 是最后一个字符
-    CSF_info_dict["J"] = j_p[:-1]  # J 是 parity 之前的部分
-
-    return CSF_info_dict
-
-
-def CSF_item_2_dict(CSF_item_list: list[str]) -> dict:
-    CSF_item_dict = {}
+def CSF_item_2_dict(CSF_item_list: list[str]) -> dict[str, str]:
+    CSF_item_dict: dict[str, str] = {}
 
     CSF_item_dict.update(
         {
@@ -253,126 +138,6 @@ def CSF_item_2_dict(CSF_item_list: list[str]) -> dict:
     CSF_item_dict["J"] = j_p[:-1]  # J 是 parity 之前的部分
 
     return CSF_item_dict
-
-
-def get_CSFs_file_info(csfs_file_data: list) -> dict:
-    """
-    Process CSF file data and extract structured information.
-
-    Args:
-        csfs_file_data: Raw CSF data list containing subshell info and CSFs entries
-
-    Returns:
-        dictionary containing:
-        - subshell_info_raw: Original header lines
-        - parsed subshell parameters (n, orbitals, etc.)
-        - star_idxs: Positions of CSF separators
-        - CSFs_j_value: Collected J-values from CSFs
-    """
-    # Extract first 4 lines containing subshell information
-    subshell_info = csfs_file_data[0:4]
-
-    CSFs_file_info = {}
-    CSFs_file_info["subshell_info_raw"] = subshell_info
-
-    # Process subshell info pairs (parameter name + values)
-    for i in range(0, len(subshell_info), 2):
-        key = subshell_info[i].rstrip(":")  # Remove colon from key
-        value = subshell_info[i + 1].split()  # Split values into list
-        CSFs_file_info[key] = value
-
-    # Find all CSF separators ('*') in the data
-    star_idxs = []
-    for idx, value in enumerate(csfs_file_data):
-        if "*" in value:
-            star_idxs.append(idx)
-    CSFs_file_info["star_idxs"] = star_idxs
-
-    # Collect J-values preceding each separator and the final value
-    CSFs_j_value = []
-    CSFs_block_parity = []
-    prev_idx = 5
-    CSFs_file_info["CSFs_block_data"] = []  # 初始化 CSFs_block_data 列表
-
-    for idx in star_idxs:
-        temp_j_value, temp_parity = csf_J(csfs_file_data[idx - 1])
-        CSFs_j_value.append(temp_j_value)
-        CSFs_block_parity.append(temp_parity)
-        # 处理每个块的数据，而不是一次性存储所有块
-        block_data = csfs_file_data[prev_idx:idx]
-        if len(block_data) % 3 != 0:
-            raise ValueError("CSFs_list length must be a multiple of 3")
-        CSFs_file_info["CSFs_block_data"].append(block_data)  # 添加当前块的数据
-        prev_idx = idx + 1
-
-    temp_j_value, temp_parity = csf_J(csfs_file_data[-1])
-    CSFs_j_value.append(temp_j_value)
-    CSFs_block_parity.append(temp_parity)
-    CSFs_file_info["CSFs_j_value"] = CSFs_j_value
-
-    CSFs_parity = set(CSFs_block_parity)
-    if len(CSFs_parity) == 1:
-        CSFs_file_info["parity"] = list(CSFs_parity)[0]
-
-    # 处理最后一个块的数据
-    last_block_data = csfs_file_data[prev_idx:]
-    if len(last_block_data) % 3 != 0:
-        raise ValueError("CSFs_list length must be a multiple of 3")
-    CSFs_file_info["CSFs_block_data"].append(last_block_data)  # 添加最后一个块的数据
-
-    return CSFs_file_info
-
-
-#######################################################################
-
-
-def split_by_asterisk(lines):
-    """
-    将列表按单独一个星号行分割为二维列表
-
-    :param lines: readlines 读取的列表
-    :param keep_empty: 是否保留空块（默认过滤）
-    :return: 二维列表，例如 [[块1行], [块2行], ...]
-    """
-    result = []
-    current_chunk = []
-
-    for line in lines:
-        # 严格匹配：仅当行内容为单个星号（含换行符）
-        if line.strip() == "*":
-            result.append(current_chunk)
-            current_chunk = []
-        else:
-            current_chunk.append(line)  # 可选：去除换行符
-
-    # 添加最后一个块
-    result.append(current_chunk)
-
-    return result
-
-
-def shuffle_three_line_groups(lst):
-    """
-    将列表按每三行一组随机打乱顺序
-    示例输入格式：
-    ['行1', '行2', '行3', '行4', '行5', '行6', ...]
-    输出格式：
-    ['行4', '行5', '行6', '行1', '行2', '行3', ...]
-    """
-    # 检查是否能被3整除
-    if len(lst) % 3 != 0:
-        raise ValueError("列表长度必须是3的倍数")
-
-    # 将列表分成三元组
-    groups = [lst[i : i + 3] for i in range(0, len(lst), 3)]
-
-    # 打乱组顺序
-    random.shuffle(groups)
-
-    # 重新展开为平铺列表
-    shuffled = [line for group in groups for line in group]
-
-    return shuffled
 
 
 #######################################################################
@@ -427,7 +192,7 @@ def parse_csf_2_descriptor(
 
     # 第四步：初始化描述符数组和已占用轨道索引列表
     csf_descriptor = np.zeros(3 * len(peel_subshells_list), dtype=np.float32)
-    orbs_occupied_idxs = []  # 记录哪些轨道被占用
+    orbs_occupied_idxs: list[int] = []  # 记录哪些轨道被占用
 
     # 第五步：遍历每个子壳层块，提取和处理信息
     for i, (subshell_charges, middle_line_item, coupling_line_item) in enumerate(
@@ -506,15 +271,13 @@ def batch_process_csfs_to_descriptors(CSFs_file_data: CSFs) -> np.ndarray:
         >>> save_descriptors(descriptors, 'output/csf_descriptors', 'csv')
     """
     # 获取剥离子壳层列表
-    peel_subshells_list = get_CSFs_peel_subshells(CSFs_file_data)
+    peel_subshells_list: list[str] = get_CSFs_peel_subshells(CSFs_file_data)
 
-    all_descriptors = []
+    all_descriptors: list[NDArray[np.float64]] = []
 
     for block_idx, block in enumerate(CSFs_file_data.CSFs_block_data):
         # 遍历块中的每个CSF项
-        for csf_idx, csf_item in enumerate(
-            wrap_iterator(block, desc=f"处理CSF块 {block_idx + 1}")
-        ):
+        for csf_idx, csf_item in enumerate(block):
             try:
                 # 检查CSF项是否包含3行
                 if len(csf_item) != 3:
@@ -522,7 +285,7 @@ def batch_process_csfs_to_descriptors(CSFs_file_data: CSFs) -> np.ndarray:
                         f"Warning: CSF item in block {block_idx}, idx {csf_idx} has {len(csf_item)} lines instead of 3. Skipping..."
                     )
                     continue
-                descriptor = parse_csf_2_descriptor(peel_subshells_list, csf_item)
+                descriptor: NDArray[np.float64] = parse_csf_2_descriptor(peel_subshells_list, csf_item)
                 all_descriptors.append(descriptor)
 
             except Exception as e:
@@ -544,7 +307,7 @@ def batch_process_csfs_to_descriptors(CSFs_file_data: CSFs) -> np.ndarray:
 
 
 def batch_process_csfs_parquet_to_descriptors(
-    CSFs_file_header: dict, CSFs_file_data: pl.DataFrame
+    CSFs_file_header: dict[str, dict[str, str]], CSFs_file_data: pl.DataFrame
 ) -> np.ndarray:
     """
     批量处理CSFs文件中的所有CSF数据，转换为描述符数组
