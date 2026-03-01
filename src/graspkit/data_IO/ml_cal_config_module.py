@@ -260,7 +260,7 @@ class MLCalConfig(BaseModel):
             self.cal_path.results_path / "training_results.csv"
         )
         self.cal_path.accumulated_idxs_ci_path = (
-            self.cal_path.results_path / f"{self.target.conf}_merged_ci_squared"
+            self.cal_path.results_path / f"{self.target.conf}_merged_ci_squared.npz"
         )
 
         # 如果是第二轮及之后的计算循环，需要设置前一轮的相关文件路径
