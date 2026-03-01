@@ -226,6 +226,8 @@ def train_model(
         y_val=y_val,
         batch_size=batch_size_optimized,
         max_epochs=max_epochs_optimized,
+        early_stopping_patience=999999,  # 禁用早停：设置非常大的值
+        min_delta=0.0,  # 禁用最小改进阈值
     )
 
     # Model evaluation

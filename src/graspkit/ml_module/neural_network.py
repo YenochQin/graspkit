@@ -117,7 +117,7 @@ class ANNClassifier:
         input_size: int,
         hidden_size: int = 150,
         output_size: int = 2,
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.003,  # 增大学习率加快学习
         class_weights: list[float] | None = None,
         device: str | None = None,
         use_dynamic_weights: bool = True,
@@ -230,16 +230,16 @@ class ANNClassifier:
                 num_classes=self.output_size,
             ).to(self.device)
         else:
-            # 标准全连接架构
+            # 标准全连接架构 - 简化版本，避免过度正则化
             model = nn.Sequential(
                 nn.Linear(self.input_size, self.hidden_size),
-                nn.LayerNorm(self.hidden_size),
-                nn.ReLU(),
-                nn.Dropout(0.3),
+                nn.BatchNorm1d(self.hidden_size),  # 改用BatchNorm，更稳定
+                nn.GELU(),
+                nn.Dropout(0.1),  # 减少Dropout
                 nn.Linear(self.hidden_size, self.hidden_size // 2),
-                nn.LayerNorm(self.hidden_size // 2),
-                nn.ReLU(),
-                nn.Dropout(0.2),
+                nn.BatchNorm1d(self.hidden_size // 2),
+                nn.GELU(),
+                nn.Dropout(0.1),  # 减少Dropout
                 nn.Linear(self.hidden_size // 2, self.output_size),
             ).to(self.device)
             # 初始化权重
@@ -254,7 +254,7 @@ class ANNClassifier:
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:  # type: ignore[reportUnnecessaryComparison]
                     #这是 PyTorch 类型存根的不准确之处——nn.Linear.bias 实际上可以是None（当 nn.Linear(..., bias=False) 时），但存根中将其标注为Parameter 而非 Parameter | None。代码逻辑本身是正确的。
-                    nn.init.zeros_(module.bias)
+                    nn.init.constant_(module.bias, 0.01)  # 小正值偏置，避免Dead ReLU
 
     def fit(
         self,
@@ -317,9 +317,9 @@ class ANNClassifier:
         else:
             X_val_tensor = y_val_tensor = None
 
-        # 学习率调度器
+        # 学习率调度器 - 增大patience避免过早降低学习率
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=10
+            self.optimizer, mode="min", factor=0.5, patience=30, min_lr=1e-6
         )
 
         # 早停机制
@@ -327,12 +327,22 @@ class ANNClassifier:
         patience_counter = 0
         best_model_state = None
 
-        # 训练循环
+        # 调试：输出训练前的初始状态
+        self.logger.info(f"[DEBUG] 训练数据范围 - X: min={X_train_tensor.min():.6f}, max={X_train_tensor.max():.6f}, mean={X_train_tensor.mean():.6f}")
+        self.logger.info(f"[DEBUG] 训练标签范围 - y: min={y_train_tensor.min():.6f}, max={y_train_tensor.max():.6f}, mean={y_train_tensor.mean():.6f}")
+
+        # 检查初始模型输出
+        self.model.eval()
+        with torch.no_grad():
+            initial_outputs = self.model(X_train_tensor[:100])
+            self.logger.info(f"[DEBUG] 初始模型输出(前100样本) - min={initial_outputs.min():.6f}, max={initial_outputs.max():.6f}, mean={initial_outputs.mean():.6f}")
         self.model.train()
+
+        # 训练循环
         val_loss = val_accuracy = 0.0
 
         for epoch in range(max_epochs):
-            epoch_loss = self._train_epoch(X_train_tensor, y_train_tensor, batch_size)
+            epoch_loss = self._train_epoch(X_train_tensor, y_train_tensor, batch_size, epoch, max_epochs)
             self.training_history["train_loss"].append(epoch_loss)
 
             # 验证评估
@@ -372,7 +382,7 @@ class ANNClassifier:
         return self.training_history
 
     def _train_epoch(
-        self, X_train: torch.Tensor, y_train: torch.Tensor, batch_size: int
+        self, X_train: torch.Tensor, y_train: torch.Tensor, batch_size: int, epoch: int = 0, max_epochs: int = 150
     ) -> float:
         """训练一个epoch"""
         self.model.train()
@@ -390,8 +400,27 @@ class ANNClassifier:
             loss = self.criterion(outputs, batch_y)
             loss.backward()
 
-            # 梯度裁剪
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            # 调试：检查第一个batch和最后一个epoch的梯度
+            if (epoch == 0 and i == 0) or (epoch == max_epochs - 1 and i == 0):
+                grad_norms = []
+                for name, param in self.model.named_parameters():
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()
+                        grad_norms.append(grad_norm)
+                        if grad_norm == 0:
+                            self.logger.warning(f"[DEBUG] Epoch {epoch} - {name} 梯度为0")
+                if grad_norms:
+                    self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - 梯度范数: min={min(grad_norms):.6f}, max={max(grad_norms):.6f}, mean={sum(grad_norms)/len(grad_norms):.6f}")
+                self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - outputs范围: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
+                self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - loss={loss.item():.6f}")
+                self.logger.info(f"[DEBUG] Epoch {epoch} - 学习率: {self.optimizer.param_groups[0]['lr']:.6f}")
+
+            # 梯度裁剪 - 增大阈值避免限制学习
+            grad_norm_before = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
+
+            # 调试：记录梯度裁剪情况
+            if (epoch == 0 and i == 0) or (epoch == max_epochs - 1 and i == 0):
+                self.logger.info(f"[DEBUG] Epoch {epoch} - 梯度裁剪前总范数: {grad_norm_before:.6f}, 裁剪阈值: 5.0")
 
             self.optimizer.step()
 
