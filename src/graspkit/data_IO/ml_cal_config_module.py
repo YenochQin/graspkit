@@ -6,7 +6,7 @@
 '''
 from pathlib import Path
 from dataclasses import dataclass, field as dc_field
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # Target model
@@ -195,8 +195,8 @@ class MLCalConfig(BaseModel):
     model_params: ModelParams
     step_control: StepControl
 
-    # cal_path 不来自 TOML，由 model_post_init 计算后赋值
-    cal_path: CalPath  # type: ignore[assignment]
+    # cal_path 不来自 TOML，由 model_validator(mode="after") 在所有字段验证完成后自动计算
+    cal_path: CalPath = Field(default_factory=CalPath, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -208,10 +208,12 @@ class MLCalConfig(BaseModel):
             raise ValueError(f"配置文件缺少必需的节: {missing_sections}")
         return data
 
-    def model_post_init(self, __context: object) -> None:
-        """模型构建完成后自动初始化所有文件路径"""
-        object.__setattr__(self, "cal_path", CalPath())
+    @model_validator(mode="after")
+    def _setup_cal_path(self) -> "MLCalConfig":
+        """所有字段验证完成后自动初始化所有文件路径"""
+        self.cal_path = CalPath()
         self.setup_paths()
+        return self
 
     def setup_paths(self) -> None:
         """
