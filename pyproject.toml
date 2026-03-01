@@ -79,8 +79,22 @@ all = [
 ]
 
 
-# Removed custom PyTorch sources - using PyPI directly for torch
-# PyPI provides platform-specific wheels automatically
+# uv 按 extra 选择不同的 PyTorch wheel 源
+# PyPI 上的 torch 是 CPU-only；CUDA 版需从 PyTorch 官方 wheel 仓库获取
+# cpu extra 不指定源，由下方镜像（tuna/aliyun）下载 CPU-only wheel
+# gpu extra 必须指向 PyTorch 官方仓库，镜像不同步 CUDA wheel
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-gpu", extra = "gpu" },
+]
+torchvision = [
+    { index = "pytorch-gpu", extra = "gpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [[tool.uv.index]]
 name = "tuna"
