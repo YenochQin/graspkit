@@ -192,7 +192,7 @@ def check_configuration_coupling(
 
     优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
     """
-    cal_configuration_list: list[str] = energy_level_data["configuration"].to_list()
+    cal_configuration_list: list[str] = energy_level_data["configuration_raw"].to_list()
 
     # 优化1: 一次遍历同时构建计数和位置映射
     term_positions: dict[str, list[int]] = {}
