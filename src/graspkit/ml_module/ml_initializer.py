@@ -10,10 +10,11 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-from numpy._typing._array_like import NDArray
+from numpy.typing import NDArray
 
 import polars as pl
 import rtoml
+from tabulate import tabulate
 
 from ..data_IO import (
     CalPath,
@@ -31,16 +32,16 @@ from ..utils import (
 )
 
 
-def setup_directories(root_path: Path):
+def setup_directories(root_path: Path) -> None:
     """创建必要的目录结构"""
 
     directories = ["models", "roc_curves", "results"]
 
-    for dir in directories:
-        (root_path / dir).mkdir(parents=True, exist_ok=True)
+    for dir_name in directories:
+        (root_path / dir_name).mkdir(parents=True, exist_ok=True)
 
 
-def setup_logging(log_dir: Path):
+def setup_logging(log_dir: Path) -> logging.Logger:
     """配置日志系统，支持环境感知"""
     env_config = get_environment_config()
     log_config = env_config.get_logging_config()
@@ -187,7 +188,7 @@ def check_configuration_coupling(
     spectral_term: list[str],
     cal_loop_num: int,
     logger: logging.Logger,
-):
+) -> tuple[bool, pl.DataFrame, NDArray[np.float64]]:
     """检查组态耦合是否正确
 
     优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
@@ -237,6 +238,9 @@ def check_configuration_coupling(
         raise RuntimeError(error_msg)
 
     # 成功路径
+    # 注意：排序后 selected_energy_data 的行顺序为能量文件中的升序位置，
+    # 而非 spectral_term 列表的顺序。下游代码不得用行索引 i 与
+    # spectral_term[i] 对应，必须通过 configuration_raw 列做字典匹配。
     spectral_term_positions.sort()
     logger.info(
         f"cal_loop {cal_loop_num} 组态耦合正确，位置索引: {spectral_term_positions}"
@@ -251,6 +255,115 @@ def check_configuration_coupling(
     logger.info(f"正确的能级数据已保存到: {correct_levels_csv_path}")
 
     return True, selected_energy_data, correct_levels_ci
+
+
+def _load_loop_energy_csv(config: MLCalConfig, loop_num: int) -> pl.DataFrame | None:
+    """加载指定轮次的 correct_levels.csv，文件不存在时返回 None"""
+    csv_path = (
+        config.cal_settings.root_path
+        / f"{config.target.conf}_{loop_num}"
+        / f"{config.target.conf}_{loop_num}_correct_levels.csv"
+    )
+    if not csv_path.exists():
+        return None
+    return pl.read_csv(csv_path)
+
+
+def _get_reference_discrepancies(
+    df: pl.DataFrame,
+    spectral_term: list[str],
+    reference_energy_levels: list[float],
+) -> list[float] | None:
+    """从 correct_levels DataFrame 计算各谱项相对于参考值的能级间距偏差
+
+    Args:
+        df: correct_levels.csv 的 DataFrame
+        spectral_term: 谱项列表
+        reference_energy_levels: 参考能级值（cm⁻¹），与 spectral_term 一一对应
+
+    Returns:
+        各谱项的偏差列表（cm⁻¹），数据不完整时返回 None
+    """
+    term_energy: dict[str, float] = {}
+    for row in df.iter_rows(named=True):
+        term = row["configuration_raw"]
+        if term in spectral_term:
+            term_energy[term] = float(row["EnergyLevel"])
+
+    if len(term_energy) < len(spectral_term):
+        return None
+
+    ref_base = min(reference_energy_levels)
+    base_idx = reference_energy_levels.index(ref_base)
+    calc_base = term_energy[spectral_term[base_idx]]
+
+    return [
+        abs((term_energy[term] - calc_base) - (reference_energy_levels[i] - ref_base))
+        for i, term in enumerate(spectral_term)
+    ]
+
+
+def check_reference_energy_agreement(
+    selected_energy_data: pl.DataFrame,
+    spectral_term: list[str],
+    reference_energy_levels: list[float],
+    reference_energy_threshold: float,
+    logger: logging.Logger,
+) -> bool:
+    """监控并检查计算能级间距与参考值（如NIST）之间的偏差
+
+    以 reference_energy_levels 中最小值对应的谱项为参考零点，比较计算值与参考值
+    的相对能级差，输出对比表格；当 reference_energy_threshold > 0 时返回是否满足阈值。
+
+    Args:
+        selected_energy_data: 包含目标谱项的 Polars DataFrame（来自 check_configuration_coupling）
+        spectral_term: 谱项列表
+        reference_energy_levels: 参考能级值（cm⁻¹），与 spectral_term 一一对应
+        reference_energy_threshold: 允许的最大偏差（cm⁻¹），0 表示仅监控不阻断
+        logger: 日志记录器
+
+    Returns:
+        bool: True=满足阈值或纯监控模式, False=超出阈值（用于收敛门控）
+    """
+    term_energy: dict[str, float] = {}
+    for row in selected_energy_data.iter_rows(named=True):
+        term = row["configuration_raw"]
+        if term in spectral_term:
+            term_energy[term] = float(row["EnergyLevel"])
+
+    missing = [t for t in spectral_term if t not in term_energy]
+    if missing:
+        logger.error(f"以下谱项在能级数据中找不到: {missing}，跳过参考能级比较")
+        return True
+
+    ref_base = min(reference_energy_levels)
+    base_idx = reference_energy_levels.index(ref_base)
+    calc_base = term_energy[spectral_term[base_idx]]
+
+    table_rows = []
+    discrepancies: list[float] = []
+    for i, term in enumerate(spectral_term):
+        ref_rel = reference_energy_levels[i] - ref_base
+        calc_rel = term_energy[term] - calc_base
+        disc = abs(calc_rel - ref_rel)
+        discrepancies.append(disc)
+        table_rows.append([term, f"{ref_rel:.2f}", f"{calc_rel:.2f}", f"{disc:.2f}"])
+
+    table = tabulate(
+        table_rows,
+        headers=["谱项", "参考相对值 (cm⁻¹)", "计算相对值 (cm⁻¹)", "偏差 (cm⁻¹)"],
+        tablefmt="simple",
+    )
+    logger.info(f"能级间距对比:\n{table}")
+
+    if reference_energy_threshold > 0:
+        within_threshold = all(d < reference_energy_threshold for d in discrepancies)
+        logger.info(
+            f"  参考能级间距阈值检查: {'满足' if within_threshold else '超出'}"
+            f" (阈值: {reference_energy_threshold:.1f} cm⁻¹)"
+        )
+        return within_threshold
+    return True
 
 
 def check_energy_convergence(
@@ -280,19 +393,14 @@ def check_energy_convergence(
     """
 
     try:
-        # 获取上一轮的能量数据文件路径
-        previous_energy_path = (
-            config.cal_settings.root_path
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}"
-            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}_correct_levels.csv"
-        )
-
-        if not previous_energy_path.exists():
-            logger.warning(f"未找到上一轮能量数据: {previous_energy_path}")
+        previous_loop = config.cal_settings.cal_loop_num - 1
+        previous_energy_data = _load_loop_energy_csv(config, previous_loop)
+        if previous_energy_data is None:
+            logger.warning(
+                f"未找到上一轮能量数据: "
+                f"{config.target.conf}_{previous_loop}_correct_levels.csv"
+            )
             return True
-
-        # 加载上一轮能量数据
-        previous_energy_data = pl.read_csv(previous_energy_path)
 
         # 检查数据一致性
         if len(current_energy_data) != len(previous_energy_data):
@@ -331,17 +439,66 @@ def check_energy_convergence(
             return False
 
         logger.info("能量变化方向正常（单调下降或数值稳定），继续计算")
+
+        # === 趋势回退：参考能级间距单调递增检查 ===
+        if (
+            config.cal_settings.reference_energy_levels
+            and config.cal_settings.reference_energy_threshold > 0
+            and config.cal_settings.cal_loop_num >= 3
+        ):
+            current_loop = config.cal_settings.cal_loop_num
+            spectral_term = config.cal_settings.spectral_term
+            reference_energy_levels = config.cal_settings.reference_energy_levels
+
+            # 加载前两轮 CSV；当前轮直接使用传入的 current_energy_data，避免重复 I/O
+            recent_discrepancies: list[list[float]] = []
+            all_loaded = True
+            for ln in range(current_loop - 2, current_loop):
+                frame = _load_loop_energy_csv(config, ln)
+                if frame is None:
+                    all_loaded = False
+                    break
+                disc = _get_reference_discrepancies(frame, spectral_term, reference_energy_levels)
+                if disc is None:
+                    all_loaded = False
+                    break
+                recent_discrepancies.append(disc)
+            # 当前轮使用传入的 current_energy_data
+            if all_loaded:
+                curr_disc = _get_reference_discrepancies(
+                    current_energy_data, spectral_term, reference_energy_levels
+                )
+                if curr_disc is None:
+                    all_loaded = False
+                else:
+                    recent_discrepancies.append(curr_disc)
+
+            if all_loaded and len(recent_discrepancies) == 3:
+                n_terms = len(spectral_term)
+                monotonically_increasing = all(
+                    recent_discrepancies[0][k] < recent_discrepancies[1][k] < recent_discrepancies[2][k]
+                    for k in range(n_terms)
+                )
+                if monotonically_increasing:
+                    logger.warning(
+                        "检测到能级间距偏差连续3轮单调递增（持续远离参考值），触发回退"
+                    )
+                    return False
+                else:
+                    logger.info("能级间距偏差无单调递增趋势，继续计算")
+
         return True
 
-    except Exception as e:
-        logger.error(f"能量收敛检查过程中发生错误: {str(e)}")
-        return False  # 发生错误时继续计算，避免阻塞
+    except (FileNotFoundError, pl.exceptions.ColumnNotFoundError) as e:
+        logger.exception("能量收敛检查过程中发生错误: %s", e)
+        return True  # 无法判断时，默认继续（不触发回退）
 
 
 def evaluate_calculation_convergence(
     config: MLCalConfig,
     logger: logging.Logger,
     cal_loop_csfs_count: int,
+    current_energy_data: pl.DataFrame | None = None,
 ) -> bool:
     """
     检查GRASP计算的收敛性
@@ -362,29 +519,25 @@ def evaluate_calculation_convergence(
     try:
         current_loop = config.cal_settings.cal_loop_num
 
-        # === 1. 加载最近三轮能级数据，取列 configuration 和 EnergyTotal ===
+        # === 1. 加载最近三轮能级数据，取列 configuration_raw 和 EnergyTotal ===
         energy_frames: list[pl.DataFrame] = []
         for i, loop_num in enumerate(range(current_loop - 2, current_loop + 1)):
-            csv_path = (
-                config.cal_settings.root_path
-                / f"{config.target.conf}_{loop_num}"
-                / f"{config.target.conf}_{loop_num}_correct_levels.csv"
-            )
-            if not csv_path.exists():
-                logger.warning(f"未找到第{loop_num}轮能级数据: {csv_path}")
+            frame = _load_loop_energy_csv(config, loop_num)
+            if frame is None:
+                logger.warning(f"未找到第{loop_num}轮能级数据")
                 return True
             energy_frames.append(
-                pl.read_csv(csv_path)
-                .select(["configuration", "EnergyTotal"])
+                frame
+                .select(["configuration_raw", "EnergyTotal"])
                 .rename({"EnergyTotal": f"E{i}"})
             )
-            logger.info(f"读取第{loop_num}轮能级数据: {csv_path}")
+            logger.info(f"读取第{loop_num}轮能级数据")
 
         # === 2. 三轮内连接取共有能级，向量化计算跨轮标准差均值 ===
         merged = (
             energy_frames[0]
-            .join(energy_frames[1], on="configuration", how="inner")
-            .join(energy_frames[2], on="configuration", how="inner")
+            .join(energy_frames[1], on="configuration_raw", how="inner")
+            .join(energy_frames[2], on="configuration_raw", how="inner")
         )
         if merged.height < energy_frames[0].height:
             logger.warning(
@@ -432,8 +585,27 @@ def evaluate_calculation_convergence(
             f" (阈值: {energy_threshold:.5e}) → {'收敛' if energy_converged else '未收敛'}"
         )
 
-        if energy_converged and csfs_converged:
-            logger.info("能级和组态数量均已收敛，停止计算")
+        # === 6. 参考能级间距收敛判据（可选）===
+        ref_energy_converged = True
+        if (
+            config.cal_settings.reference_energy_levels
+            and config.cal_settings.reference_energy_threshold > 0
+            and current_energy_data is not None
+        ):
+            ref_energy_converged = check_reference_energy_agreement(
+                current_energy_data,
+                config.cal_settings.spectral_term,
+                config.cal_settings.reference_energy_levels,
+                config.cal_settings.reference_energy_threshold,
+                logger,
+            )
+            logger.info(
+                f"  参考能级间距收敛: {'满足' if ref_energy_converged else '未满足'}"
+                f" (阈值: {config.cal_settings.reference_energy_threshold:.1f} cm⁻¹)"
+            )
+
+        if energy_converged and csfs_converged and ref_energy_converged:
+            logger.info("能级、组态数量、参考能级间距均已收敛，停止计算")
             return False
 
         if not energy_converged:
@@ -442,8 +614,8 @@ def evaluate_calculation_convergence(
             logger.info("组态数量未稳定收敛，继续计算")
         return True
 
-    except Exception as e:
-        logger.error(f"收敛性检查过程中发生错误: {e}")
+    except (FileNotFoundError, pl.exceptions.ColumnNotFoundError) as e:
+        logger.exception("收敛性检查过程中发生错误: %s", e)
         return True
 
 
@@ -532,6 +704,8 @@ def ci_idx_data_processor(
     )  # shape: (n_correct_levels, n_current_csfs)
 
     accumulated_idxs_ci_path = config.cal_path.accumulated_idxs_ci_path
+    accumulated_idxs: NDArray[np.int64]
+    accumulated_ci_squared: NDArray[np.float64]
     # 如果是第二轮及之后，读取历史数据并合并
     if config.cal_settings.cal_loop_num > 1:
         if accumulated_idxs_ci_path.exists():
@@ -554,8 +728,8 @@ def ci_idx_data_processor(
             
     else:
         # 第一轮直接使用当前数据
-        accumulated_idxs: NDArray[np.int64] = caled_csfs_idxs_array
-        accumulated_ci_squared: NDArray[np.float64] = correct_levels_ci_squared
+        accumulated_idxs = caled_csfs_idxs_array
+        accumulated_ci_squared = correct_levels_ci_squared
 
     # 保存合并后的累积数据到 accumulated_idxs_ci_path（供下次计算使用）
 
@@ -570,7 +744,8 @@ def ci_idx_data_processor(
 def generate_train_csfs_descriptors(
     config: MLCalConfig,
     raw_csfs_descriptors: NDArray[np.float64],
-    logger: logging.Logger
+    logger: logging.Logger,
+    selected_energy_data: pl.DataFrame | None = None,
 ) -> np.ndarray:
     """
     生成用于机器学习训练的CSFs描述符数据
@@ -584,6 +759,7 @@ def generate_train_csfs_descriptors(
         config: 配置对象
         raw_csfs_descriptors: 原始CSFs描述符数组
         logger: 日志记录器
+        selected_energy_data: 当前轮的目标谱项能级数据，用于差动CI加权正样本生成（可选）
 
     Returns:
         np.ndarray: 包含描述符和标签的训练数据
@@ -610,9 +786,84 @@ def generate_train_csfs_descriptors(
     # 转置以匹配描述符的行维度: (n_current_csfs, n_correct_levels)
     important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
 
+    # === 差动 CI 加权正样本（可选）===
+    # 物理依据：差动关联（ci²在不同谱项间差异大的CSF）主要影响能级间距。
+    # 当计算间距偏离参考值时，优先选择能拉近间距方向的 CSF 作为额外正样本。
+    if (
+        selected_energy_data is not None
+        and config.cal_settings.diff_ci_cutoff > 0
+        and len(config.cal_settings.reference_energy_levels) > 1
+    ):
+        diff_ci_cutoff = config.cal_settings.diff_ci_cutoff
+        spectral_terms = config.cal_settings.spectral_term
+        ref_energy_list = config.cal_settings.reference_energy_levels
+        ref_zero = min(ref_energy_list)
+        ref_zero_idx = ref_energy_list.index(ref_zero)
+
+        # 建立 谱项名 -> CI矩阵行索引 和 谱项名 -> 计算能级值(cm⁻¹) 的映射
+        # CI矩阵行顺序与 selected_energy_data 的行顺序一致（按能量升序排列）
+        term_to_ci_row: dict[str, int] = {}
+        term_to_calc_energy: dict[str, float] = {}
+        for ci_row_idx, energy_row in enumerate(selected_energy_data.iter_rows(named=True)):
+            term_name = energy_row["configuration_raw"]
+            if term_name in spectral_terms:
+                term_to_ci_row[term_name] = ci_row_idx
+                term_to_calc_energy[term_name] = float(energy_row["EnergyLevel"])
+
+        if len(term_to_ci_row) == len(spectral_terms):
+            # 计算零点对应谱项的计算能级值（用于计算相对能级差）
+            calc_zero_energy = term_to_calc_energy[spectral_terms[ref_zero_idx]]
+            # diff_mask shape: (n_levels, n_csfs)，与 accumulated_ci_squared 同形
+            diff_mask = np.zeros_like(accumulated_ci_squared, dtype=bool)
+
+            # 遍历所有谱项对，以参考能级确定高/低能态，按间距偏差方向追加正样本
+            for outer_idx in range(len(spectral_terms)):
+                for inner_idx in range(outer_idx + 1, len(spectral_terms)):
+                    outer_term = spectral_terms[outer_idx]
+                    inner_term = spectral_terms[inner_idx]
+                    outer_ref_rel = ref_energy_list[outer_idx] - ref_zero
+                    inner_ref_rel = ref_energy_list[inner_idx] - ref_zero
+
+                    # 以参考能级确定哪个谱项是高能态（high_term）、哪个是低能态（low_term）
+                    if outer_ref_rel >= inner_ref_rel:
+                        high_term, low_term = outer_term, inner_term
+                        ref_gap_high_minus_low = outer_ref_rel - inner_ref_rel
+                    else:
+                        high_term, low_term = inner_term, outer_term
+                        ref_gap_high_minus_low = inner_ref_rel - outer_ref_rel
+
+                    # 简并态（参考能级相同）无间距信息，跳过差动加权
+                    if ref_gap_high_minus_low == 0.0:
+                        continue
+
+                    high_ci_row = term_to_ci_row[high_term]
+                    low_ci_row = term_to_ci_row[low_term]
+                    high_calc_rel = term_to_calc_energy[high_term] - calc_zero_energy
+                    low_calc_rel = term_to_calc_energy[low_term] - calc_zero_energy
+                    calc_gap_high_minus_low = high_calc_rel - low_calc_rel
+
+                    if calc_gap_high_minus_low > ref_gap_high_minus_low:
+                        # 计算间距偏大：需降低高能态 → 追加对高能态 CI² 贡献显著的 CSF
+                        # 筛选：ci²[高能态行, CSF列] - ci²[低能态行, CSF列] >= diff_ci_cutoff
+                        ci_diff_for_high = accumulated_ci_squared[high_ci_row] - accumulated_ci_squared[low_ci_row]
+                        diff_mask[high_ci_row] |= (ci_diff_for_high >= diff_ci_cutoff)
+                    elif calc_gap_high_minus_low < ref_gap_high_minus_low:
+                        # 计算间距偏小：需降低低能态 → 追加对低能态 CI² 贡献显著的 CSF
+                        # 筛选：ci²[低能态行, CSF列] - ci²[高能态行, CSF列] >= diff_ci_cutoff
+                        ci_diff_for_low = accumulated_ci_squared[low_ci_row] - accumulated_ci_squared[high_ci_row]
+                        diff_mask[low_ci_row] |= (ci_diff_for_low >= diff_ci_cutoff)
+
+            diff_count = int(np.sum(diff_mask))
+            # diff_mask.T shape: (n_csfs, n_levels)，与 important_csfs_mask 同形，取 OR 合并
+            important_csfs_mask = important_csfs_mask | diff_mask.T
+            logger.info(f"差动CI加权新增正样本: {diff_count} (diff_ci_cutoff={diff_ci_cutoff})")
+
+    positive_count = int(np.sum(important_csfs_mask))
+    total_elements = important_csfs_mask.size
+
     logger.info(f"生成完整训练数据: {sampled_csfs_descriptors.shape[0]} 个CSF")
     logger.info(
-        f"正样本数量: {np.sum(important_csfs_mask)} (占比: {np.sum(important_csfs_mask) / len(important_csfs_mask):.4f})"
+        f"正样本数量: {positive_count} (占比: {positive_count / total_elements:.4f})"
     )
 
     # 返回完整的训练数据（类似旧版ann3_proba.py的处理方式）
@@ -621,25 +872,16 @@ def generate_train_csfs_descriptors(
     )
 
     # 保存描述符文件
-    save_descriptors(
-        caled_csfs_descriptors,
-        f"{config.cal_path.cal_loop_path}/{config.cal_path.loop_file_name}_full",
-        "npy",
-    )
-    logger.info(
-        f"保存完整历史数据并集描述符文件: {config.cal_path.cal_loop_path}/{config.cal_path.loop_file_name}_full.npy"
-    )
+    descriptor_path = config.cal_path.cal_loop_path / f"{config.cal_path.loop_file_name}_full"
+    save_descriptors(caled_csfs_descriptors, descriptor_path, "npy")
+    logger.info(f"保存完整历史数据并集描述符文件: {descriptor_path}.npy")
 
-    logger.info(f"CSFs描述符标签生成完成")
+    logger.info("CSFs描述符标签生成完成")
     logger.info(
-        f"正样本数量: {np.sum(important_csfs_mask)} (在正确能级位置混合系数 ≥ {cutoff_value})"
+        f"正样本数量: {positive_count} (在正确能级位置混合系数 ≥ {cutoff_value})"
     )
-    logger.info(
-        f"负样本总数量: {len(important_csfs_mask) - np.sum(important_csfs_mask)}"
-    )
-    logger.info(
-        f"正样本比例: {np.sum(important_csfs_mask) / len(important_csfs_mask):.4f}"
-    )
+    logger.info(f"负样本总数量: {total_elements - positive_count}")
+    logger.info(f"正样本比例: {positive_count / total_elements:.4f}")
 
     return caled_csfs_descriptors
 
