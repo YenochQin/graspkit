@@ -4,8 +4,9 @@
 @date :2026/02/20 15:48:54
 @author :YenochQin (秦毅)
 '''
-from pathlib import Path
 from dataclasses import dataclass, field as dc_field
+from pathlib import Path
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -38,6 +39,9 @@ class CalSettings(BaseModel):
     root_path: Path
     cal_levels: str
     spectral_term: list[str]
+    reference_energy_levels: list[float] = []
+    reference_energy_threshold: float = 0.0
+    diff_ci_cutoff: float = 0.0
 
     @field_validator("root_path", mode="before")
     @classmethod
@@ -63,10 +67,20 @@ class CalSettings(BaseModel):
 
     @field_validator("spectral_term")
     @classmethod
-    def validate_spectral_term(cls, v: list[str] | None) -> list[str] | None:
-        if v is not None and len(v) == 0:
+    def validate_spectral_term(cls, v: list[str]) -> list[str]:
+        if len(v) == 0:
             raise ValueError("spectral_term 必须是非空列表")
         return v
+
+    @model_validator(mode="after")
+    def validate_reference_energy_levels(self) -> "CalSettings":
+        if self.reference_energy_levels:
+            if len(self.reference_energy_levels) != len(self.spectral_term):
+                raise ValueError(
+                    f"reference_energy_levels 长度({len(self.reference_energy_levels)}) "
+                    f"必须与 spectral_term 长度({len(self.spectral_term)}) 相同"
+                )
+        return self
 
 # ServerSettings model
 class ServerSettings(BaseModel):

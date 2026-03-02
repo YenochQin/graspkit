@@ -60,6 +60,7 @@ from .grasp_data_extractor import (
 from .ml_module import (
     ANNClassifier,
     check_configuration_coupling,
+    check_reference_energy_agreement,
     check_energy_convergence,
     ci_idx_data_processor,
     evaluate_calculation_convergence,
@@ -176,6 +177,7 @@ __all__ = [
     "training_data_loader",
     "ci_idx_data_processor",
     "check_configuration_coupling",
+    "check_reference_energy_agreement",
     "check_energy_convergence",
     "evaluate_calculation_convergence",
     "generate_train_csfs_descriptors",
