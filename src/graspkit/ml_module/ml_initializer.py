@@ -257,20 +257,26 @@ def check_energy_convergence(
     config: MLCalConfig,
     logger: logging.Logger,
     current_energy_data: pl.DataFrame,
-    convergence_threshold: float = 0.001,
+    increase_tolerance: float = 1e-4,
 ) -> bool:
     """
-    检查能量收敛性：比较当前轮与上一轮的能量差异
-    ! TODO 这个还没改，上一轮的路径如何输入是个问题
+    检查能量收敛性：验证当前轮能量符合变分原理（单调不增）
+
+    在 MCDHF/RCI 变分计算中，随着组态空间扩大，束缚态总能量应单调下降
+    （变分原理保证）。若当前轮某能级较上一轮显著升高，则表明计算出现异常
+    （如线性相关、收敛到错误态或数值不稳定），需要回退重算。
+
+    能量大幅下降属于正常收敛过程，不触发回退。
 
     Args:
         config: 配置对象
         logger: 日志记录器
         current_energy_data: 当前轮的能量数据DataFrame
-        convergence_threshold: 收敛阈值，默认为0.001（绝对能量差）
+        increase_tolerance: 允许的能量上升上限（Hartree），超过此值视为异常，
+                            默认为 1e-4 Hartree（0.1 mHartree）
 
     Returns:
-        bool: True表示继续计算，False表示需要回退到上一轮重算
+        bool: True表示继续计算（能量正常下降或稳定），False表示需要回退到上一轮重算
     """
 
     try:
@@ -303,26 +309,33 @@ def check_energy_convergence(
             previous_energy_data["EnergyTotal"], dtype=np.float64
         )
 
-        # 计算绝对能量差异
-        energy_diffs = np.abs(current_energies - previous_energies)
-        max_diff = np.max(energy_diffs)
+        # 计算带符号的能量变化（正值=上升，负值=下降）
+        energy_changes = current_energies - previous_energies
+        max_increase = np.max(energy_changes)
+        max_decrease = np.min(energy_changes)
 
-        # 检查是否超过阈值
-        if max_diff > convergence_threshold:
-            max_diff_idx = np.argmax(energy_diffs)
+        logger.info("能量变化统计 (当前轮 - 上一轮):")
+        logger.info(f"  最大上升量: {max_increase:+.7f} Hartree")
+        logger.info(f"  最大下降量: {max_decrease:+.7f} Hartree")
+
+        # 核心检查：能量不应显著上升（违反变分原理）
+        if max_increase > increase_tolerance:
+            max_increase_idx = int(np.argmax(energy_changes))
             logger.warning(
-                f"检测到能量不收敛: 第{max_diff_idx + 1}个能级能量差异{max_diff:.6f} (阈值: {convergence_threshold:.6f})"
+                f"检测到能量异常上升（违反变分原理）: "
+                f"第 {max_increase_idx + 1} 个能级上升 {max_increase:.7f} Hartree"
+                f"（容差: {increase_tolerance:.1e} Hartree）"
             )
-            logger.warning(f"当前能量: {current_energies[max_diff_idx]:.7f}")
-            logger.warning(f"上轮能量: {previous_energies[max_diff_idx]:.7f}")
+            logger.warning(f"  当前轮能量: {current_energies[max_increase_idx]:.7f} Hartree")
+            logger.warning(f"  上一轮能量: {previous_energies[max_increase_idx]:.7f} Hartree")
             return False
 
-        logger.info("能量收敛检查通过，继续计算")
+        logger.info("能量变化方向正常（单调下降或数值稳定），继续计算")
         return True
 
     except Exception as e:
         logger.error(f"能量收敛检查过程中发生错误: {str(e)}")
-        return True  # 发生错误时继续计算，避免阻塞
+        return False  # 发生错误时继续计算，避免阻塞
 
 
 def evaluate_calculation_convergence(
