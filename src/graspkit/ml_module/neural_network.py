@@ -328,14 +328,14 @@ class ANNClassifier:
         best_model_state = None
 
         # 调试：输出训练前的初始状态
-        self.logger.info(f"[DEBUG] 训练数据范围 - X: min={X_train_tensor.min():.6f}, max={X_train_tensor.max():.6f}, mean={X_train_tensor.mean():.6f}")
-        self.logger.info(f"[DEBUG] 训练标签范围 - y: min={y_train_tensor.min():.6f}, max={y_train_tensor.max():.6f}, mean={y_train_tensor.mean():.6f}")
+        self.logger.debug(f"训练数据范围 - X: min={X_train_tensor.min():.6f}, max={X_train_tensor.max():.6f}, mean={X_train_tensor.mean():.6f}")
+        self.logger.debug(f"训练标签范围 - y: min={y_train_tensor.min():.6f}, max={y_train_tensor.max():.6f}, mean={y_train_tensor.mean():.6f}")
 
         # 检查初始模型输出
         self.model.eval()
         with torch.no_grad():
             initial_outputs = self.model(X_train_tensor[:100])
-            self.logger.info(f"[DEBUG] 初始模型输出(前100样本) - min={initial_outputs.min():.6f}, max={initial_outputs.max():.6f}, mean={initial_outputs.mean():.6f}")
+            self.logger.debug(f"初始模型输出(前100样本) - min={initial_outputs.min():.6f}, max={initial_outputs.max():.6f}, mean={initial_outputs.mean():.6f}")
         self.model.train()
 
         # 训练循环
@@ -410,17 +410,17 @@ class ANNClassifier:
                         if grad_norm == 0:
                             self.logger.warning(f"[DEBUG] Epoch {epoch} - {name} 梯度为0")
                 if grad_norms:
-                    self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - 梯度范数: min={min(grad_norms):.6f}, max={max(grad_norms):.6f}, mean={sum(grad_norms)/len(grad_norms):.6f}")
-                self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - outputs范围: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
-                self.logger.info(f"[DEBUG] Epoch {epoch} Batch 0 - loss={loss.item():.6f}")
-                self.logger.info(f"[DEBUG] Epoch {epoch} - 学习率: {self.optimizer.param_groups[0]['lr']:.6f}")
+                    self.logger.debug(f"Epoch {epoch} Batch 0 - 梯度范数: min={min(grad_norms):.6f}, max={max(grad_norms):.6f}, mean={sum(grad_norms)/len(grad_norms):.6f}")
+                self.logger.debug(f"Epoch {epoch} Batch 0 - outputs范围: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
+                self.logger.debug(f"Epoch {epoch} Batch 0 - loss={loss.item():.6f}")
+                self.logger.debug(f"Epoch {epoch} - 学习率: {self.optimizer.param_groups[0]['lr']:.6f}")
 
             # 梯度裁剪 - 增大阈值避免限制学习
             grad_norm_before = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
 
             # 调试：记录梯度裁剪情况
             if (epoch == 0 and i == 0) or (epoch == max_epochs - 1 and i == 0):
-                self.logger.info(f"[DEBUG] Epoch {epoch} - 梯度裁剪前总范数: {grad_norm_before:.6f}, 裁剪阈值: 5.0")
+                self.logger.debug(f"Epoch {epoch} - 梯度裁剪前总范数: {grad_norm_before:.6f}, 裁剪阈值: 5.0")
 
             self.optimizer.step()
 
