@@ -229,8 +229,7 @@ def save_training_results(
     # 计算过拟合差距
     overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
 
-    # 安全获取配置参数
-    cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
+    cal_loop_num = config.cal_settings.cal_loop_num
 
     with open(results_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -299,8 +298,7 @@ def save_iteration_results(
     ml_retention_rate = getattr(train_data_counts, "ml_retention_rate", 0)
     iteration_retention_rate = getattr(train_data_counts, "iteration_retention_rate", 0)
 
-    # 安全获取配置参数
-    cal_loop_num = getattr(config.cal_settings, "cal_loop_num", 1)
+    cal_loop_num = config.cal_settings.cal_loop_num
 
     with open(results_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)

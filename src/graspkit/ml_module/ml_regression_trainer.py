@@ -120,7 +120,7 @@ def train_regression_model(
     # CPU 线程优化
     if not torch.cuda.is_available():
         cpu_count = os.cpu_count() or 4
-        cpu_threads = getattr(config.server_settings, "cpu_threads", 16)
+        cpu_threads = config.server_settings.cpu_threads
         if cpu_threads is not None:
             try:
                 optimal_threads = min(int(cpu_threads), cpu_count)
@@ -164,7 +164,7 @@ def train_regression_model(
     overfitting_gap = train_rho - test_rho
     logger.info(f"过拟合检测（训练ρ - 测试ρ）: {overfitting_gap:.4f}")
 
-    overfitting_threshold = getattr(config.ml_config, "overfitting_threshold", 0.1)
+    overfitting_threshold = config.ml_config.overfitting_threshold
     if overfitting_gap > overfitting_threshold:
         logger.warning("检测到可能的过拟合现象（Spearman ρ 差异过大）")
 
@@ -250,11 +250,11 @@ def predict_regression_model(
         current_important_count = min_important_count
         logger.info(f"重要组态数目小于最小值，调整为 {min_important_count}")
 
-    expansion_ratio = getattr(config.cal_settings, "expansion_ratio", 2)
+    expansion_ratio = config.cal_settings.expansion_ratio
     new_target = math.ceil(expansion_ratio * current_important_count)
 
     # 设置上限
-    sampling_ratio = getattr(config.cal_settings, "sampling_ratio", 0.085)
+    sampling_ratio = config.cal_settings.sampling_ratio
     max_sampling_num = math.ceil(total_csfs_count * sampling_ratio)
     if new_target + current_important_count > max_sampling_num:
         new_target = max_sampling_num - current_important_count
