@@ -178,7 +178,7 @@ def train_model(
         cpu_count = os.cpu_count() or 4  # 如果无法获取则默认使用4核
 
         # 从配置文件读取PyTorch线程数，如果未设置则使用默认值
-        cpu_threads = getattr(config.server_settings, "cpu_threads", 16)
+        cpu_threads = config.server_settings.cpu_threads
         if cpu_threads is not None:
             try:
                 cpu_threads = int(cpu_threads)
@@ -409,8 +409,9 @@ def evaluate_model(
     # 过拟合监控
     overfitting_check = train_f1 - test_f1
     logger.info(f"过拟合检查差异(训练-测试): {overfitting_check:.4f}")
-    overfitting_threshold = getattr(config.ml_config, "overfitting_threshold", 0.1)
-    underfitting_threshold = getattr(config.ml_config, "underfitting_threshold", -0.05)
+    overfitting_threshold = config.ml_config.overfitting_threshold
+    underfitting_threshold = config.ml_config.underfitting_threshold
+
     if overfitting_check > overfitting_threshold:
         logger.warning("检测到可能的过拟合现象")
     elif overfitting_check < underfitting_threshold:
@@ -452,7 +453,6 @@ def evaluate_model(
             "eval_time": eval_time,
             "test_samples": len(y_test),
             "train_samples": len(y_train),
-            "config_name": getattr(config, "file_name", "unknown"),
         },
     }
     save_training_results(config, evaluation_results, logger)
@@ -496,7 +496,7 @@ def predict_model(
     logger.info(f"当前计算CSF数量: {len(current_calc_idxs)}, 预测概率shape: {y_current_cal_probability.shape}")
 
     # 基于混合系数选择重要组态（已验证重要组态）
-    cutoff_value = getattr(config.cal_settings, "cutoff_value", 1e-10)
+    cutoff_value = config.cal_settings.cutoff_value
     csfs_above_threshold_idxs = np.where(
         np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis=0)
     )[0]
@@ -525,7 +525,7 @@ def predict_model(
         logger.info(f"重要组态数目小于等于最小值，调整为{min_important_count}")
 
     # 获取扩展比例
-    expansion_ratio = getattr(config.cal_settings, "expansion_ratio", 2)
+    expansion_ratio = config.cal_settings.expansion_ratio
     new_sampling_CSFs_num = math.ceil(expansion_ratio * current_important_count)
 
     # 在未选择的CSF中找出被预测为重要的组态
@@ -543,7 +543,7 @@ def predict_model(
     logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
 
     # 设置上限
-    sampling_ratio = getattr(config.cal_settings, "sampling_ratio", 0.085)
+    sampling_ratio = config.cal_settings.sampling_ratio
     max_sampling_CSFs_num = math.ceil(total_csfs_count * sampling_ratio)
     if new_sampling_CSFs_num + current_important_count > max_sampling_CSFs_num:
         new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count

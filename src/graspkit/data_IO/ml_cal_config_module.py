@@ -24,13 +24,13 @@ class Target(BaseModel):
 class CalSettings(BaseModel):
     """Calculation settings"""
     continue_cal: bool = True
-    cal_loop_num: int
+    cal_loop_num: int = 1
     cal_error_num: int = 0
     backward_loop_needed: bool = False
     target_backward_loop: int = 0
     cutoff_value: float
-    sampling_ratio: float
-    expansion_ratio: float
+    sampling_ratio: float = 0.1
+    expansion_ratio: float = 2.0
     energy_std_threshold: float = 1e-5
     csfs_num_relative_std_threshold: float = 0.002
     cal_method: str = "rci"
@@ -88,7 +88,7 @@ class ServerSettings(BaseModel):
     slurm_partition: str
     tasks_per_node: int
     mpi_tmp_path: str | None = None
-    cpu_threads: int | None = None
+    cpu_threads: int = 16
     python_source: str  # "uv" or "conda"
     uv_env_path: str | None = None
     conda_path: str | None = None
@@ -148,10 +148,9 @@ class StepControl(BaseModel):
 # MlConfig model
 class MlConfig(BaseModel):
     """Machine learning configuration"""
-    use_rcsfs: bool = True
     high_prob_percentile: int = 95
-    overfitting_threshold: float
-    underfitting_threshold: float
+    overfitting_threshold: float = 0.1
+    underfitting_threshold: float = -0.05
     include_wrong_level_negatives: bool = True
     feature_selection: bool = True
 
