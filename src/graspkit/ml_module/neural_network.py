@@ -757,6 +757,11 @@ class ANNClassifier:
 
     def save_model(self, path: str) -> None:
         """保存模型完整状态"""
+        saved_class_weights = (
+            None
+            if self.class_weights is None
+            else self.class_weights.detach().cpu().tolist()
+        )
         save_dict = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -769,22 +774,35 @@ class ANNClassifier:
                 "model_architecture": self.model_architecture,
                 "tensor_channels": self.tensor_channels,
                 "multi_label": self.multi_label,
+                "use_dynamic_weights": self.use_dynamic_weights,
+                "class_weights": saved_class_weights,
             },
         }
         torch.save(save_dict, path)
 
-    def load_model(
-        self,
-        path: str,
-        device: str | None = None
-        ) -> ANNClassifier:
-        """加载模型"""
-        checkpoint = torch.load(path, map_location=device or self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.training_history = checkpoint["training_history"]
-        self.model.to(self.device)
-        return self
+    @classmethod
+    def load_model(cls, path: str, device: str | None = None) -> "ANNClassifier":
+        """从 checkpoint 自动重建并加载模型"""
+        checkpoint = torch.load(path, map_location=device or "cpu")
+        hyperparameters = checkpoint["hyperparameters"]
+
+        model = cls(
+            input_size=hyperparameters["input_size"],
+            hidden_size=hyperparameters["hidden_size"],
+            output_size=hyperparameters["output_size"],
+            learning_rate=hyperparameters["learning_rate"],
+            class_weights=hyperparameters.get("class_weights"),
+            device=device,
+            use_dynamic_weights=hyperparameters.get("use_dynamic_weights", True),
+            model_architecture=hyperparameters["model_architecture"],
+            tensor_channels=hyperparameters.get("tensor_channels", 3),
+            multi_label=hyperparameters.get("multi_label"),
+        )
+        model.model.load_state_dict(checkpoint["model_state_dict"])
+        model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        model.training_history = checkpoint["training_history"]
+        model.model.to(model.device)
+        return model
 
     @staticmethod
     def plot_curve(
