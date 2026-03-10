@@ -1,22 +1,19 @@
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import numpy as np
 
 
 class PredictionOutputs(TypedDict):
-    y_prediction_test: np.ndarray
-    y_prediction_train: np.ndarray
+    y_prediction_labeled: np.ndarray
 
 
 class ProbabilityOutputs(TypedDict):
-    y_probability_test: np.ndarray
-    y_probability_train: np.ndarray
+    y_probability_labeled: np.ndarray
     y_probability_all: np.ndarray
 
 
 class LabelOutputs(TypedDict):
-    y_test: np.ndarray
-    y_train: np.ndarray
+    y_labeled: np.ndarray
 
 
 class MetricsOutputs(TypedDict):
@@ -29,13 +26,12 @@ class MetricsOutputs(TypedDict):
 
 class MetadataOutputs(TypedDict):
     eval_time: float
-    test_samples: int
-    train_samples: int
+    labeled_samples: int
+    metric_scope: Literal["in_sample"]
 
 
 class EvaluationResults(TypedDict):
     probabilities: ProbabilityOutputs
     true_labels: LabelOutputs
-    test_metrics: MetricsOutputs
-    train_metrics: MetricsOutputs
+    labeled_metrics: MetricsOutputs
     metadata: MetadataOutputs
