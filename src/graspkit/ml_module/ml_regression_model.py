@@ -395,11 +395,22 @@ class ANNRegressor:
         }
         torch.save(save_dict, path)
 
-    def load_model(self, path: str, device: str | None = None) -> "ANNRegressor":
-        """加载模型"""
-        checkpoint = torch.load(path, map_location=device or self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.training_history = checkpoint["training_history"]
-        self.model.to(self.device)
-        return self
+    @classmethod
+    def load_model(cls, path: str, device: str | None = None) -> "ANNRegressor":
+        """从 checkpoint 自动重建并加载回归模型"""
+        checkpoint = torch.load(path, map_location=device or "cpu")
+        hyperparameters = checkpoint["hyperparameters"]
+
+        model = cls(
+            input_size=hyperparameters["input_size"],
+            hidden_size=hyperparameters["hidden_size"],
+            output_size=hyperparameters["output_size"],
+            learning_rate=hyperparameters["learning_rate"],
+            huber_delta=hyperparameters.get("huber_delta", 1.0),
+            device=device,
+        )
+        model.model.load_state_dict(checkpoint["model_state_dict"])
+        model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        model.training_history = checkpoint["training_history"]
+        model.model.to(model.device)
+        return model

@@ -188,7 +188,7 @@ def check_configuration_coupling(
     spectral_term: list[str],
     cal_loop_num: int,
     logger: logging.Logger,
-) -> tuple[bool, pl.DataFrame, NDArray[np.float64]]:
+) -> tuple[bool, pl.DataFrame | None, NDArray[np.float64] | None]:
     """检查组态耦合是否正确
 
     优化版本：一次遍历完成计数和位置记录，时间复杂度从 O(n*m) 降至 O(n)
@@ -235,7 +235,7 @@ def check_configuration_coupling(
             logger.error(err)
         error_msg = f"cal_loop {cal_loop_num} 组态耦合错误"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        return False, None, None
 
     # 成功路径
     # 注意：排序后 selected_energy_data 的行顺序为能量文件中的升序位置，
