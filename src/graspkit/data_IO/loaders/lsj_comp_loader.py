@@ -8,6 +8,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import polars as pl
 
@@ -127,7 +128,7 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
             lines = [line.rstrip("\n") for line in f.readlines()]
 
         data_rows = []
-        current_level = None
+        current_level: dict[str, Any] | None = None
 
         for line in lines:
             # 跳过空行
@@ -155,7 +156,8 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
             # 尝试匹配组成行
             comp_match = self.COMPOSITION_LINE_PATTERN.match(line)
             if comp_match and current_level is not None:
-                current_level["compositions"].append(
+                compositions = cast(list[dict[str, Any]], current_level["compositions"])
+                compositions.append(
                     {
                         "coefficient": float(comp_match.group(1)),
                         "weight": float(comp_match.group(2)),

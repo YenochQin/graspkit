@@ -15,8 +15,12 @@
 """
 import warnings
 import re
+from typing import Any
+
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from .fig_settings import (
         configure_matplotlib_for_publication,
@@ -30,15 +34,15 @@ from .fig_settings import (
 
 
 def inter_coupling_channel_bar(
-        categories,
-        quantity,
-        sum_squared_ci,
-        colors=None,
-        figsize='double_column',
-        color_scheme='nature',
-        min_threshold=10,
-        fontsize_scale=1.0
-    ):
+        categories: Any,
+        quantity: Any,
+        sum_squared_ci: Any,
+        colors: list[Any] | None = None,
+        figsize: str | tuple[float, float] = 'double_column',
+        color_scheme: str = 'nature',
+        min_threshold: int = 10,
+        fontsize_scale: float = 1.0,
+    ) -> tuple[Figure, Axes, Axes]:
     """
     创建专业的双轴柱状图，展示占比和贡献值
 
@@ -79,7 +83,7 @@ def inter_coupling_channel_bar(
     sum_squared_ci = np.array(sum_squared_ci, dtype=float)
 
     # 处理元组类别名称
-    def format_category(cat):
+    def format_category(cat: Any) -> str:
         if isinstance(cat, tuple):
             return '-'.join(str(item) for item in cat)
         else:
@@ -100,7 +104,7 @@ def inter_coupling_channel_bar(
             aggregated_quantity = quantity[~mask_above_threshold].sum()
             aggregated_sum_squared_ci = sum_squared_ci[~mask_above_threshold].sum()
             aggregated_quantity_percent = quantity_percent[~mask_above_threshold].sum()
-            aggregated_count = np.sum(~mask_above_threshold)
+            # aggregated_count = np.sum(~mask_above_threshold)
 
             # 保留大于阈值的类别
             categories_keep = categories[mask_above_threshold]
@@ -255,7 +259,7 @@ def inter_coupling_channel_bar(
 
 
 def auto_plot_wavefunction_comparison(
-        data_list: list,
+        data_list: list[Any],
         column_names: list[str],
         x_col: str = 'r(a.u)',
         labels: list[str] | None = None,
@@ -265,11 +269,11 @@ def auto_plot_wavefunction_comparison(
         xscale: str = 'symlog',
         linthresh: int = 1,
         suptitle: str = 'Wavefunction Comparison',
-        colors  = None,
-        linestyles: list[str] | None = None,
+        colors: list[str] | None = None,
+        linestyles: list[Any] | None = None,
         xlabel: str | None = None,
-        ylabel: str | None = None
-    ):
+        ylabel: str | None = None,
+    ) -> tuple[Figure, np.ndarray]:
     """
     自动绘制波函数对比图的通用函数，支持多个DataFrame对比
 
@@ -293,7 +297,7 @@ def auto_plot_wavefunction_comparison(
         fig, axes: matplotlib的figure和axes对象
     """
 
-    def extract_orbital_name(col_name):
+    def extract_orbital_name(col_name: str) -> str:
         """
         从列名中提取轨道名称（括号内的字符）
 
@@ -308,7 +312,7 @@ def auto_plot_wavefunction_comparison(
             return match.group(1)
         return col_name
 
-    def group_columns_by_orbital(column_names):
+    def group_columns_by_orbital(column_names: list[str]) -> list[dict[str, str]]:
         """
         将列名按轨道分组，返回每组对应的P和Q列名以及轨道名称
 
@@ -319,7 +323,7 @@ def auto_plot_wavefunction_comparison(
             list: 包含轨道信息的列表，每个元素为 {'orbital': str, 'p_col': str, 'q_col': str}
         """
         # 首先提取所有轨道名称
-        orbital_map = {}
+        orbital_map: dict[str, dict[str, str | None]] = {}
         for col_name in column_names:
             orbital = extract_orbital_name(col_name)
             if orbital not in orbital_map:
@@ -332,7 +336,7 @@ def auto_plot_wavefunction_comparison(
                 orbital_map[orbital]['q_col'] = col_name
 
         # 转换为列表格式，并验证每个轨道都有P和Q分量
-        orbital_groups = []
+        orbital_groups: list[dict[str, str]] = []
         for orbital, cols in orbital_map.items():
             if cols['p_col'] is not None and cols['q_col'] is not None:
                 orbital_groups.append({
@@ -487,7 +491,7 @@ def auto_plot_wavefunction_comparison(
     )
 
     # 配置子图网格，使用轨道名称作为标题
-    orbital_titles = [group['orbital'] for group in orbital_groups[:nrows*ncols]]
+    orbital_titles: list[str | None] = [group['orbital'] for group in orbital_groups[:nrows*ncols]]
     configure_subplot_grid(
         fig,
         axes,

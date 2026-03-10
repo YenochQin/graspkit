@@ -207,14 +207,14 @@ def parse_csf_2_descriptor(
         temp_middle_item = 0
         if not middle_line_item.isspace():  # 如果不是空白
             # 如果有分号分隔的多个值，取最后一个
-            temp_middle_item = middle_line_item.split(";")[-1].strip()
-            temp_middle_item = J_to_doubleJ(temp_middle_item)  # 转换为2J值
+            temp_middle_str = middle_line_item.split(";")[-1].strip()
+            temp_middle_item = J_to_doubleJ(temp_middle_str)  # 转换为2J值
 
         # 处理第三行数据（耦合J值）
         temp_coupling_item = 0
         if not coupling_line_item.isspace():  # 如果第三行有值
-            temp_coupling_item = coupling_line_item.strip()
-            temp_coupling_item = J_to_doubleJ(temp_coupling_item)
+            temp_coupling_str = coupling_line_item.strip()
+            temp_coupling_item = J_to_doubleJ(temp_coupling_str)
         elif not middle_line_item.isspace():  # 如果第三行没值但第二行有值
             temp_coupling_item = temp_middle_item  # 使用第二行的值
 

@@ -26,6 +26,7 @@
 """
 import re
 import warnings
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -390,7 +391,12 @@ def configure_for_latex() -> bool:
         return False
 
 
-def save_figure(fig: Figure, filename: str, purpose: str = "publication", **kwargs) -> bool:
+def save_figure(
+    fig: Figure,
+    filename: str,
+    purpose: str = "publication",
+    **kwargs: Any,
+) -> bool:
     """
     保存图表，根据用途优化设置
 
@@ -418,7 +424,7 @@ def save_figure(fig: Figure, filename: str, purpose: str = "publication", **kwar
             if settings["format"]:
                 filename = f"{filename}.{settings['format']}"
 
-            fig.savefig(filename, **save_kwargs)
+            fig.savefig(filename, **cast(Any, save_kwargs))
             return True
         else:
             warnings.warn(f"Unknown save purpose: {purpose}")
@@ -515,14 +521,14 @@ def _get_axes_at(axes: Axes | np.ndarray, i: int, j: int) -> Axes:
     # 如果axes是一维数组（1xN或Nx1布局）
     if axes.ndim == 1:
         if axes.shape[0] == 1:  # 1x1
-            return axes[0]
+            return cast(Axes, axes[0])
         elif i == 0:  # 1xN布局
-            return axes[j]
+            return cast(Axes, axes[j])
         else:  # Nx1布局
-            return axes[i]
+            return cast(Axes, axes[i])
 
     # 如果axes是二维数组（MxN布局）
-    return axes[i, j]
+    return cast(Axes, axes[i, j])
 
 
 def get_subplot_layout(layout_name: str) -> tuple[int, int]:
@@ -537,7 +543,7 @@ def get_subplot_layout(layout_name: str) -> tuple[int, int]:
     """
     # 首先检查是否在预定义布局中
     if layout_name in SUBPLOT_LAYOUTS:
-        return SUBPLOT_LAYOUTS[layout_name]
+        return cast(tuple[int, int], SUBPLOT_LAYOUTS[layout_name])
 
     # 使用正则匹配解析布局格式 (如 "1x4", "3x5", "10x2" 等)
     pattern = r"^(\d+)x(\d+)$"
@@ -611,10 +617,10 @@ def create_multi_subplot_figure(
     spacing: str = "normal",
     color_scheme: str = "default",
     legend_size: str = "medium",
-    sharex: bool | str = False,
-    sharey: bool | str = False,
+    sharex: bool | Literal["none", "all", "row", "col"] = False,
+    sharey: bool | Literal["none", "all", "row", "col"] = False,
     squeeze: bool = False,
-    subplot_kw: dict[str, str | int | float | bool] | None = None,
+    subplot_kw: dict[str, Any] | None = None,
     gridspec_kw: dict[str, float] | None = None,
 ) -> tuple[Figure, np.ndarray]:
     """
@@ -642,13 +648,12 @@ def create_multi_subplot_figure(
     figsize = calculate_subplot_figure_size(base_size, layout, spacing)
 
     # 准备gridspec参数
-    if gridspec_kw is None:
-        gridspec_kw: dict[str, float] = {}
+    resolved_gridspec_kw: dict[str, float] = dict(gridspec_kw or {})
 
     # 添加间距设置
     if spacing in SUBPLOT_SPACING:
-        gridspec_kw.setdefault("wspace", SUBPLOT_SPACING[spacing]["wspace"])
-        gridspec_kw.setdefault("hspace", SUBPLOT_SPACING[spacing]["hspace"])
+        resolved_gridspec_kw.setdefault("wspace", SUBPLOT_SPACING[spacing]["wspace"])
+        resolved_gridspec_kw.setdefault("hspace", SUBPLOT_SPACING[spacing]["hspace"])
 
     # 创建多子图
     fig, axes = plt.subplots(
@@ -659,7 +664,7 @@ def create_multi_subplot_figure(
         sharey=sharey,
         squeeze=squeeze,
         subplot_kw=subplot_kw,
-        gridspec_kw=gridspec_kw,
+        gridspec_kw=resolved_gridspec_kw,
     )
 
     # 设置配色方案
@@ -848,8 +853,9 @@ def configure_subplot_grid(
                     if title:
                         if isinstance(title, list):
                             idx = i * ncols + j
-                            if idx < len(title) and title[idx]:
-                                ax.set_title(title[idx])
+                            title_item = title[idx] if idx < len(title) else None
+                            if title_item is not None:
+                                ax.set_title(title_item)
                         else:
                             ax.set_title(title)
 
@@ -857,9 +863,10 @@ def configure_subplot_grid(
                     if subtitle:
                         if isinstance(subtitle, list):
                             idx = i * ncols + j
-                            if idx < len(subtitle) and subtitle[idx]:
+                            subtitle_item = subtitle[idx] if idx < len(subtitle) else None
+                            if subtitle_item is not None:
                                 ax.set_title(
-                                    subtitle[idx],
+                                    subtitle_item,
                                     loc="right",
                                     fontsize=10,
                                     style="italic",
@@ -873,8 +880,9 @@ def configure_subplot_grid(
                     if xlabel:
                         if isinstance(xlabel, list):
                             idx = i * ncols + j
-                            if idx < len(xlabel) and xlabel[idx]:
-                                ax.set_xlabel(xlabel[idx])
+                            xlabel_item = xlabel[idx] if idx < len(xlabel) else None
+                            if xlabel_item is not None:
+                                ax.set_xlabel(xlabel_item)
                         else:
                             ax.set_xlabel(xlabel)
 
@@ -882,8 +890,9 @@ def configure_subplot_grid(
                     if ylabel:
                         if isinstance(ylabel, list):
                             idx = i * ncols + j
-                            if idx < len(ylabel) and ylabel[idx]:
-                                ax.set_ylabel(ylabel[idx])
+                            ylabel_item = ylabel[idx] if idx < len(ylabel) else None
+                            if ylabel_item is not None:
+                                ax.set_ylabel(ylabel_item)
                         else:
                             ax.set_ylabel(ylabel)
                 except Exception as e:
@@ -929,23 +938,23 @@ def create_shared_colorbar(
         if orientation == "vertical":
             if location == "right":
                 # 右侧: [left=0.92, bottom=0.1, width=0.02, height=0.8]
-                cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
+                cax = fig.add_axes((0.92, 0.1, 0.02, 0.8))
             elif location == "left":
                 # 左侧: [left=0.06, bottom=0.1, width=0.02, height=0.8]
-                cax = fig.add_axes([0.06, 0.1, 0.02, 0.8])
+                cax = fig.add_axes((0.06, 0.1, 0.02, 0.8))
             else:
                 # 默认右侧
-                cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
+                cax = fig.add_axes((0.92, 0.1, 0.02, 0.8))
         else:  # horizontal
             if location == "top":
                 # 顶部: [left=0.1, bottom=0.92, width=0.8, height=0.02]
-                cax = fig.add_axes([0.1, 0.92, 0.8, 0.02])
+                cax = fig.add_axes((0.1, 0.92, 0.8, 0.02))
             elif location == "bottom":
                 # 底部: [left=0.1, bottom=0.06, width=0.8, height=0.02]
-                cax = fig.add_axes([0.1, 0.06, 0.8, 0.02])
+                cax = fig.add_axes((0.1, 0.06, 0.8, 0.02))
             else:
                 # 默认底部
-                cax = fig.add_axes([0.1, 0.06, 0.8, 0.02])
+                cax = fig.add_axes((0.1, 0.06, 0.8, 0.02))
 
         # 创建colorbar
         cbar = fig.colorbar(
@@ -964,7 +973,7 @@ def save_multi_subplot_figure(
     layout: str = "2x2",
     purpose: str = "publication",
     tight_layout: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> bool:
     """
     保存多子图
@@ -992,7 +1001,8 @@ def save_multi_subplot_figure(
         if nrows * ncols > 4:
             if purpose in SAVE_FORMATS:
                 settings = SAVE_FORMATS[purpose]
-                if settings["dpi"] and settings["dpi"] < 300:
+                dpi_value = settings["dpi"]
+                if isinstance(dpi_value, int) and dpi_value < 300:
                     settings["dpi"] = 300  # 提高多子图的分辨率
 
         return save_figure(fig, filename, purpose, **kwargs)

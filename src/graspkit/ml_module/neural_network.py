@@ -31,7 +31,7 @@ from sklearn.metrics import (
 
 def _set_random_seed(seed: int) -> None:
     """设置所有相关库的随机种子以保证可重复性"""
-    torch.manual_seed(seed)# type: ignore[reportUnknownMemberType]
+    torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
@@ -52,7 +52,7 @@ class TensorNet(nn.Module):
 
     def __init__(
         self, input_shape: tuple[int, int], hidden_dim: int = 128, num_classes: int = 2
-    ):
+    ) -> None:
         """
         初始化 TensorNet
 
@@ -181,6 +181,10 @@ class ANNClassifier:
             self.device = torch.device(device)
 
         # 类别权重处理
+        self.class_weights: torch.Tensor | None
+        self.model: nn.Module
+        self.criterion: nn.Module
+
         if not use_dynamic_weights:
             # 使用静态权重
             if class_weights is None:
@@ -221,6 +225,7 @@ class ANNClassifier:
 
     def _build_model(self) -> nn.Module:
         """构建神经网络模型"""
+        model: nn.Module
         if self.model_architecture == "tensornet":
             # TensorNet 架构
             seq_length = self.input_size // self.tensor_channels
@@ -252,7 +257,7 @@ class ANNClassifier:
         for module in model.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:  # type: ignore[reportUnnecessaryComparison]
+                if module.bias is not None:
                     #这是 PyTorch 类型存根的不准确之处——nn.Linear.bias 实际上可以是None（当 nn.Linear(..., bias=False) 时），但存根中将其标注为Parameter 而非 Parameter | None。代码逻辑本身是正确的。
                     nn.init.constant_(module.bias, 0.01)  # 小正值偏置，避免Dead ReLU
 
@@ -311,6 +316,8 @@ class ANNClassifier:
         y_train_tensor = torch.tensor(y_train, dtype=y_dtype).to(self.device)
 
         # 验证数据处理
+        X_val_tensor: torch.Tensor | None
+        y_val_tensor: torch.Tensor | None
         if X_val is not None and y_val is not None:
             X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(self.device)
             y_val_tensor = torch.tensor(y_val, dtype=y_dtype).to(self.device)
@@ -435,7 +442,7 @@ class ANNClassifier:
         """验证一个epoch"""
         self.model.eval()
         total_loss = 0.0
-        correct = 0
+        correct = 0.0
         total = 0
 
         with torch.no_grad():
@@ -933,7 +940,7 @@ class ANNClassifier:
     @staticmethod
     def model_evaluation(
         y_test: np.ndarray, y_pred: np.ndarray, y_probability: np.ndarray
-    ):
+    ) -> tuple[float, float, float, float, float]:
         """
         模型评估
 

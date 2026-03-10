@@ -145,6 +145,14 @@ python_version = "3.14"
 strict = true
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = ["joblib", "sklearn", "sklearn.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["seaborn", "scipy", "scipy.*"]
+ignore_missing_imports = true
+
 [tool.basedpyright]
 include = ["src"]
 exclude = ["**/node_modules",
