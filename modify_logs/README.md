@@ -6,6 +6,23 @@
 
 ## 📁 最新修改记录
 
+### Strict `mypy src/` 清理完成 (2026-03-10)
+
+**修复文件**:
+- `strict_mypy_cleanup_20260310.md` - 本轮严格类型清理总结
+
+**修复统计**:
+- `mypy src/`: ✅ `Success: no issues found in 37 source files`
+- `ruff check`（相关文件）: ✅ 通过
+
+**关键结果**:
+1. ✅ `ml_module` 类型结构统一，新增 `ml_types.py`
+2. ✅ `utils` 图表工具链严格类型问题清理完成
+3. ✅ `data_IO` 与 `CSFs_processor` 历史类型问题收敛完成
+4. ✅ 第三方库缺少 stub 改为模块级定向豁免
+
+---
+
 ### CODE_REVIEW.md 关键问题修复 (2026-01-19)
 
 **修复文件**:
@@ -37,6 +54,7 @@
 
 | 文件 | 日期 | 说明 |
 |------|------|------|
+| `strict_mypy_cleanup_20260310.md` | 2026-03-10 | `src/` 全量严格类型清理总结 |
 | `type_safety_solution_summary.md` | 2025-01-02 | 类型安全解决方案总结 |
 | `logger_refactoring_20250713.md` | 2025-07-13 | 日志系统重构 |
 | `html_generator_*.md` | 2025-07-13 | HTML 生成器优化 |
@@ -142,5 +160,5 @@ ls -lt modify_logs/*.md
 
 ---
 
-**最后更新**: 2026-01-19
+**最后更新**: 2026-03-10
 **维护者**: Sisyphus (AI Code Review Agent)
