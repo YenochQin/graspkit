@@ -5,10 +5,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from graspkit.ml_module import ml_results_analyzer, ml_trainer
+from graspkit.ml_module.neural_network import ANNClassifier
 
 
 def make_config(tmp_path: Path, loop_num: int = 1) -> SimpleNamespace:
@@ -53,6 +55,9 @@ class DummyClassifier:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         return np.full((len(X), self.output_size), 0.75, dtype=float)
+
+    def save_model(self, path: str) -> None:
+        Path(path).write_text("dummy-checkpoint", encoding="utf-8")
 
     @staticmethod
     def model_evaluation(
@@ -163,16 +168,53 @@ def test_save_and_plot_results_writes_labeled_parquet_only(tmp_path: Path) -> No
         model,
         correct_levels_ci=np.array([[0.2, 0.1], [0.3, 0.4]]),
         y_current_cal_probability=np.array([[0.8, 0.2], [0.1, 0.9]]),
-        save_model=False,
+        save_model=True,
         save_data=True,
         plot_curves=True,
     )
 
     labeled_file = config.cal_path.results_path / "demo_loop_labeled_results.parquet"
+    model_file = config.cal_path.models_path / "demo_loop.pt"
     assert labeled_file.exists()
+    assert model_file.exists()
     assert "labeled_data" in saved_files
-    assert "test_data" not in saved_files
+    assert saved_files["model"].endswith("demo_loop.pt")
 
     frame = pl.read_parquet(labeled_file)
     assert frame.columns == ["y_true", "y_prediction", "y_proba"]
     assert frame.shape == (2, 3)
+
+
+def test_annclassifier_checkpoint_roundtrip(tmp_path: Path) -> None:
+    model = ANNClassifier(
+        input_size=4,
+        hidden_size=8,
+        output_size=2,
+        learning_rate=0.002,
+        class_weights=[1.0, 3.0],
+        use_dynamic_weights=False,
+        model_architecture="standard",
+        tensor_channels=1,
+        random_seed=7,
+    )
+    model.training_history["train_loss"].append(0.123)
+    checkpoint_path = tmp_path / "model.pt"
+
+    model.save_model(str(checkpoint_path))
+    loaded = ANNClassifier.load_model(str(checkpoint_path), device="cpu")
+
+    assert loaded.input_size == 4
+    assert loaded.hidden_size == 8
+    assert loaded.output_size == 2
+    assert loaded.learning_rate == 0.002
+    assert loaded.model_architecture == "standard"
+    assert loaded.use_dynamic_weights is False
+    assert loaded.training_history["train_loss"] == [0.123]
+    assert loaded.class_weights is not None
+    assert loaded.class_weights.detach().cpu().tolist() == [1.0, 3.0]
+
+    original_state = model.model.state_dict()
+    loaded_state = loaded.model.state_dict()
+    assert original_state.keys() == loaded_state.keys()
+    for key in original_state:
+        assert torch.equal(original_state[key].cpu(), loaded_state[key].cpu())

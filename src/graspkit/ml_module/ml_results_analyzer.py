@@ -8,7 +8,6 @@
 import csv
 import logging
 
-import joblib
 import numpy as np
 from numpy.typing import NDArray
 import polars as pl
@@ -363,8 +362,8 @@ def save_and_plot_results(
 
     # 2. 保存模型文件到models目录
     if save_model:
-        model_file = path_cfg.models_path / f"{path_cfg.loop_file_name}.pkl"
-        joblib.dump(model, model_file)
+        model_file = path_cfg.models_path / f"{path_cfg.loop_file_name}.pt"
+        model.save_model(str(model_file))
         saved_files["model"] = str(model_file)
 
         if logger:
