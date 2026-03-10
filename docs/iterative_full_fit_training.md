@@ -56,6 +56,7 @@ Result schema changes:
 
 Saved artifacts:
 - labeled diagnostics parquet: `*_labeled_results.parquet`
+- model checkpoint: `*.pt`
 - training CSV columns now record `labeled_*` metrics
 
 ## Interpretation guidance
@@ -80,5 +81,6 @@ Tooling or scripts that previously expected:
 - `X_train, X_test, y_train, y_test` from `train_model`
 - `test_metrics` / `train_metrics` in `evaluation_results`
 - `*_test_results.parquet` and `*_train_results.parquet`
+- `.pkl` model checkpoints as the default iterative save format
 
 must be updated to the labeled-only iterative interface.

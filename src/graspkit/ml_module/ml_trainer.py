@@ -13,7 +13,6 @@ import shutil
 import time
 
 # 第三方库导入
-import joblib
 import numpy as np
 import torch
 
@@ -107,10 +106,14 @@ def train_model(
         # 后续轮次：尝试加载之前的模型
         model_path = (
             config.cal_path.models_path
+            / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pt"
+        )
+        legacy_model_path = (
+            config.cal_path.models_path
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
         )
         if model_path.exists():
-            model = joblib.load(model_path)
+            model = ANNClassifier.load_model(str(model_path))
             logger.info(f"加载已有模型: {model_path}")
             # 验证模型输出维度是否匹配
             if model.output_size != n_correct_levels:
@@ -129,6 +132,31 @@ def train_model(
             else:
                 logger.info(
                     f"已加载模型支持{'多标签' if model.multi_label else '单标签'}分类，输出维度={model.output_size}"
+                )
+        elif legacy_model_path.exists():
+            logger.warning(
+                "检测到旧版 .pkl 模型文件，建议重新保存为 .pt checkpoint 格式"
+            )
+            import joblib
+
+            model = joblib.load(legacy_model_path)
+            logger.info(f"加载旧版模型: {legacy_model_path}")
+            if model.output_size != n_correct_levels:
+                logger.warning(
+                    f"加载的模型输出维度({model.output_size})与当前能级数({n_correct_levels})不匹配，将创建新模型"
+                )
+                model = ANNClassifier(
+                    input_size=X_train.shape[1],
+                    output_size=n_correct_levels,
+                    hidden_size=hidden_size,
+                    learning_rate=0.001,
+                    class_weights=class_weights,
+                    model_architecture="tensornet",
+                )
+                logger.info(f"创建新模型（输出维度={n_correct_levels}）")
+            else:
+                logger.info(
+                    f"已加载旧版模型支持{'多标签' if model.multi_label else '单标签'}分类，输出维度={model.output_size}"
                 )
         else:
             # 模型文件不存在，创建新模型
