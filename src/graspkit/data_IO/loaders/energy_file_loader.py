@@ -131,7 +131,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
                 f"Available columns: {list(self.df.columns)}"
             )
 
-        return self.df["EnergyTotal"][0]
+        return float(self.df["EnergyTotal"][0])
 
     def get_number_of_levels(self) -> int:
         """获取能级数量

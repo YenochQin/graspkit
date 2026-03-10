@@ -15,6 +15,7 @@ import polars as pl
 
 from ..grasp_data_extractor.asfs_data_processor import format_configuration
 from ..utils.data_modules import MLDataCounts
+from .ml_types import EvaluationResults, PredictionOutputs
 from .neural_network import ANNClassifier
 from ..data_IO import MLCalConfig
 
@@ -182,9 +183,9 @@ def select_csfs_for_coverage(
 
 def save_training_results(
     config: MLCalConfig,
-    evaluation_results: dict, # type: ignore
-    logger: logging.Logger
-    ) -> None:
+    evaluation_results: EvaluationResults,
+    logger: logging.Logger,
+) -> None:
     """
     保存训练结果到CSV文件
 
@@ -258,7 +259,7 @@ def save_iteration_results(
     config: MLCalConfig,
     train_data_counts: MLDataCounts,
     logger: logging.Logger
-):
+) -> None:
     """
     保存迭代结果到CSV文件
 
@@ -322,7 +323,8 @@ def save_iteration_results(
 def save_and_plot_results(
     config: MLCalConfig,
     logger: logging.Logger,
-    evaluation_results: dict[str, dict[str, np.ndarray | float | int | str]],
+    evaluation_results: EvaluationResults,
+    prediction_outputs: PredictionOutputs,
     model: ANNClassifier,
     correct_levels_ci: np.ndarray,
     y_current_cal_probability: np.ndarray | None = None,
@@ -365,7 +367,7 @@ def save_and_plot_results(
         pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_test"],
-                "y_prediction": evaluation_results["predictions"]["y_prediction_test"],
+                "y_prediction": prediction_outputs["y_prediction_test"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_test"],
             }
         ).write_parquet(test_file)
@@ -378,7 +380,7 @@ def save_and_plot_results(
         pl.DataFrame(
             {
                 "y_true": evaluation_results["true_labels"]["y_train"],
-                "y_prediction": evaluation_results["predictions"]["y_prediction_train"],
+                "y_prediction": prediction_outputs["y_prediction_train"],
                 "y_proba": evaluation_results["probabilities"]["y_probability_train"],
             }
         ).write_parquet(train_file)
@@ -491,8 +493,6 @@ def save_and_plot_results(
         except Exception as e:
             if logger:
                 logger.warning(f"绘图过程出现错误: {e}")
-            else:
-                print(f"绘图错误: {e}")
 
     if logger:
         logger.info("所有结果保存完成")

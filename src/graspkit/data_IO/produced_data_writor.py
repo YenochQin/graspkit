@@ -19,7 +19,7 @@ import polars as pl
 # TODO not good enough
 def write_sorted_CSFs_to_cfile(
     CSFs_file_info: list[str], sorted_CSFs_data_list: list[list[list[str]]], output_file: str | Path
-):
+) -> None:
     """
     将排序后的CSFs数据写入到指定的输出文件中。
 
@@ -76,7 +76,7 @@ def write_CSFs_pl_to_cfile(
 #######################################################################
 
 
-def update_config(config_path: str | Path, updates: dict[str, Any]):
+def update_config(config_path: str | Path, updates: dict[str, Any]) -> None:
     """更新TOML配置文件
 
     Args:
@@ -137,7 +137,7 @@ def csfs_idxs_ci_storage(
 
 def save_descriptors(
     descriptors: np.ndarray, save_path: str | Path, file_format: str = "npy"
-):
+) -> None:
     """
     保存描述符数组
 
@@ -180,7 +180,7 @@ def save_descriptors_with_multi_block(
     labels: np.ndarray,
     save_path: str | Path,
     file_format: str = "npy",
-):
+) -> None:
     """
     保存带标签的描述符数组
 
