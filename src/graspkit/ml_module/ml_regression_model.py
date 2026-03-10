@@ -11,6 +11,7 @@
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -80,11 +81,11 @@ class ANNRegressor:
             self.device = torch.device(device)
 
         # 构建模型（与 ANNClassifier standard 架构相同，输出层无激活）
-        self.model = self._build_model()
+        self.model: nn.Module = self._build_model()
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         # HuberLoss 对异常值鲁棒（delta=1.0 时，误差<1用MSE，误差>=1用MAE）
-        self.criterion = nn.HuberLoss(delta=huber_delta)
+        self.criterion: nn.Module = nn.HuberLoss(delta=huber_delta)
 
         # 训练历史记录
         self.training_history: dict[str, list[float]] = {
@@ -169,6 +170,8 @@ class ANNRegressor:
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
         y_train_tensor = torch.tensor(y_train, dtype=torch.float32).to(self.device)
 
+        X_val_tensor: torch.Tensor | None
+        y_val_tensor: torch.Tensor | None
         if X_val is not None and y_val is not None:
             X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(self.device)
             y_val_tensor = torch.tensor(y_val, dtype=torch.float32).to(self.device)
@@ -269,7 +272,7 @@ class ANNRegressor:
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
         with torch.no_grad():
             outputs = self.model(X_tensor)
-        return outputs.cpu().numpy()
+        return cast(np.ndarray, outputs.cpu().numpy())
 
     def predict_batch(self, X: np.ndarray, batch_size: int = 1_000_000) -> np.ndarray:
         """

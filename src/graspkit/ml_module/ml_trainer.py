@@ -28,6 +28,7 @@ from ..data_IO import (
         update_config
     )
 from ..utils.data_modules import MLDataCounts
+from .ml_types import EvaluationResults, PredictionOutputs
 from .ml_results_analyzer import save_training_results
 
 # 本地模块导入
@@ -39,7 +40,7 @@ def train_model(
     caled_csfs_descriptors: np.ndarray,
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
-):
+) -> tuple[ANNClassifier, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """训练机器学习模型（支持多标签分类）"""
 
     # 数据提取：支持多标签分类
@@ -69,7 +70,7 @@ def train_model(
 
     # 计算每个能级的正样本比例
     per_level_positive_ratio = np.mean(y_train, axis=0)
-    avg_positive_ratio: np.float64 = np.mean(per_level_positive_ratio)
+    avg_positive_ratio = float(np.mean(per_level_positive_ratio))
 
     logger.info(f"多标签分类 - {n_correct_levels} 个能级")
     logger.info(
@@ -352,7 +353,7 @@ def evaluate_model(
         y_test: np.ndarray,
         config: MLCalConfig,
         logger: logging.Logger,
-    ) -> dict[str, dict[str, np.ndarray | float | int | str]]:
+    ) -> tuple[EvaluationResults, PredictionOutputs]:
     """
     评估模型性能，返回所有预测结果和评估指标
 
@@ -418,12 +419,12 @@ def evaluate_model(
         logger.warning("检测到可能的欠拟合现象")
 
     logger.info("模型评估完成")
-    evaluation_results = {
-        # 预测结果
-        "predictions": {
-            "y_prediction_test": y_prediction,
-            "y_prediction_train": y_prediction_train,
-        },
+    prediction_outputs: PredictionOutputs = {
+        "y_prediction_test": y_prediction,
+        "y_prediction_train": y_prediction_train,
+    }
+
+    evaluation_results: EvaluationResults = {
         # 预测概率
         "probabilities": {
             "y_probability_test": y_probability,
@@ -457,8 +458,7 @@ def evaluate_model(
     }
     save_training_results(config, evaluation_results, logger)
 
-    # 返回完整的结果字典
-    return evaluation_results
+    return evaluation_results, prediction_outputs
 
 
 def predict_model(
@@ -590,7 +590,7 @@ def predict_model(
     )
 
 
-def handle_calculation_error(config: MLCalConfig, logger: logging.Logger):
+def handle_calculation_error(config: MLCalConfig, logger: logging.Logger) -> None:
     """处理计算错误的情况"""
     config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:

@@ -12,7 +12,8 @@ def calculate_deformation(
     Z: int,
     A: int,
     spin_I: float,
-    Q_s: float):
+    Q_s: float,
+) -> dict[str, float]:
     """
     根据原子核参数计算内禀电四极矩和四极形变参数。
 
