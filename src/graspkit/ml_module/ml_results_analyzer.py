@@ -13,10 +13,8 @@ import numpy as np
 from numpy.typing import NDArray
 import polars as pl
 
-from ..grasp_data_extractor.asfs_data_processor import format_configuration
 from ..utils.data_modules import MLDataCounts
 from .ml_types import EvaluationResults, PredictionOutputs
-from .neural_network import ANNClassifier
 from ..data_IO import MLCalConfig
 
 def validate_csf_desc_coverage(
@@ -199,9 +197,7 @@ def save_training_results(
         logger: 日志记录器
     """
 
-    # 从新的结果结构中提取指标
-    test_metrics = evaluation_results["test_metrics"]
-    train_metrics = evaluation_results["train_metrics"]
+    labeled_metrics = evaluation_results["labeled_metrics"]
 
     # 保存到CSV文件
     results_file = config.cal_path.training_results
@@ -212,43 +208,33 @@ def save_training_results(
             writer = csv.writer(file)
             writer.writerow(
                 [
-                    "cal_loop_num",  # 迭代轮次
-                    "test_f1",
-                    "test_roc_auc",
-                    "test_accuracy",
-                    "test_precision",
-                    "test_recall",
-                    "train_f1",
-                    "train_roc_auc",
-                    "train_accuracy",
-                    "train_precision",
-                    "train_recall",
-                    "overfitting_gap",  # 过拟合差距
+                    "cal_loop_num",
+                    "metric_scope",
+                    "labeled_samples",
+                    "labeled_f1",
+                    "labeled_roc_auc",
+                    "labeled_accuracy",
+                    "labeled_precision",
+                    "labeled_recall",
                 ]
             )
 
-    # 计算过拟合差距
-    overfitting_gap = train_metrics["f1"] - test_metrics["f1"]
-
     cal_loop_num = config.cal_settings.cal_loop_num
+    metadata = evaluation_results["metadata"]
 
     with open(results_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
 
         writer.writerow(
             [
-                cal_loop_num,  # 迭代轮次
-                test_metrics["f1"],
-                test_metrics["roc_auc"],
-                test_metrics["accuracy"],
-                test_metrics["precision"],
-                test_metrics["recall"],
-                train_metrics["f1"],
-                train_metrics["roc_auc"],
-                train_metrics["accuracy"],
-                train_metrics["precision"],
-                train_metrics["recall"],
-                overfitting_gap,  # 过拟合差距
+                cal_loop_num,
+                metadata["metric_scope"],
+                metadata["labeled_samples"],
+                labeled_metrics["f1"],
+                labeled_metrics["roc_auc"],
+                labeled_metrics["accuracy"],
+                labeled_metrics["precision"],
+                labeled_metrics["recall"],
             ]
         )
 
@@ -358,39 +344,22 @@ def save_and_plot_results(
 
     saved_files = {}
 
-    # 1. 保存预测结果数据到test_data目录
+    # 1. 保存累计已标注样本的诊断结果
     if save_data:
-        # 保存测试集结果
-        test_file = (
-            path_cfg.results_path / f"{path_cfg.loop_file_name}_test_results.parquet"
+        labeled_file = (
+            path_cfg.results_path / f"{path_cfg.loop_file_name}_labeled_results.parquet"
         )
         pl.DataFrame(
             {
-                "y_true": evaluation_results["true_labels"]["y_test"],
-                "y_prediction": prediction_outputs["y_prediction_test"],
-                "y_proba": evaluation_results["probabilities"]["y_probability_test"],
+                "y_true": evaluation_results["true_labels"]["y_labeled"],
+                "y_prediction": prediction_outputs["y_prediction_labeled"],
+                "y_proba": evaluation_results["probabilities"]["y_probability_labeled"],
             }
-        ).write_parquet(test_file)
-        saved_files["test_data"] = str(test_file)
-
-        # 保存训练集结果到results目录
-        train_file = (
-            path_cfg.results_path / f"{path_cfg.loop_file_name}_train_results.parquet"
-        )
-        pl.DataFrame(
-            {
-                "y_true": evaluation_results["true_labels"]["y_train"],
-                "y_prediction": prediction_outputs["y_prediction_train"],
-                "y_proba": evaluation_results["probabilities"]["y_probability_train"],
-            }
-        ).write_parquet(train_file)
-        saved_files["train_data"] = str(train_file)
-
-        # 注意：不再保存other_predictions，因为evaluate_model不再对X_unselected进行预测
-        # X_unselected的预测应在推理阶段单独进行（参考旧版ann3_proba.py）
+        ).write_parquet(labeled_file)
+        saved_files["labeled_data"] = str(labeled_file)
 
         if logger:
-            logger.info(f"预测数据已保存到: {test_file} 和 {train_file}")
+            logger.info(f"累计已标注样本诊断数据已保存到: {labeled_file}")
 
     # 2. 保存模型文件到models目录
     if save_model:
@@ -401,98 +370,9 @@ def save_and_plot_results(
         if logger:
             logger.info(f"模型已保存到: {model_file}")
 
-    # 3. 绘制性能曲线到roc_curves目录
-    if plot_curves:
-        try:
-            # 生成latex格式的谱项符号列表
-            latex_form_spectral_term: list[str] = []
-            spectral_term: list[str] = config.cal_settings.spectral_term
-
-            for term in spectral_term:
-                _, format_LS_coupling = format_configuration(term)
-                latex_form_spectral_term.append(format_LS_coupling)
-
-            # 确定能级数量
-            if len(correct_levels_ci.shape) > 1:
-                n_levels = correct_levels_ci.shape[0]  # 多能级情况
-            else:
-                n_levels = 1  # 单能级情况
-
-            if logger:
-                logger.info(f"检测到能级数量: {n_levels}")
-                if spectral_term:
-                    logger.info(f"谱项符号: {spectral_term}")
-                    logger.info(f"LaTeX格式: {latex_form_spectral_term}")
-
-            # 为每个能级绘制图表
-            for level_idx in range(n_levels):
-                # 提取当前能级的CI系数
-                if len(correct_levels_ci.shape) > 1:
-                    level_ci = np.abs(correct_levels_ci[level_idx, :])
-                else:
-                    level_ci = np.abs(correct_levels_ci)
-
-                # 提取当前能级的预测概率（当前计算的CSFs）
-                if y_current_cal_probability is not None:
-                    if len(y_current_cal_probability.shape) > 1:
-                        # y_current_cal_probability: (n_csfs, n_levels)
-                        level_probability = y_current_cal_probability[:, level_idx]
-                    else:
-                        # 单能级情况
-                        level_probability = y_current_cal_probability
-                else:
-                    # 回退：使用全局概率
-                    y_prob_all = evaluation_results["probabilities"][
-                        "y_probability_all"
-                    ]
-                    if len(y_prob_all.shape) > 1:
-                        level_probability = y_prob_all[:, level_idx]
-                    else:
-                        level_probability = y_prob_all
-
-                # 提取当前能级的测试集标签和概率
-                y_test = evaluation_results["true_labels"]["y_test"]
-                y_probability_test = evaluation_results["probabilities"][
-                    "y_probability_test"
-                ]
-                if len(y_test.shape) > 1:
-                    # 多标签情况：提取当前能级的列
-                    level_y_test = y_test[:, level_idx]
-                    level_y_probability_test = y_probability_test[:, level_idx]
-                else:
-                    # 单标签情况：直接使用
-                    level_y_test = y_test
-                    level_y_probability_test = y_probability_test
-
-                if logger:
-                    logger.info(
-                        f"能级 {level_idx}: CI系数shape={level_ci.shape}, 预测概率shape={level_probability.shape}, 测试集shape={level_y_test.shape}"
-                    )
-
-                # 生成图表标题（LaTeX 格式支持）
-                level_title = f"${latex_form_spectral_term[level_idx]}$ Ci Values vs Predicted Probability"
-
-                # 绘制当前能级的ROC和PR曲线
-                plot_file = (
-                    path_cfg.roc_curves_path
-                    / f"{path_cfg.loop_file_name}_level{level_idx}_roc_pr_curves.png"
-                )
-                ANNClassifier.plot_curve(
-                    level_ci,
-                    level_probability,
-                    level_y_test,
-                    level_y_probability_test,
-                    str(plot_file),
-                    level_title=level_title,
-                )
-                saved_files[f"roc_pr_plot_level{level_idx}"] = str(plot_file)
-
-                if logger:
-                    logger.info(f"能级 {level_idx} 性能图表已保存到: {plot_file}")
-
-        except Exception as e:
-            if logger:
-                logger.warning(f"绘图过程出现错误: {e}")
+    # 3. 正式迭代流程不再保留 holdout 测试集，因此跳过 ROC/PR 曲线绘制
+    if plot_curves and logger:
+        logger.info("当前迭代模式未切分测试集，跳过 ROC/PR 曲线绘制")
 
     if logger:
         logger.info("所有结果保存完成")

@@ -11,7 +11,6 @@ import math
 import os
 import shutil
 import time
-from typing import cast
 
 # 第三方库导入
 import joblib
@@ -21,7 +20,6 @@ import torch
 # from imblearn.over_sampling import SMOTE
 # from imblearn.under_sampling import RandomUnderSampler
 # from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 
 from ..data_IO import (
         MLCalConfig,
@@ -40,7 +38,7 @@ def train_model(
     caled_csfs_descriptors: np.ndarray,
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
-) -> tuple[ANNClassifier, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[ANNClassifier, np.ndarray, np.ndarray]:
     """训练机器学习模型（支持多标签分类）"""
 
     # 数据提取：支持多标签分类
@@ -54,11 +52,9 @@ def train_model(
     X = caled_csfs_descriptors[:, :descriptor_features]
     y = caled_csfs_descriptors[:, descriptor_features:]  # 多标签：所有能级的标签
 
-    # 使用 cast 明确声明 train_test_split 返回值的类型
-    X_train, X_test, y_train, y_test = cast(
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-        train_test_split(X, y, test_size=0.2, random_state=42)
-    )
+    # 迭代流程中使用累计的全部已标注样本训练，不再切分验证集或测试集
+    X_train = X
+    y_train = y
 
     # 初始化或加载模型
     config.cal_path.models_path.mkdir(exist_ok=True)
@@ -152,22 +148,12 @@ def train_model(
                 f"模型hidden_size: {hidden_size} ({'CPU优化' if not torch.cuda.is_available() else 'GPU模式'})"
             )
 
-    # 直接使用原始数据，不进行重采样
-    # 原因：重采样导致数据分布过于极端，影响模型泛化能力
-    X_resampled, y_resampled = X_train, y_train
-
-    # 从训练集切出验证集用于早停（避免用测试集，防止数据泄露）
-    X_fit, X_val, y_fit, y_val = cast(
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-        train_test_split(X_resampled, y_resampled, test_size=0.1, random_state=42)
-    )
-
-    logger.info("使用原始数据训练 - 不进行重采样")
+    logger.info("使用累计的全部已标注样本训练 - 不进行重采样、不切验证集")
     logger.info(
         f"最终训练数据 - 正样本:{positive_count}, 负样本:{negative_count}, "
         f"平均正样本比例:{avg_positive_ratio:.4f}"
     )
-    logger.info(f"训练集:{len(X_fit)}, 验证集(早停用):{len(X_val)}, 测试集:{len(X_test)}")
+    logger.info(f"累计已标注样本数:{len(X_train)}")
     logger.info("使用类别权重和损失函数来处理数据不平衡问题")
 
     # Model training (只训练一次)
@@ -218,242 +204,88 @@ def train_model(
         max_epochs_optimized = 150
 
     logger.info(
-        f"开始训练 - 数据量:{len(X_fit):,}, 特征维度:{X_fit.shape[1]}"
+        f"开始训练 - 数据量:{len(X_train):,}, 特征维度:{X_train.shape[1]}"
     )
     model.fit(
-        X_fit,
-        y_fit,
-        X_val=X_val,
-        y_val=y_val,
+        X_train,
+        y_train,
+        X_val=None,
+        y_val=None,
         batch_size=batch_size_optimized,
         max_epochs=max_epochs_optimized,
-        early_stopping_patience=999999,  # 禁用早停：设置非常大的值
-        min_delta=0.0,  # 禁用最小改进阈值
+        early_stopping_patience=999999,
+        min_delta=0.0,
     )
 
-    # Model evaluation
-    logger.info("             预测与评估")
-    y_prediction = model.predict(X_test)
-    # 多标签分类：predict_proba 返回 (n_samples, n_labels)，取平均概率用于分析
-    y_probability = model.predict_proba(X_test).mean(axis=1)
-    y_prediction_train = model.predict(X_train)
-    y_probability_all = model.predict_proba(X).mean(axis=1)
+    logger.info("训练完成，返回累计已标注样本供迭代评估与后续推理使用")
 
-    # 诊断预测概率分布
-    logger.info(
-        f"预测概率统计 - 最小值:{y_probability.min():.4f}, 最大值:{y_probability.max():.4f}, 平均值:{y_probability.mean():.4f}"
-    )
-    # 多标签：统计至少在一个能级上被预测为重要的样本数
-    positive_samples_test = np.any(y_prediction == 1, axis=1)
-    positive_true_test = np.any(y_test == 1, axis=1)
-
-    logger.info(
-        f"测试集预测为正类的样本数: {np.sum(positive_samples_test)}/{len(y_prediction)}"
-    )
-    logger.info(f"测试集真实正样本数: {np.sum(positive_true_test)}/{len(y_test)}")
-
-    # 智能阈值调整（多标签分类版本）
-    positive_ratio = np.mean(y_test)  # 真实正样本比例（所有标签的平均）
-    predicted_positive_ratio = np.mean(y_prediction)  # 预测正样本比例
-
-    logger.info(
-        f"真实正样本比例: {positive_ratio:.3f}, 预测正样本比例: {predicted_positive_ratio:.3f}"
-    )
-
-    # 如果预测正样本过多(超过真实比例的3倍)，提高阈值
-    if predicted_positive_ratio > positive_ratio * 3:
-        logger.warning("预测正样本过多，尝试提高阈值")
-        # 寻找最优阈值，使预测比例接近真实比例的1.5-2倍
-        target_ratio = positive_ratio * 2
-        thresholds = np.arange(0.1, 0.9, 0.05)
-        best_threshold = 0.5
-        best_diff = float("inf")
-
-        # 多标签：使用平均概率进行阈值调整
-        for threshold in thresholds:
-            temp_prediction = (y_probability >= threshold).astype(int)
-            temp_ratio = np.mean(temp_prediction)
-            diff = abs(temp_ratio - target_ratio)
-            if diff < best_diff:
-                best_diff = diff
-                best_threshold = threshold
-
-        # 基于优化后的阈值重新生成预测（需要基于原始概率矩阵）
-        y_probability_matrix = model.predict_proba(X_test)
-        y_prediction_optimized = (y_probability_matrix >= best_threshold).astype(int)
-        optimized_ratio = np.mean(y_prediction_optimized)
-        logger.info(
-            f"优化阈值: {best_threshold:.3f}, 新预测比例: {optimized_ratio:.3f}"
-        )
-
-        # 使用优化后的预测
-        y_prediction = y_prediction_optimized
-
-    # 如果没有预测为正类，降低阈值（多标签分类版本）
-    elif np.sum(y_prediction) == 0:
-        logger.warning("模型没有预测任何正样本，尝试使用自适应阈值")
-        threshold_percentile = 90  # 前10%概率最高的作为正样本
-        adaptive_threshold = np.percentile(y_probability, threshold_percentile)
-        # 基于原始概率矩阵重新生成预测
-        y_probability_matrix = model.predict_proba(X_test)
-        y_prediction_adaptive = (y_probability_matrix >= adaptive_threshold).astype(int)
-        logger.info(
-            f"自适应阈值:{adaptive_threshold:.4f}, 预测正样本数:{np.sum(y_prediction_adaptive)}"
-        )
-        y_prediction = y_prediction_adaptive
-
-    # 修复：使用正确能级位置的混合系数进行绘图
-    # 获取所有CSFs在正确能级位置的混合系数平方和
-    csf_mix_coeff_squared_sum = np.sum(correct_levels_ci**2, axis=0)
-
-    # 诊断混合系数的信息
-    logger.info(
-        f"混合系数统计 - 最小值:{csf_mix_coeff_squared_sum.min():.6f}, 最大值:{csf_mix_coeff_squared_sum.max():.6f}"
-    )
-    logger.info(
-        f"混合系数平均值:{csf_mix_coeff_squared_sum.mean():.6f}, 零值数量:{np.sum(csf_mix_coeff_squared_sum == 0)}"
-    )
-    logger.info(f"y_probability_all形状: {y_probability_all.shape}")
-
-    # 模型评估：传入完整的概率矩阵而不是平均概率
-    y_probability_matrix_test = model.predict_proba(X_test)
-    y_probability_matrix_train = model.predict_proba(X_train)
-
-    f1, _roc_auc, accuracy, precision, recall = ANNClassifier.model_evaluation(
-        y_test, y_prediction, y_probability_matrix_test
-    )
-    logger.info("测试集预测结果:")
-    logger.info(
-        f"f1:{f1:.4f}, accuracy:{accuracy:.4f}, precision:{precision:.4f}, recall:{recall:.4f}"
-    )
-
-    # Overfitting and underfitting monitoring
-    (f1_train, _roc_auc_train, accuracy_train, precision_train, recall_train) = (
-        ANNClassifier.model_evaluation(
-            y_train, y_prediction_train, y_probability_matrix_train
-        )
-    )
-    logger.info(f"训练集预测结果:")
-    logger.info(
-        f"f1:{f1_train:.4f}, accuracy:{accuracy_train:.4f}, precision:{precision_train:.4f}, recall:{recall_train:.4f}"
-    )
-
-    # 过拟合检测
-    overfitting_diff = f1_train - f1
-    logger.info(f"过拟合检测(训练F1 - 测试F1): {overfitting_diff:.4f}")
-
-    return model, X_train, X_test, y_train, y_test
+    return model, X_train, y_train
 
 
 def evaluate_model(
         model: ANNClassifier,
-        X_train: np.ndarray,
-        X_test: np.ndarray,
-        y_train: np.ndarray,
-        y_test: np.ndarray,
+        X_labeled: np.ndarray,
+        y_labeled: np.ndarray,
         config: MLCalConfig,
         logger: logging.Logger,
     ) -> tuple[EvaluationResults, PredictionOutputs]:
     """
-    评估模型性能，返回所有预测结果和评估指标
+    对累计的全部已标注样本做训练内诊断评估。
 
     Args:
         model: 训练好的模型
-        X_train, X_test, y_train, y_test: 训练和测试数据
+        X_labeled: 截至当前轮累计的全部已标注描述符
+        y_labeled: 与 X_labeled 对应的累计标签
         config: 配置对象
         logger: 日志记录器
 
     Returns:
-        dict: 包含所有预测结果、概率、评估指标和元数据的完整结果字典
-
-    Note:
-        仅对训练集和测试集进行评估，不对 X_unselected 进行预测
-        X_unselected 的预测应在推理阶段单独进行（参考旧版 ann3_proba.py）
+        包含训练内诊断结果、概率和元数据的结果字典
     """
 
-    logger.info("开始预测与评估")
+    logger.info("开始基于累计已标注样本的训练内诊断评估")
 
-    # 预测 - 仅对训练集和测试集
     start_time = time.time()
-    y_prediction = model.predict(X_test)
+    y_prediction_labeled = model.predict(X_labeled)
+    y_probability_labeled = model.predict_proba(X_labeled)
     eval_time = time.time() - start_time
 
-    # 预测概率 - 多标签情况下保留所有能级的概率
-    y_probability = model.predict_proba(X_test)
-    y_prediction_train = model.predict(X_train)
-    y_probability_train = model.predict_proba(X_train)
-
-    # 生成完整训练数据集的概率用于分析
-    y_probability_all = model.predict_proba(np.vstack([X_train, X_test]))
-
-    # 评估指标计算
-    test_f1, test_roc_auc, test_accuracy, test_precision, test_recall = (
-        ANNClassifier.model_evaluation(y_test, y_prediction, y_probability)
+    labeled_f1, labeled_roc_auc, labeled_accuracy, labeled_precision, labeled_recall = (
+        ANNClassifier.model_evaluation(
+            y_labeled, y_prediction_labeled, y_probability_labeled
+        )
     )
 
-    # 训练集评估（过拟合监控）
-    train_f1, train_roc_auc, train_accuracy, train_precision, train_recall = (
-        ANNClassifier.model_evaluation(y_train, y_prediction_train, y_probability_train)
-    )
-
-    logger.info("测试集预测结果:")
+    logger.info("累计已标注样本诊断结果:")
     logger.info(
-        f"AUC: {test_roc_auc:.4f}, F1: {test_f1:.4f}, Accuracy: {test_accuracy:.4f}"
+        f"AUC: {labeled_roc_auc:.4f}, F1: {labeled_f1:.4f}, Accuracy: {labeled_accuracy:.4f}"
     )
-    logger.info(f"Precision: {test_precision:.4f}, Recall: {test_recall:.4f}")
-    logger.info("训练集预测结果:")
     logger.info(
-        f"AUC: {train_roc_auc:.4f}, F1: {train_f1:.4f}, Accuracy: {train_accuracy:.4f}"
+        f"Precision: {labeled_precision:.4f}, Recall: {labeled_recall:.4f}"
     )
-    logger.info(f"Precision: {train_precision:.4f}, Recall: {train_recall:.4f}")
+    logger.info("注意：以上指标仅反映训练内拟合程度，不代表跨轮泛化能力")
 
-    # 过拟合监控
-    overfitting_check = train_f1 - test_f1
-    logger.info(f"过拟合检查差异(训练-测试): {overfitting_check:.4f}")
-    overfitting_threshold = config.ml_config.overfitting_threshold
-    underfitting_threshold = config.ml_config.underfitting_threshold
-
-    if overfitting_check > overfitting_threshold:
-        logger.warning("检测到可能的过拟合现象")
-    elif overfitting_check < underfitting_threshold:
-        logger.warning("检测到可能的欠拟合现象")
-
-    logger.info("模型评估完成")
     prediction_outputs: PredictionOutputs = {
-        "y_prediction_test": y_prediction,
-        "y_prediction_train": y_prediction_train,
+        "y_prediction_labeled": y_prediction_labeled,
     }
 
     evaluation_results: EvaluationResults = {
-        # 预测概率
         "probabilities": {
-            "y_probability_test": y_probability,
-            "y_probability_train": y_probability_train,
-            "y_probability_all": y_probability_all,
+            "y_probability_labeled": y_probability_labeled,
+            "y_probability_all": y_probability_labeled,
         },
-        # 真实标签
-        "true_labels": {"y_test": y_test, "y_train": y_train},
-        # 测试集评估指标
-        "test_metrics": {
-            "f1": test_f1,
-            "roc_auc": test_roc_auc,
-            "accuracy": test_accuracy,
-            "precision": test_precision,
-            "recall": test_recall,
+        "true_labels": {"y_labeled": y_labeled},
+        "labeled_metrics": {
+            "f1": labeled_f1,
+            "roc_auc": labeled_roc_auc,
+            "accuracy": labeled_accuracy,
+            "precision": labeled_precision,
+            "recall": labeled_recall,
         },
-        # 训练集评估指标（过拟合检测）
-        "train_metrics": {
-            "f1": train_f1,
-            "roc_auc": train_roc_auc,
-            "accuracy": train_accuracy,
-            "precision": train_precision,
-            "recall": train_recall,
-        },
-        # 元数据
         "metadata": {
             "eval_time": eval_time,
-            "test_samples": len(y_test),
-            "train_samples": len(y_train),
+            "labeled_samples": len(y_labeled),
+            "metric_scope": "in_sample",
         },
     }
     save_training_results(config, evaluation_results, logger)
