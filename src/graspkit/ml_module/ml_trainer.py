@@ -33,18 +33,23 @@ from .neural_network import ANNClassifier
 
 
 def _select_model_architecture(
-    sample_count: int,
+    current_loop_sample_count: int,
+    accumulated_sample_count: int,
     positive_sample_count: int,
     logger: logging.Logger,
 ) -> str:
     """为小样本训练选择更稳健的模型结构。"""
-    if sample_count < 30_000 or positive_sample_count < 2_048:
+    if current_loop_sample_count < 30_000 or positive_sample_count < 2_048:
         logger.info(
             "检测到小样本训练场景，使用 standard 架构以避免 TensorNet 在低覆盖率数据下塌缩"
         )
         return "standard"
 
-    logger.info("使用 tensornet 架构进行训练")
+    logger.info(
+        "使用 tensornet 架构进行训练（本轮CSF数=%s, 累积样本数=%s）",
+        current_loop_sample_count,
+        accumulated_sample_count,
+    )
     return "tensornet"
 
 
@@ -61,7 +66,9 @@ def train_model(
     # 前 descriptor_features 列是描述符特征，后 n_correct_levels 列是每个能级的标签
 
     # 从 correct_levels_ci 推断能级数量
-    n_correct_levels = correct_levels_ci.shape[0] if correct_levels_ci.ndim == 2 else 1
+    correct_levels_ci_2d = np.atleast_2d(correct_levels_ci)
+    n_correct_levels = correct_levels_ci_2d.shape[0]
+    current_loop_sample_count = correct_levels_ci_2d.shape[1]
     descriptor_features = caled_csfs_descriptors.shape[1] - n_correct_levels
 
     X = caled_csfs_descriptors[:, :descriptor_features]
@@ -106,7 +113,8 @@ def train_model(
     pos_weight = negative_count / positive_count if positive_count > 0 else 1.0
     class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
     desired_architecture = _select_model_architecture(
-        sample_count=len(X_train),
+        current_loop_sample_count=current_loop_sample_count,
+        accumulated_sample_count=len(X_train),
         positive_sample_count=positive_sample_count,
         logger=logger,
     )
