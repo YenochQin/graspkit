@@ -8,7 +8,6 @@
 import logging
 from collections import Counter
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -341,9 +340,9 @@ def check_reference_energy_agreement(
     base_idx = reference_energy_levels.index(ref_base)
     calc_base = term_energy[spectral_term[base_idx]]
 
-    table_rows: list[Any] = []
+    table_rows: list[list[str]] = []
     discrepancies: list[float] = []
-    for i, term in enumerate(spectral_term):
+    for i, term in enumerate[str](spectral_term):
         ref_rel = reference_energy_levels[i] - ref_base
         calc_rel = term_energy[term] - calc_base
         disc = abs(calc_rel - ref_rel)
