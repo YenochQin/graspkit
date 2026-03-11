@@ -33,13 +33,20 @@ from .neural_network import ANNClassifier
 
 
 def _select_model_architecture(
+    cal_loop_num: int,
     current_loop_sample_count: int,
     accumulated_sample_count: int,
     positive_sample_count: int,
     logger: logging.Logger,
 ) -> str:
     """为小样本训练选择更稳健的模型结构。"""
-    if current_loop_sample_count < 30_000 or positive_sample_count < 2_048:
+    if cal_loop_num <= 3:
+        logger.info(
+            "当前处于前3轮迭代，固定使用 standard 架构以保证早期小样本阶段稳定性"
+        )
+        return "standard"
+
+    if current_loop_sample_count < 50_000 or positive_sample_count < 2_048:
         logger.info(
             "检测到小样本训练场景，使用 standard 架构以避免 TensorNet 在低覆盖率数据下塌缩"
         )
@@ -107,12 +114,18 @@ def train_model(
         f"各能级正样本比例: {np.array2string(per_level_positive_ratio, precision=4)}"
     )
     logger.info(f"描述符长度:{X_train.shape[1]}, 输出维度:{n_correct_levels}")
+    if avg_positive_ratio > 0.35:
+        logger.warning(
+            "当前正样本比例过高(%.4f)，模型可能退化为几乎全正预测；建议提高 cutoff_value 或收紧正样本定义",
+            avg_positive_ratio,
+        )
 
     # 模型初始化
     # 计算正类权重（用于处理不平衡数据）
     pos_weight = negative_count / positive_count if positive_count > 0 else 1.0
     class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
     desired_architecture = _select_model_architecture(
+        cal_loop_num=config.cal_settings.cal_loop_num,
         current_loop_sample_count=current_loop_sample_count,
         accumulated_sample_count=len(X_train),
         positive_sample_count=positive_sample_count,
