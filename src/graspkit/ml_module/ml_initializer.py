@@ -780,7 +780,7 @@ def generate_train_csfs_descriptors(
     logger.info(f"当前轮次: {config.cal_settings.cal_loop_num}")
 
     # 初始化变量
-    cutoff_value = np.float64(config.cal_settings.cutoff_value)
+    cutoff_value = config.cal_settings.cutoff_value
 
     sampled_csfs_descriptors = raw_csfs_descriptors[accumulated_idxs]
     # 转置以匹配描述符的行维度: (n_current_csfs, n_correct_levels)
