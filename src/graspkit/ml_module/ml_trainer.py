@@ -94,6 +94,7 @@ def train_model(
             learning_rate=0.001,
             class_weights=class_weights,
             model_architecture="tensornet",
+            random_seed=config.model_params.random_state,
         )
         logger.info(
             f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
@@ -127,6 +128,7 @@ def train_model(
                     learning_rate=0.001,
                     class_weights=class_weights,
                     model_architecture="tensornet",
+                    random_seed=config.model_params.random_state,
                 )
                 logger.info(f"创建新模型（输出维度={n_correct_levels}）")
             else:
@@ -152,6 +154,7 @@ def train_model(
                     learning_rate=0.001,
                     class_weights=class_weights,
                     model_architecture="tensornet",
+                    random_seed=config.model_params.random_state,
                 )
                 logger.info(f"创建新模型（输出维度={n_correct_levels}）")
             else:
@@ -167,6 +170,7 @@ def train_model(
                 learning_rate=0.001,
                 class_weights=class_weights,
                 model_architecture="tensornet",
+                random_seed=config.model_params.random_state,
             )
             logger.info(
                 f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
