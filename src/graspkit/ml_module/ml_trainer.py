@@ -34,11 +34,11 @@ from .neural_network import ANNClassifier
 
 def _select_model_architecture(
     sample_count: int,
-    positive_count: int,
+    positive_sample_count: int,
     logger: logging.Logger,
 ) -> str:
     """为小样本训练选择更稳健的模型结构。"""
-    if sample_count < 20_000 or positive_count < 2_048:
+    if sample_count < 30_000 or positive_sample_count < 2_048:
         logger.info(
             "检测到小样本训练场景，使用 standard 架构以避免 TensorNet 在低覆盖率数据下塌缩"
         )
@@ -78,6 +78,8 @@ def train_model(
     # 统计所有能级的正负样本总数
     positive_count = np.sum(y_train == 1)
     negative_count = np.sum(y_train == 0)
+    positive_sample_count = int(np.sum(np.any(y_train == 1, axis=1)))
+    negative_sample_count = int(len(y_train) - positive_sample_count)
 
     # 计算每个能级的正样本比例
     per_level_positive_ratio = np.mean(y_train, axis=0)
@@ -87,6 +89,12 @@ def train_model(
     logger.info(
         f"训练集 - 正样本总数:{positive_count}, 负样本总数:{negative_count}, "
         f"平均正样本比例:{avg_positive_ratio:.4f}"
+    )
+    logger.info(
+        "按CSF样本统计 - 正样本数:%s, 负样本数:%s, 样本总数:%s",
+        positive_sample_count,
+        negative_sample_count,
+        len(X_train),
     )
     logger.info(
         f"各能级正样本比例: {np.array2string(per_level_positive_ratio, precision=4)}"
@@ -99,7 +107,7 @@ def train_model(
     class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
     desired_architecture = _select_model_architecture(
         sample_count=len(X_train),
-        positive_count=int(positive_count),
+        positive_sample_count=positive_sample_count,
         logger=logger,
     )
 
