@@ -41,6 +41,10 @@ class CalSettings(BaseModel):
     spectral_term: list[str]
     reference_energy_levels: list[float] = []
     reference_energy_threshold: float = 0.0
+    reference_energy_threshold_base: float | None = None
+    reference_energy_threshold_min: float = 300.0
+    reference_energy_threshold_tighten_start_loop: int = 4
+    reference_energy_threshold_decay: float = 0.85
     diff_ci_cutoff: float = 0.0
 
     @field_validator("root_path", mode="before")
@@ -72,6 +76,31 @@ class CalSettings(BaseModel):
             raise ValueError("spectral_term 必须是非空列表")
         return v
 
+    @field_validator(
+        "reference_energy_threshold",
+        "reference_energy_threshold_min",
+        mode="before",
+    )
+    @classmethod
+    def validate_nonnegative_reference_thresholds(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("reference_energy_threshold 相关参数必须大于等于 0")
+        return v
+
+    @field_validator("reference_energy_threshold_tighten_start_loop")
+    @classmethod
+    def validate_reference_threshold_start_loop(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("reference_energy_threshold_tighten_start_loop 必须大于 0")
+        return v
+
+    @field_validator("reference_energy_threshold_decay")
+    @classmethod
+    def validate_reference_threshold_decay(cls, v: float) -> float:
+        if not (0 < v <= 1):
+            raise ValueError("reference_energy_threshold_decay 必须在 (0, 1] 范围内")
+        return v
+
     @model_validator(mode="after")
     def validate_reference_energy_levels(self) -> "CalSettings":
         if self.reference_energy_levels:
@@ -80,6 +109,28 @@ class CalSettings(BaseModel):
                     f"reference_energy_levels 长度({len(self.reference_energy_levels)}) "
                     f"必须与 spectral_term 长度({len(self.spectral_term)}) 相同"
                 )
+        if self.reference_energy_threshold_base is None:
+            self.reference_energy_threshold_base = self.reference_energy_threshold
+
+        if self.reference_energy_threshold_base > 0:
+            effective_floor = min(
+                self.reference_energy_threshold_base,
+                self.reference_energy_threshold_min,
+            )
+            if self.cal_loop_num >= self.reference_energy_threshold_tighten_start_loop:
+                tighten_steps = (
+                    self.cal_loop_num
+                    - self.reference_energy_threshold_tighten_start_loop
+                    + 1
+                )
+                tightened_threshold = self.reference_energy_threshold_base * (
+                    self.reference_energy_threshold_decay ** tighten_steps
+                )
+                self.reference_energy_threshold = max(
+                    effective_floor, tightened_threshold
+                )
+            else:
+                self.reference_energy_threshold = self.reference_energy_threshold_base
         return self
 
 # ServerSettings model

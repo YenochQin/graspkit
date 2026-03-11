@@ -355,6 +355,10 @@ def check_reference_energy_agreement(
         tablefmt="simple",
     )
     logger.info(f"能级间距对比:\n{table}")
+    logger.info(
+        "当前轮参考能级阈值: %.1f cm⁻¹",
+        reference_energy_threshold,
+    )
 
     if reference_energy_threshold > 0:
         within_threshold = all(d < reference_energy_threshold for d in discrepancies)
@@ -592,6 +596,14 @@ def evaluate_calculation_convergence(
             and config.cal_settings.reference_energy_threshold > 0
             and current_energy_data is not None
         ):
+            logger.info(
+                "参考能级阈值策略: base=%.1f, current=%.1f, min=%.1f, start_loop=%s, decay=%.3f",
+                config.cal_settings.reference_energy_threshold_base,
+                config.cal_settings.reference_energy_threshold,
+                config.cal_settings.reference_energy_threshold_min,
+                config.cal_settings.reference_energy_threshold_tighten_start_loop,
+                config.cal_settings.reference_energy_threshold_decay,
+            )
             ref_energy_converged = check_reference_energy_agreement(
                 current_energy_data,
                 config.cal_settings.spectral_term,
