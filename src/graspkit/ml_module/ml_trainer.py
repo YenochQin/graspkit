@@ -32,6 +32,22 @@ from .ml_results_analyzer import save_training_results
 from .neural_network import ANNClassifier
 
 
+def _select_model_architecture(
+    sample_count: int,
+    positive_count: int,
+    logger: logging.Logger,
+) -> str:
+    """为小样本训练选择更稳健的模型结构。"""
+    if sample_count < 20_000 or positive_count < 2_048:
+        logger.info(
+            "检测到小样本训练场景，使用 standard 架构以避免 TensorNet 在低覆盖率数据下塌缩"
+        )
+        return "standard"
+
+    logger.info("使用 tensornet 架构进行训练")
+    return "tensornet"
+
+
 def train_model(
     config: MLCalConfig,
     caled_csfs_descriptors: np.ndarray,
@@ -81,6 +97,11 @@ def train_model(
     # 计算正类权重（用于处理不平衡数据）
     pos_weight = negative_count / positive_count if positive_count > 0 else 1.0
     class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
+    desired_architecture = _select_model_architecture(
+        sample_count=len(X_train),
+        positive_count=int(positive_count),
+        logger=logger,
+    )
 
     # CPU优化：减少hidden_size以降低计算量
     hidden_size = 96 if not torch.cuda.is_available() else 128
@@ -93,7 +114,7 @@ def train_model(
             hidden_size=hidden_size,
             learning_rate=0.001,
             class_weights=class_weights,
-            model_architecture="tensornet",
+            model_architecture=desired_architecture,
             random_seed=config.model_params.random_state,
         )
         logger.info(
@@ -116,10 +137,15 @@ def train_model(
         if model_path.exists():
             model = ANNClassifier.load_model(str(model_path))
             logger.info(f"加载已有模型: {model_path}")
-            # 验证模型输出维度是否匹配
-            if model.output_size != n_correct_levels:
+            # 验证模型输出维度和架构是否匹配
+            if (
+                model.output_size != n_correct_levels
+                or model.model_architecture != desired_architecture
+            ):
                 logger.warning(
-                    f"加载的模型输出维度({model.output_size})与当前能级数({n_correct_levels})不匹配，将创建新模型"
+                    "加载的模型与当前训练需求不匹配："
+                    f"输出维度 {model.output_size}->{n_correct_levels}, "
+                    f"架构 {model.model_architecture}->{desired_architecture}，将创建新模型"
                 )
                 model = ANNClassifier(
                     input_size=X_train.shape[1],
@@ -127,13 +153,16 @@ def train_model(
                     hidden_size=hidden_size,
                     learning_rate=0.001,
                     class_weights=class_weights,
-                    model_architecture="tensornet",
+                    model_architecture=desired_architecture,
                     random_seed=config.model_params.random_state,
                 )
-                logger.info(f"创建新模型（输出维度={n_correct_levels}）")
+                logger.info(
+                    f"创建新模型（输出维度={n_correct_levels}, 架构={desired_architecture}）"
+                )
             else:
                 logger.info(
-                    f"已加载模型支持{'多标签' if model.multi_label else '单标签'}分类，输出维度={model.output_size}"
+                    f"已加载模型支持{'多标签' if model.multi_label else '单标签'}分类，"
+                    f"输出维度={model.output_size}, 架构={model.model_architecture}"
                 )
         elif legacy_model_path.exists():
             logger.warning(
@@ -143,9 +172,15 @@ def train_model(
 
             model = joblib.load(legacy_model_path)
             logger.info(f"加载旧版模型: {legacy_model_path}")
-            if model.output_size != n_correct_levels:
+            legacy_architecture = getattr(model, "model_architecture", "standard")
+            if (
+                model.output_size != n_correct_levels
+                or legacy_architecture != desired_architecture
+            ):
                 logger.warning(
-                    f"加载的模型输出维度({model.output_size})与当前能级数({n_correct_levels})不匹配，将创建新模型"
+                    "加载的旧版模型与当前训练需求不匹配："
+                    f"输出维度 {model.output_size}->{n_correct_levels}, "
+                    f"架构 {legacy_architecture}->{desired_architecture}，将创建新模型"
                 )
                 model = ANNClassifier(
                     input_size=X_train.shape[1],
@@ -153,13 +188,16 @@ def train_model(
                     hidden_size=hidden_size,
                     learning_rate=0.001,
                     class_weights=class_weights,
-                    model_architecture="tensornet",
+                    model_architecture=desired_architecture,
                     random_seed=config.model_params.random_state,
                 )
-                logger.info(f"创建新模型（输出维度={n_correct_levels}）")
+                logger.info(
+                    f"创建新模型（输出维度={n_correct_levels}, 架构={desired_architecture}）"
+                )
             else:
                 logger.info(
-                    f"已加载旧版模型支持{'多标签' if model.multi_label else '单标签'}分类，输出维度={model.output_size}"
+                    f"已加载旧版模型支持{'多标签' if model.multi_label else '单标签'}分类，"
+                    f"输出维度={model.output_size}, 架构={legacy_architecture}"
                 )
         else:
             # 模型文件不存在，创建新模型
@@ -169,7 +207,7 @@ def train_model(
                 hidden_size=hidden_size,
                 learning_rate=0.001,
                 class_weights=class_weights,
-                model_architecture="tensornet",
+                model_architecture=desired_architecture,
                 random_seed=config.model_params.random_state,
             )
             logger.info(
@@ -348,9 +386,16 @@ def predict_model(
         batch_size=10_000_000,  # 可根据内存调整
     )
     # 多能级情况：在所有能级中取最大概率值，然后与阈值比较
-    y_unselected_prediction = (np.max(y_unselected_probability, axis=1) > 0.5).astype(int)
+    max_unselected_probability = np.max(y_unselected_probability, axis=1)
+    y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
     logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
+    logger.info(
+        "未选择CSF预测概率统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        float(np.min(max_unselected_probability)),
+        float(np.max(max_unselected_probability)),
+        float(np.mean(max_unselected_probability)),
+    )
 
     # 为绘图准备当前计算CSF的预测概率
     # 对当前计算的CSF也进行预测（用于绘图和分析）
@@ -413,15 +458,27 @@ def predict_model(
         new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
         logger.info(f"目标新增组态数超过最大选择数，调整为{new_sampling_CSFs_num}")
 
+    if new_sampling_CSFs_num <= 0:
+        logger.info("目标新增组态数为0，本轮不新增ML采样组态")
+        ml_sampled_idxs = np.array([], dtype=np.int64)
+        train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
+        train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
+        train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
+        return (
+            ml_sampled_idxs,
+            verified_important_idxs,
+            y_current_cal_probability,
+            train_data_counts,
+        )
+
     if len(ml_predicted_important_local_idxs) >= new_sampling_CSFs_num:
         # 情况1：ML预测的重要组态数量充足，按概率排序选择top-k
         logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
 
         # 获取ML预测重要组态的最大概率（在所有能级中取最大值）
-        ml_predicted_important_probabilities = np.max(
-            y_unselected_probability[ml_predicted_important_local_idxs],
-            axis=1
-        )
+        ml_predicted_important_probabilities = max_unselected_probability[
+            ml_predicted_important_local_idxs
+        ]
 
         # 按概率降序排序
         probability_sorted_idxs = np.argsort(ml_predicted_important_probabilities)[::-1]
@@ -437,10 +494,29 @@ def predict_model(
         )
     else:
         # 情况2：ML预测的重要组态数量不足，全部采用
-        logger.info(
-            f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个"
-        )
-        ml_sampled_idxs = ml_predicted_important_global_idxs
+        if len(ml_predicted_important_global_idxs) > 0:
+            logger.info(
+                f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个"
+            )
+            ml_sampled_idxs = ml_predicted_important_global_idxs
+        else:
+            logger.warning(
+                "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
+                new_sampling_CSFs_num,
+            )
+            probability_sorted_idxs = np.argsort(max_unselected_probability)[::-1]
+            top_k_local_idxs = probability_sorted_idxs[:new_sampling_CSFs_num]
+            ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
+            logger.info(
+                "回退采样完成：选取了 %s 个概率最高的未选择组态，最高概率=%.4f，最低入选概率=%.4f",
+                len(ml_sampled_idxs),
+                float(max_unselected_probability[top_k_local_idxs[0]])
+                if len(top_k_local_idxs) > 0
+                else 0.0,
+                float(max_unselected_probability[top_k_local_idxs[-1]])
+                if len(top_k_local_idxs) > 0
+                else 0.0,
+            )
 
     train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
