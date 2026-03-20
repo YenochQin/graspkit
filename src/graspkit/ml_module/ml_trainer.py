@@ -364,6 +364,20 @@ def evaluate_model(
     )
     logger.info("注意：以上指标仅反映训练内拟合程度，不代表跨轮泛化能力")
 
+    # -- 坍缩检测 --
+    avg_positive_ratio = float(np.mean(y_labeled))
+    is_collapsed = (
+        abs(labeled_precision - avg_positive_ratio) < 0.02
+        and labeled_recall > 0.95
+    )
+    if is_collapsed:
+        logger.critical(
+            "检测到模型坍缩（全正预测）: "
+            "Precision=%.4f ≈ 正样本比例=%.4f, Recall=%.4f。"
+            "建议在 config.toml [cal_settings] 中设置 use_regression_model = true。",
+            labeled_precision, avg_positive_ratio, labeled_recall,
+        )
+
     prediction_outputs: PredictionOutputs = {
         "y_prediction_labeled": y_prediction_labeled,
     }
