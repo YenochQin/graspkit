@@ -46,6 +46,8 @@ class CalSettings(BaseModel):
     reference_energy_threshold_tighten_start_loop: int = 4
     reference_energy_threshold_decay: float = 0.85
     diff_ci_cutoff: float = 0.0
+    use_regression_model: bool = False
+    regression_min_clip: float = 1e-15
 
     @field_validator("root_path", mode="before")
     @classmethod
@@ -60,6 +62,13 @@ class CalSettings(BaseModel):
     def validate_cutoff_value(cls, v: float) -> float:
         if v <= 0:
             raise ValueError("cutoff_value 必须大于 0")
+        return v
+
+    @field_validator("regression_min_clip")
+    @classmethod
+    def validate_regression_min_clip(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("regression_min_clip 必须大于 0")
         return v
 
     @field_validator("sampling_ratio")

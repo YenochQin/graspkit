@@ -16,6 +16,7 @@ from .ml_initializer import (
     check_energy_convergence,
     evaluate_calculation_convergence,
     generate_train_csfs_descriptors,
+    generate_regression_descriptors_from_config,
     get_stay_descriptors,
 )
 
@@ -56,6 +57,7 @@ __all__ = [
     "check_energy_convergence",
     "evaluate_calculation_convergence",
     "generate_train_csfs_descriptors",
+    "generate_regression_descriptors_from_config",
     "get_stay_descriptors",
     # ml_trainer
     "train_model",
