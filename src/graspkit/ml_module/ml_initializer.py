@@ -898,6 +898,84 @@ def generate_train_csfs_descriptors(
     return caled_csfs_descriptors
 
 
+def generate_regression_descriptors_from_config(
+    config: MLCalConfig,
+    raw_csfs_descriptors: NDArray[np.float64],
+    logger: logging.Logger,
+) -> np.ndarray | None:
+    """
+    从累积 CI 系数数据生成回归训练描述符（log₁₀(CI²) 连续标签）。
+
+    当 config.cal_settings.use_regression_model = True 时由主流程调用。
+    首轮样本不足时返回 None，由调用方回退到分类路径。
+
+    Args:
+        config: ML 计算配置对象
+        raw_csfs_descriptors: 原始 CSF 描述符，shape: (total_csfs, n_features)
+        logger: 日志记录器
+
+    Returns:
+        回归训练数据矩阵，shape: (n_accumulated, n_features + n_levels)，
+        或 None（样本不足时）
+    """
+    accumulated_idxs_ci_path = config.cal_path.accumulated_idxs_ci_path
+
+    if config.cal_settings.cal_loop_num > 1 and not accumulated_idxs_ci_path.exists():
+        raise FileNotFoundError(
+            f"累积CI系数文件不存在: {accumulated_idxs_ci_path}"
+        )
+
+    accumulated_idxs, accumulated_ci_squared = csfs_idxs_ci_loader(
+        accumulated_idxs_ci_path
+    )
+
+    # 首轮保护：样本不足时回退到分类路径
+    if len(accumulated_idxs) < 1000:
+        logger.warning(
+            "回归路径样本不足（%d < 1000），回退到分类路径",
+            len(accumulated_idxs),
+        )
+        return None
+
+    # 诊断日志
+    n_levels = accumulated_ci_squared.shape[0]
+    for level_idx in range(n_levels):
+        level_ci = accumulated_ci_squared[level_idx]
+        nonzero_count = int(np.count_nonzero(level_ci))
+        if nonzero_count > 0:
+            nonzero_vals = level_ci[level_ci > 0]
+            log_min = float(np.log10(nonzero_vals.min()))
+            log_max = float(np.log10(nonzero_vals.max()))
+            # top-5 覆盖率：前 5 个最大 CI² 值占该能级总 CI² 的比例
+            sorted_ci = np.sort(level_ci)[::-1]
+            total_ci = float(np.sum(level_ci))
+            top5_coverage = float(np.sum(sorted_ci[:5]) / total_ci) if total_ci > 0 else 0.0
+            logger.info(
+                "能级 %d: 非零CSF=%d, log₁₀(CI²) 范围=[%.2f, %.2f], top-5 覆盖率=%.4f",
+                level_idx, nonzero_count, log_min, log_max, top5_coverage,
+            )
+        else:
+            logger.warning("能级 %d: 无非零 CI² 值", level_idx)
+
+    # 生成回归训练描述符
+    from .ml_regression_trainer import generate_regression_train_descriptors
+
+    min_clip = config.cal_settings.regression_min_clip
+    result = generate_regression_train_descriptors(
+        raw_csfs_descriptors, accumulated_idxs, accumulated_ci_squared, min_clip
+    )
+
+    # 保存描述符文件
+    descriptor_path = (
+        config.cal_path.cal_loop_path
+        / f"{config.cal_path.loop_file_name}_regression_full"
+    )
+    save_descriptors(result, descriptor_path, "npy")
+    logger.info(f"保存回归训练描述符文件: {descriptor_path}.npy")
+
+    return result
+
+
 def get_stay_descriptors(
     raw_csfs_descriptors: NDArray[np.float64],
     sampled_csfs_idxs_array: NDArray[np.int64]
