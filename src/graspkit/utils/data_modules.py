@@ -7,6 +7,7 @@
 
 from dataclasses import dataclass
 from typing import TypedDict
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -19,7 +20,7 @@ class MixCoefficientData:
     block_energy_count_list: list[int]
     level_J_value_list: list[str]
     parity_list: list[int]
-    block_levels_idx_list: list[NDArray[np.int32]]
+    block_levels_idx_list: list[NDArray[np.int64]]
     block_energy_list: list[float]
     block_level_energy_list: list[NDArray[np.float64]]
     mix_coefficient_list: list[NDArray[np.float64]]
@@ -33,6 +34,7 @@ class CSFsDict(TypedDict, total=False):
     CSFs_block_data: list[list[list[str]]]
     CSFs_block_length: list[int]
     block_num: int
+
 
 @dataclass
 class CSFs:
