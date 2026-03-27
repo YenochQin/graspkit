@@ -1,438 +1,273 @@
 # 安装指南
 
-本项目提供了多种安装方式，推荐使用 UV 进行现代化的环境管理。
+## 前提
 
-## 🚀 方法一：使用UV (推荐)
-UV 是超快速的Python包和项目管理器，提供极快的依赖解析和安装。
+- Python `>=3.14`
+- 建议在独立虚拟环境中安装
+- 如果要使用 GPU 版 PyTorch，需要 NVIDIA CUDA 环境
+
+项目依赖通过 extras 管理：
+
+- `cpu`：安装 CPU 版 PyTorch 运行依赖
+- `gpu`：安装 CUDA 版 PyTorch 运行依赖
+- `dev`：安装测试、类型检查、构建等开发依赖
+
+## 方式一：使用 UV
+
+推荐使用 `uv`，因为当前仓库已经为 extras 和 PyTorch CUDA 源做了配置。
+
+### 安装 UV
 
 ```bash
-# 安装 UV (如果尚未安装)
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-# macOS/Linux
+# macOS / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 克隆项目并进入目录
-git clone https://github.com/YenochQin/graspkit-tools.git
-cd graspkit-tools
+# Windows PowerShell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-# 创建虚拟环境
+### 创建环境并安装
+
+```bash
+git clone https://github.com/YenochQin/graspkit.git
+cd GraspKit
+
 uv venv
 
-# 激活环境
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
+# macOS / Linux
 source .venv/bin/activate
 
-# 注意：镜像源已在 pyproject.toml 中配置为清华镜像源
-# 如果需要覆盖配置，可以设置环境变量：
-# export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+```
 
+### CPU 运行环境
 
-# 安装依赖 - 必须选择CPU或GPU版本
-# CPU版本 (推荐，兼容性好)
+```bash
 uv sync --extra cpu
+```
 
-# GPU版本 (如果有NVIDIA GPU和CUDA)
+### GPU 运行环境
+
+```bash
 uv sync --extra gpu
-
-# 开发环境 CPU版本
-uv sync --extra dev --extra cpu
-
-# 开发环境 GPU版本
-uv sync --extra dev --extra gpu
-
-# 运行特定命令
-uv run python your_script.py
 ```
 
-**UV 环境特性**：
-- 超快的依赖解析和安装（比pip快10-100倍）
-- 自动管理Python版本 (>=3.12)
-- 支持CPU和GPU两种环境配置
-- 跨平台支持 (Linux, Windows, macOS)
-- 现代化的锁文件机制 (uv.lock)
-- 隔离的开发环境
-- 与pip完全兼容
-
-### UV 环境管理
+### 开发环境
 
 ```bash
-# 查看UV版本
-uv --version
+# CPU 开发环境
+uv sync --extra cpu --extra dev
 
-# 创建特定Python版本环境
-uv venv --python 3.12
-
-# 注意：镜像源已在 pyproject.toml 的 [tool.uv] 部分配置
-# UV 会自动使用配置的清华镜像源加速下载
-
-# 如果需要临时覆盖配置，可以设置环境变量：
-# export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
-
-# 同步依赖 (使用uv.lock文件) - 注意：需要指定CPU或GPU
-# 基础安装无法工作，必须选择以下之一：
-uv sync --extra cpu    # CPU版本
-uv sync --extra gpu    # GPU版本
-
-# 开发环境安装
-uv sync --extra dev --extra cpu    # 开发环境CPU版本
-uv sync --extra dev --extra gpu    # 开发环境GPU版本
-
-# 安装所有额外依赖 (包含GPU版PyTorch)
-uv sync --all-extras
-
-# 添加新的依赖到pyproject.toml
-uv add pytest
-uv add torch --extra cpu
-
-# 更新依赖
-uv sync --upgrade
-
-# 查看当前环境变量
-echo $UV_INDEX_URL
-echo $UV_EXTRA_INDEX_URL
+# GPU 开发环境
+uv sync --extra gpu --extra dev
 ```
 
-### UV 优势
-
-- **超快速度**：依赖解析和安装比pip快10-100倍
-- **自动版本管理**：无需手动管理 Python 版本 (>=3.12)
-- **跨平台兼容**：支持 Linux、Windows、macOS
-- **环境隔离**：不同项目使用不同依赖版本
-- **现代化锁文件**：使用 uv.lock 确保可重现构建
-- **GPU 支持**：支持CPU和GPU两种环境配置
-- **完全兼容**：与pip完全兼容
-
-### 📄 pyproject.toml 配置
-
-项目已在 `pyproject.toml` 文件中配置了镜像源：
-
-```toml
-[tool.uv]
-# Configure package index for faster downloads in China
-index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-extra-index-url = ["https://pypi.org/simple"]
-```
-
-**配置优势**：
-- 🎯 **项目级配置**：随项目一起版本控制，团队共享
-- 🚀 **自动应用**：无需手动设置环境变量
-- 🔄 **灵活覆盖**：仍可通过环境变量临时覆盖
-- 📦 **官方支持**：UV 原生支持 pyproject.toml 配置
-
-**临时覆盖配置**：
-```bash
-# 使用其他镜像源
-UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
-
-# 使用官方源
-UV_INDEX_URL="https://pypi.org/simple" uv sync
-```
-
----
-
-## 📦 方法二：传统 pip 安装
-
-如果您更喜欢使用传统的 pip 安装方式，我们仍然提供了相应的配置文件。
-
-### 环境选择
-
-#### 🖥️ CPU环境安装
-适用于：
-- 没有GPU的机器
-- 不需要GPU加速的场景
-- 快速测试和开发
-- 资源受限的环境
+### 常用命令
 
 ```bash
-# 创建虚拟环境
-python -m venv grasp_env
-
-# 激活环境 (Windows)
-grasp_env\Scripts\activate
-
-# 激活环境 (Linux/Mac)
-source grasp_env/bin/activate
-
-# 安装依赖
-pip install -r requirements-cpu.txt
-
-# 开发模式安装
-pip install -e .
-```
-
-#### 🚀 GPU环境安装
-适用于：
-- 有NVIDIA GPU的机器
-- 需要深度学习加速的场景
-- 大规模模型训练
-- 高性能计算需求
-
-```bash
-# 创建虚拟环境
-python -m venv grasp_env
-
-# 激活环境
-grasp_env\Scripts\activate  # Windows
-source grasp_env/bin/activate  # Linux/Mac
-
-# 安装依赖
-pip install -r requirements-gpu.txt
-
-# 开发模式安装
-pip install -e .
-```
-
-**前提条件**：
-- 安装了NVIDIA GPU驱动
-- 安装了合适版本的CUDA (推荐11.8+)
-- 确认GPU可用：`nvidia-smi`
-
----
-
-## 🔍 验证安装
-
-### 快速验证
-
-```bash
-# 使用 UV 环境
-python -c "
-import torch
-import numpy as np
-import pandas as pd
-import sklearn
-import graspkit
-print(f'✅ graspkit 版本: {graspkit.__version__}')
-print(f'✅ PyTorch版本: {torch.__version__}')
-print(f'✅ NumPy版本: {np.__version__}')
-print(f'✅ GPU可用: {torch.cuda.is_available()}')
-"
-
-# 或者使用 uv run
-uv run python -c "
-import torch
-import numpy as np
-import pandas as pd
-import sklearn
-import graspkit
-print(f'✅ graspkit 版本: {graspkit.__version__}')
-print(f'✅ PyTorch版本: {torch.__version__}')
-print(f'✅ NumPy版本: {np.__version__}')
-print(f'✅ GPU可用: {torch.cuda.is_available()}')
-"
-```
-
-### 功能测试
-
-```python
-# 测试核心功能
-from graspkit.data_IO import GraspFileLoad
-from graspkit.ml_module import NeuralNetwork
-from graspkit.utils import calculate_energy
-
-print("✅ 核心模块导入成功")
-
-# 测试数据处理功能
-try:
-    # 这里可以添加具体的功能测试
-    print("✅ 功能测试通过")
-except Exception as e:
-    print(f"❌ 功能测试失败: {e}")
-```
-
----
-
-## 🛠️ 开发环境设置
-
-### 使用 UV 开发
-
-```bash
-# 安装开发版本 (包含所有开发工具) - 必须指定CPU或GPU
-# CPU版本开发环境 (推荐)
-uv sync --extra dev --extra cpu
-
-# GPU版本开发环境
-uv sync --extra dev --extra gpu
-
-# 或者逐个添加开发依赖
-uv add pytest --dev
-uv add black --dev
-uv add ruff --dev
-uv add mypy --dev
-
-# 运行测试
-uv run pytest
-
-# 代码格式化
-uv run black .
-
-# 代码检查
+uv run python -c "import graspkit; print(graspkit.__version__)"
+uv run pytest tests/
 uv run ruff check .
-
-# 自动修复代码格式问题
-uv run ruff check . --fix
-
-# 类型检查
 uv run mypy src/
 ```
 
-### 传统开发环境
+## 方式二：使用 Pixi
+
+仓库已经包含 Pixi 配置，适合希望直接使用项目预定义环境的人。
+
+### 安装并进入环境
 
 ```bash
-# 安装开发依赖
-pip install pytest black ruff mypy
+git clone https://github.com/YenochQin/graspkit.git
+cd GraspKit
 
-# 运行测试
-pytest
-
-# 代码格式化
-black .
-
-# 代码检查
-ruff check .
-
-# 自动修复代码格式问题
-ruff check . --fix
+pixi install
+pixi shell
 ```
 
----
+默认环境启用 `gpu + dev`。如果你需要其他环境：
 
-## 📋 系统要求
+```bash
+pixi shell -e cpu
+pixi shell -e gpu
+pixi shell -e dev
+pixi shell -e dev-gpu
+pixi shell -e all
+```
 
-### 最低要求
-- **操作系统**: Linux, Windows 10+, macOS 10.15+
-- **Python**: 3.12+ (Pixi 自动管理)
-- **内存**: 4GB RAM (推荐 8GB+)
-- **存储**: 2GB 可用空间
+在 Pixi 环境中可直接执行：
 
-### GPU 环境要求
-- **GPU**: NVIDIA GPU (支持 CUDA)
-- **CUDA**: 11.8+ (推荐 12.0+)
-- **GPU 内存**: 4GB+ (推荐 8GB+)
+```bash
+python -c "import graspkit; print(graspkit.__version__)"
+pytest tests/
+ruff check .
+```
 
----
+## 方式三：使用 pip
 
-## 🔧 故障排除
+如果你不使用 `uv` 或 `pixi`，也可以直接基于 extras 安装。当前仓库没有 `requirements-cpu.txt` 或 `requirements-gpu.txt`，请不要再使用旧文档中的那些命令。
 
-### 常见问题
+### 创建虚拟环境
 
-1. **UV 安装失败**
-   ```bash
-   # 检查网络连接
-   curl -I https://astral.sh/uv/install.sh
+```bash
+python3.14 -m venv .venv
 
-   # 使用代理 (如果需要)
-   https_proxy=your_proxy curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
+# macOS / Linux
+source .venv/bin/activate
 
-2. **依赖下载速度慢**
-   ```bash
-   # 项目已配置清华镜像源，如果仍需要切换：
-   UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+```
 
-   # 或者使用华为云镜像
-   UV_INDEX_URL="https://repo.huaweicloud.com/repository/pypi/simple/" uv sync
+### 安装 CPU 环境
 
-   # 测试镜像源速度
-   curl -I https://pypi.tuna.tsinghua.edu.cn/simple/
-   curl -I https://mirrors.aliyun.com/pypi/simple/
-   ```
+```bash
+pip install -e ".[cpu]"
+```
 
-3. **NVIDIA CUDA 包下载超时**
-   ```bash
-   # 方法1: 增加网络超时时间
-   UV_HTTP_TIMEOUT=120 uv sync --extra dev
+### 安装 GPU 环境
 
-   # 方法2: 强制使用CPU版本的PyTorch (推荐)
-   uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-   uv sync --extra dev
+GPU 版依赖在 `uv` 下会自动走项目配置的 PyTorch CUDA 源；如果你用 `pip`，通常需要先按 PyTorch 官方方式安装匹配 CUDA 的 wheel，再安装项目本体。例如：
 
-   # 方法3: 跳过有问题的包，手动安装
-   uv sync --extra dev --no-build-isolation
+```bash
+pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
+pip install -e .
+```
 
-   # 方法4: 使用官方PyTorch源
-   UV_INDEX_URL="https://download.pytorch.org/whl/cpu" uv sync --extra dev
-   ```
+如果你要装开发依赖：
 
-4. **镜像源连接失败**
-   ```bash
-   # 测试当前配置的镜像源
-   curl -I https://pypi.tuna.tsinghua.edu.cn/simple/
+```bash
+pip install -e ".[cpu,dev]"
+```
 
-   # 临时切换到其他镜像源
-   UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" uv sync
+说明：
 
-   # 使用官方源作为备选
-   UV_INDEX_URL="https://pypi.org/simple" uv sync
+- 在 `zsh` 里，extras 最好加引号，避免 `[]` 被 shell 展开
+- 若你已经手动安装 GPU 版 `torch`/`torchvision`，再执行 `pip install -e .` 即可安装项目本体
 
-   # 检查 pyproject.toml 配置
-   cat pyproject.toml | grep -A 5 "\[tool.uv\]"
-   ```
+## 构建与开发依赖
 
-5. **GPU 环境无法使用 CUDA**
-   ```bash
-   # 检查 CUDA 安装
-   nvidia-smi
+开发环境推荐直接安装 `dev` extra：
 
-   # 检查 PyTorch CUDA 支持
-   python -c "import torch; print(torch.cuda.is_available())"
+```bash
+uv sync --extra cpu --extra dev
+```
 
-   # 或者使用 uv run
-   uv run python -c "import torch; print(torch.cuda.is_available())"
-   ```
+安装后可使用这些命令：
 
-6. **依赖冲突**
-   ```bash
-   # 使用UV清理并重新同步
-   uv sync --refresh
+```bash
+ruff check .
+ruff check . --fix
+mypy src/
+pytest tests/
+python -m build
+python build_package.py --clean
+```
 
-   # 或者强制重新安装
-   uv sync --reinstall
+仓库当前可见的测试入口主要是：
 
-   # 或者使用传统方式
-   pip install --upgrade pip
-   pip install -e . --force-reinstall
-   ```
+- `pytest tests/`
+- `python test/test.ipynb` 不适合作为命令行测试入口
 
-7. **导入错误**
-   ```bash
-   # 检查安装路径
-   uv run python -c "import graspkit; print(graspkit.__file__)"
+## 验证安装
 
-   # 确保包已正确同步
-   uv sync
+### 最小验证
 
-   # 检查虚拟环境
-   uv venv --seed
-   uv sync
-   ```
+```bash
+python -c "import graspkit; print(graspkit.__version__)"
+```
 
-8. **虚拟环境激活失败**
-   ```bash
-   # Windows: 确保使用PowerShell或CMD
-   .venv\Scripts\activate
+### 依赖验证
 
-   # Linux/macOS: 确保使用bash或zsh
-   source .venv/bin/activate
-   ```
+```bash
+python - <<'PY'
+import graspkit
+import numpy
+import polars
+import torch
 
-### 获取帮助
+print("graspkit:", graspkit.__version__)
+print("numpy:", numpy.__version__)
+print("polars:", polars.__version__)
+print("torch:", torch.__version__)
+print("cuda_available:", torch.cuda.is_available())
+PY
+```
 
-如果遇到安装问题，请提供以下信息：
-- 操作系统版本
-- Python 版本
-- 使用的安装方法 (UV/pip)
-- 错误信息完整输出
-- `uv --version` 或 `pip list` 的输出
+### 简单功能验证
 
----
+```bash
+python - <<'PY'
+from graspkit import ANNClassifier, EnergyFileLoader, MLCalConfig
 
-## 📚 相关文档
+print("core imports ok")
+print("ANNClassifier:", ANNClassifier.__name__)
+print("EnergyFileLoader:", EnergyFileLoader.__name__)
+print("MLCalConfig:", MLCalConfig.__name__)
+PY
+```
 
-- [项目主页](https://github.com/YenochQin/graspkit-tools)
-- [UV 官方文档](https://docs.astral.sh/uv/)
-- [构建说明](BUILD_INSTRUCTIONS.md)
-- [API 文档](docs/)
-- [使用示例](examples/)
+## 版本与环境说明
+
+当前仓库元数据中的关键点：
+
+- 包名：`grasp-kit`
+- 当前版本：`3.2.dev1`
+- Python 要求：`>=3.14`
+- PyTorch 通过 optional dependencies 安装
+- `gpu` extra 使用 `https://download.pytorch.org/whl/cu128`
+
+如果你的 Python 版本低于 3.14，安装失败是预期行为。
+
+## 常见问题
+
+### 1. `uv sync` 失败，提示 Python 版本不满足
+
+检查解释器版本：
+
+```bash
+python --version
+uv python list
+```
+
+然后使用 3.14 环境重新创建虚拟环境。
+
+### 2. GPU 安装失败
+
+先确认 CUDA 和驱动可用：
+
+```bash
+nvidia-smi
+```
+
+如果只是想先跑功能或测试，优先切到 CPU 环境：
+
+```bash
+uv sync --extra cpu --extra dev
+```
+
+### 3. pip 安装 GPU 版 PyTorch 失败
+
+这是因为项目里的 CUDA wheel 源配置主要服务于 `uv`。使用 `pip` 时，请直接按 PyTorch 官方方式指定 `--index-url` 安装对应 CUDA 版本的 wheel。
+
+### 4. 想只安装项目本体，不要 PyTorch
+
+可以直接：
+
+```bash
+pip install -e .
+```
+
+但要注意：
+
+- `graspkit` 中的部分 ML 功能依赖 `torch`
+- 如果你只使用数据加载、表格处理、部分工具函数，这种安装方式通常够用
+
+## 推荐安装组合
+
+大多数情况直接选下面其中之一：
+
+- 日常开发：`uv sync --extra cpu --extra dev`
+- 有 CUDA 的训练环境：`uv sync --extra gpu --extra dev`
+- 只做运行验证：`uv sync --extra cpu`
