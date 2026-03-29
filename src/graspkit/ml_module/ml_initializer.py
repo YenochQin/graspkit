@@ -303,6 +303,148 @@ def _get_reference_discrepancies(
     ]
 
 
+def compute_reference_gap_errors(
+    selected_energy_data: pl.DataFrame,
+    spectral_term: list[str],
+    reference_energy_levels: list[float],
+) -> pl.DataFrame:
+    """计算每个目标谱项相对于参考零点的相对能级误差。"""
+    term_energy: dict[str, float] = {}
+    for row in selected_energy_data.iter_rows(named=True):
+        term = row["configuration_raw"]
+        if term in spectral_term:
+            term_energy[term] = float(row["EnergyLevel"])
+
+    missing = [term for term in spectral_term if term not in term_energy]
+    if missing:
+        raise ValueError(f"以下谱项在能级数据中找不到: {missing}")
+
+    ref_base = min(reference_energy_levels)
+    base_idx = reference_energy_levels.index(ref_base)
+    calc_base = term_energy[spectral_term[base_idx]]
+
+    rows: list[dict[str, str | float]] = []
+    for idx, term in enumerate(spectral_term):
+        ref_rel = float(reference_energy_levels[idx] - ref_base)
+        calc_rel = float(term_energy[term] - calc_base)
+        rows.append(
+            {
+                "configuration_raw": term,
+                "reference_relative_energy": ref_rel,
+                "calculated_relative_energy": calc_rel,
+                "gap_error": abs(calc_rel - ref_rel),
+            }
+        )
+    return pl.DataFrame(rows)
+
+
+def compute_pairwise_gap_error_matrix(
+    selected_energy_data: pl.DataFrame,
+    spectral_term: list[str],
+    reference_energy_levels: list[float],
+) -> NDArray[np.float64]:
+    """计算目标谱项之间的成对相对能级间隙误差矩阵。"""
+    reference_gap_errors = compute_reference_gap_errors(
+        selected_energy_data,
+        spectral_term,
+        reference_energy_levels,
+    )
+    calc_rel = np.asarray(
+        reference_gap_errors["calculated_relative_energy"], dtype=np.float64
+    )
+    ref_rel = np.asarray(
+        reference_gap_errors["reference_relative_energy"], dtype=np.float64
+    )
+
+    calc_gap = calc_rel[:, np.newaxis] - calc_rel[np.newaxis, :]
+    ref_gap = ref_rel[:, np.newaxis] - ref_rel[np.newaxis, :]
+    return np.abs(calc_gap - ref_gap)
+
+
+def score_correction_candidates_from_ci(
+    candidate_level_scores: NDArray[np.float64],
+    pairwise_gap_error_matrix: NDArray[np.float64],
+    pair_weighting: str = "error_magnitude",
+    top_pair_count: int | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """根据多能级预测差异和当前参考间隙误差为候选 CSF 打分。"""
+    n_candidates, n_levels = candidate_level_scores.shape
+    correction_scores = np.zeros(n_candidates, dtype=np.float64)
+    dominant_pairs = np.full((n_candidates, 2), -1, dtype=np.int64)
+    dominant_pair_scores = np.full(n_candidates, -np.inf, dtype=np.float64)
+
+    candidate_level_scores = np.asarray(candidate_level_scores, dtype=np.float64)
+    pairwise_gap_error_matrix = np.asarray(pairwise_gap_error_matrix, dtype=np.float64)
+
+    pair_entries: list[tuple[float, int, int]] = []
+    for left_idx in range(n_levels):
+        for right_idx in range(left_idx + 1, n_levels):
+            gap_error = float(pairwise_gap_error_matrix[left_idx, right_idx])
+            pair_entries.append((gap_error, left_idx, right_idx))
+
+    pair_entries.sort(reverse=True)
+    if top_pair_count is not None:
+        pair_entries = pair_entries[:top_pair_count]
+
+    for gap_error, left_idx, right_idx in pair_entries:
+        if pair_weighting == "uniform":
+            pair_weight = 1.0 if gap_error > 0 else 0.0
+        elif pair_weighting == "error_squared":
+            pair_weight = gap_error**2
+        else:
+            pair_weight = gap_error
+
+        if pair_weight <= 0:
+            continue
+
+        pair_contribution = pair_weight * np.abs(
+            candidate_level_scores[:, left_idx] - candidate_level_scores[:, right_idx]
+        )
+        correction_scores += pair_contribution
+
+        better_pair_mask = pair_contribution > dominant_pair_scores
+        dominant_pair_scores[better_pair_mask] = pair_contribution[better_pair_mask]
+        dominant_pairs[better_pair_mask, 0] = left_idx
+        dominant_pairs[better_pair_mask, 1] = right_idx
+
+    return correction_scores, dominant_pairs
+
+
+def combine_importance_and_reference_scores(
+    importance_scores: NDArray[np.float64],
+    reference_correction_scores: NDArray[np.float64],
+    importance_weight: float,
+    correction_weight: float,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """归一化并组合重要性分数与参考修正分数。"""
+
+    def _normalize_scores(scores: NDArray[np.float64]) -> NDArray[np.float64]:
+        if scores.size == 0:
+            return scores.astype(np.float64)
+        min_value = float(np.min(scores))
+        max_value = float(np.max(scores))
+        if np.isclose(min_value, max_value):
+            if max_value <= 0:
+                return np.zeros_like(scores, dtype=np.float64)
+            return np.ones_like(scores, dtype=np.float64)
+        return (scores - min_value) / (max_value - min_value)
+
+    normalized_importance = _normalize_scores(np.asarray(importance_scores, dtype=np.float64))
+    normalized_reference = _normalize_scores(
+        np.asarray(reference_correction_scores, dtype=np.float64)
+    )
+
+    total_weight = importance_weight + correction_weight
+    if total_weight <= 0:
+        raise ValueError("importance_weight 和 correction_weight 的和必须大于 0")
+
+    final_scores = (
+        importance_weight * normalized_importance
+        + correction_weight * normalized_reference
+    ) / total_weight
+    return final_scores, normalized_importance, normalized_reference
+
+
 def check_reference_energy_agreement(
     selected_energy_data: pl.DataFrame,
     spectral_term: list[str],
@@ -325,29 +467,28 @@ def check_reference_energy_agreement(
     Returns:
         bool: True=满足阈值或纯监控模式, False=超出阈值（用于收敛门控）
     """
-    term_energy: dict[str, float] = {}
-    for row in selected_energy_data.iter_rows(named=True):
-        term = row["configuration_raw"]
-        if term in spectral_term:
-            term_energy[term] = float(row["EnergyLevel"])
+    try:
+        reference_gap_errors = compute_reference_gap_errors(
+            selected_energy_data,
+            spectral_term,
+            reference_energy_levels,
+        )
+    except ValueError as exc:
+        logger.error("%s，判定为计算错误", exc)
+        return False
 
-    missing = [t for t in spectral_term if t not in term_energy]
-    if missing:
-        logger.error(f"以下谱项在能级数据中找不到: {missing}，跳过参考能级比较")
-        return True
-
-    ref_base = min(reference_energy_levels)
-    base_idx = reference_energy_levels.index(ref_base)
-    calc_base = term_energy[spectral_term[base_idx]]
-
-    table_rows: list[list[str]] = []
-    discrepancies: list[float] = []
-    for i, term in enumerate[str](spectral_term):
-        ref_rel = reference_energy_levels[i] - ref_base
-        calc_rel = term_energy[term] - calc_base
-        disc = abs(calc_rel - ref_rel)
-        discrepancies.append(disc)
-        table_rows.append([term, f"{ref_rel:.2f}", f"{calc_rel:.2f}", f"{disc:.2f}"])
+    table_rows = [
+        [
+            str(row["configuration_raw"]),
+            f"{float(row['reference_relative_energy']):.2f}",
+            f"{float(row['calculated_relative_energy']):.2f}",
+            f"{float(row['gap_error']):.2f}",
+        ]
+        for row in reference_gap_errors.iter_rows(named=True)
+    ]
+    discrepancies = [
+        float(value) for value in reference_gap_errors["gap_error"].to_list()
+    ]
 
     table = tabulate(
         table_rows,

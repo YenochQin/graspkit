@@ -40,6 +40,12 @@ class CalSettings(BaseModel):
     cal_levels: str
     spectral_term: list[str]
     reference_energy_levels: list[float] = []
+    reference_energy_mode: str = "monitor"
+    reference_energy_score_weight: float = 0.3
+    reference_energy_importance_weight: float = 0.7
+    reference_gap_pair_weighting: str = "error_magnitude"
+    reference_energy_hard_error_threshold: float | None = None
+    reference_energy_top_pair_count: int | None = None
     reference_energy_threshold: float = 0.0
     reference_energy_threshold_base: float | None = None
     reference_energy_threshold_min: float = 300.0
@@ -88,12 +94,52 @@ class CalSettings(BaseModel):
     @field_validator(
         "reference_energy_threshold",
         "reference_energy_threshold_min",
+        "reference_energy_score_weight",
+        "reference_energy_importance_weight",
         mode="before",
     )
     @classmethod
     def validate_nonnegative_reference_thresholds(cls, v: float) -> float:
         if v < 0:
             raise ValueError("reference_energy_threshold 相关参数必须大于等于 0")
+        return v
+
+    @field_validator("reference_energy_hard_error_threshold", mode="before")
+    @classmethod
+    def validate_reference_energy_hard_error_threshold(
+        cls, v: float | None
+    ) -> float | None:
+        if v is not None and v < 0:
+            raise ValueError("reference_energy_hard_error_threshold 必须大于等于 0")
+        return v
+
+    @field_validator("reference_energy_top_pair_count")
+    @classmethod
+    def validate_reference_energy_top_pair_count(cls, v: int | None) -> int | None:
+        if v is not None and v <= 0:
+            raise ValueError("reference_energy_top_pair_count 必须大于 0")
+        return v
+
+    @field_validator("reference_energy_mode")
+    @classmethod
+    def validate_reference_energy_mode(cls, v: str) -> str:
+        allowed_modes = {"monitor", "hybrid_rank", "gate", "rollback"}
+        if v not in allowed_modes:
+            raise ValueError(
+                "reference_energy_mode 必须是以下值之一: "
+                f"{sorted(allowed_modes)}，当前值: {v}"
+            )
+        return v
+
+    @field_validator("reference_gap_pair_weighting")
+    @classmethod
+    def validate_reference_gap_pair_weighting(cls, v: str) -> str:
+        allowed_weighting = {"uniform", "error_magnitude", "error_squared"}
+        if v not in allowed_weighting:
+            raise ValueError(
+                "reference_gap_pair_weighting 必须是以下值之一: "
+                f"{sorted(allowed_weighting)}，当前值: {v}"
+            )
         return v
 
     @field_validator("reference_energy_threshold_tighten_start_loop")
@@ -118,6 +164,14 @@ class CalSettings(BaseModel):
                     f"reference_energy_levels 长度({len(self.reference_energy_levels)}) "
                     f"必须与 spectral_term 长度({len(self.spectral_term)}) 相同"
                 )
+        if (
+            self.reference_energy_score_weight == 0
+            and self.reference_energy_importance_weight == 0
+        ):
+            raise ValueError(
+                "reference_energy_score_weight 和 "
+                "reference_energy_importance_weight 不能同时为零"
+            )
         if self.reference_energy_threshold_base is None:
             self.reference_energy_threshold_base = self.reference_energy_threshold
 
