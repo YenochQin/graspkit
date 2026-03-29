@@ -16,12 +16,74 @@ import os
 from typing import cast
 
 import numpy as np
+import polars as pl
 import torch
 from sklearn.model_selection import train_test_split
 
 from ..data_IO import MLCalConfig
 from ..utils.data_modules import MLDataCounts
+from .ml_initializer import (
+    combine_importance_and_reference_scores,
+    compute_pairwise_gap_error_matrix,
+    score_correction_candidates_from_ci,
+)
 from .ml_regression_model import ANNRegressor
+
+
+def _is_hybrid_reference_ranking_enabled(
+    config: MLCalConfig,
+    selected_energy_data: pl.DataFrame | None,
+) -> bool:
+    return (
+        selected_energy_data is not None
+        and len(config.cal_settings.reference_energy_levels) > 1
+        and getattr(config.cal_settings, "reference_energy_mode", "monitor")
+        == "hybrid_rank"
+        and getattr(config.cal_settings, "reference_energy_score_weight", 0.0) > 0
+    )
+
+
+def _write_candidate_hybrid_scores(
+    unselected_idxs: np.ndarray,
+    per_level_scores: np.ndarray,
+    importance_scores: np.ndarray,
+    correction_scores: np.ndarray,
+    final_scores: np.ndarray,
+    dominant_pairs: np.ndarray,
+    selected_idxs: np.ndarray,
+    config: MLCalConfig,
+    logger: logging.Logger,
+) -> None:
+    spectral_term = config.cal_settings.spectral_term
+    selected_idx_set = {int(idx) for idx in selected_idxs.tolist()}
+    rows: list[dict[str, str | int | float | bool]] = []
+
+    for row_idx, global_idx in enumerate(unselected_idxs.tolist()):
+        dominant_pair = dominant_pairs[row_idx]
+        if dominant_pair[0] >= 0 and dominant_pair[1] >= 0:
+            top_pair = (
+                f"{spectral_term[int(dominant_pair[0])]}|"
+                f"{spectral_term[int(dominant_pair[1])]}"
+            )
+        else:
+            top_pair = ""
+
+        dominant_level_idx = int(np.argmax(per_level_scores[row_idx]))
+        rows.append(
+            {
+                "csf_index": int(global_idx),
+                "importance_score": float(importance_scores[row_idx]),
+                "correction_score": float(correction_scores[row_idx]),
+                "final_score": float(final_scores[row_idx]),
+                "selected": int(global_idx) in selected_idx_set,
+                "dominant_target_level": spectral_term[dominant_level_idx],
+                "top_contributing_level_pair": top_pair,
+            }
+        )
+
+    output_path = config.cal_path.results_path / "candidate_hybrid_scores.csv"
+    pl.DataFrame(rows).write_csv(output_path)
+    logger.info("候选CSF混合评分已保存到: %s", output_path)
 
 
 def generate_regression_train_descriptors(
@@ -208,6 +270,7 @@ def predict_regression_model(
     config: MLCalConfig,
     train_data_counts: MLDataCounts,
     logger: logging.Logger | None = None,
+    selected_energy_data: pl.DataFrame | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
     """
     使用回归模型预测未计算 CSF 的 log₁₀(CI²)，按预测值排序选 top-k。
@@ -240,6 +303,45 @@ def predict_regression_model(
     )
     logger.info(f"完成对 {len(unselected_idxs)} 个未选择 CSF 的回归预测")
 
+    importance_score = np.max(y_predicted_log_ci, axis=1)
+    correction_score = np.zeros_like(importance_score, dtype=np.float64)
+    final_score = importance_score.copy()
+    dominant_pairs = np.full((len(unselected_idxs), 2), -1, dtype=np.int64)
+
+    if _is_hybrid_reference_ranking_enabled(config, selected_energy_data):
+        pairwise_gap_error_matrix = compute_pairwise_gap_error_matrix(
+            selected_energy_data,
+            config.cal_settings.spectral_term,
+            config.cal_settings.reference_energy_levels,
+        )
+        correction_score, dominant_pairs = score_correction_candidates_from_ci(
+            y_predicted_log_ci,
+            pairwise_gap_error_matrix,
+            pair_weighting=config.cal_settings.reference_gap_pair_weighting,
+            top_pair_count=config.cal_settings.reference_energy_top_pair_count,
+        )
+        final_score, normalized_importance, normalized_correction = (
+            combine_importance_and_reference_scores(
+                importance_score,
+                correction_score,
+                importance_weight=config.cal_settings.reference_energy_importance_weight,
+                correction_weight=config.cal_settings.reference_energy_score_weight,
+            )
+        )
+        logger.info(
+            "回归混合排序已启用: importance_weight=%.3f, correction_weight=%.3f",
+            config.cal_settings.reference_energy_importance_weight,
+            config.cal_settings.reference_energy_score_weight,
+        )
+        logger.info(
+            "回归修正分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+            float(np.min(normalized_correction)),
+            float(np.max(normalized_correction)),
+            float(np.mean(normalized_correction)),
+        )
+    else:
+        normalized_importance = importance_score
+
     # ============ 动态选择机制 ============
     current_important_count = len(verified_important_idxs)
     total_csfs_count = train_data_counts.total_csfs_count
@@ -262,8 +364,7 @@ def predict_regression_model(
 
     # 按各能级预测 log₁₀(CI²) 的最大值降序排序
     # max 代表：只要在某个能级上预测值大，该 CSF 就值得被选入
-    max_predicted_log_ci = np.max(y_predicted_log_ci, axis=1)  # (n_unselected,)
-    ranked_local_idxs = np.argsort(max_predicted_log_ci)[::-1]  # 降序
+    ranked_local_idxs = np.argsort(final_score)[::-1]  # 降序
 
     n_select = min(new_target, len(ranked_local_idxs))
     top_k_local_idxs = ranked_local_idxs[:n_select]
@@ -273,13 +374,25 @@ def predict_regression_model(
     logger.info(f"目标新增 CSF 数: {new_target}")
     logger.info(f"实际选出 CSF 数: {len(ml_sampled_idxs)}")
     logger.info(
-        f"预测 log₁₀(CI²) 范围 - 最大: {max_predicted_log_ci.max():.3f}, "
-        f"最小: {max_predicted_log_ci.min():.3f}"
+        f"预测重要性分数范围 - 最大: {importance_score.max():.3f}, "
+        f"最小: {importance_score.min():.3f}"
     )
 
     train_data_counts.important_csfs_count = current_important_count
     train_data_counts.ml_predicted_count = len(unselected_idxs)
     train_data_counts.ml_sampled_count = len(ml_sampled_idxs)
+
+    _write_candidate_hybrid_scores(
+        unselected_idxs=unselected_idxs,
+        per_level_scores=y_predicted_log_ci,
+        importance_scores=importance_score,
+        correction_scores=correction_score,
+        final_scores=final_score,
+        dominant_pairs=dominant_pairs,
+        selected_idxs=ml_sampled_idxs,
+        config=config,
+        logger=logger,
+    )
 
     return (
         ml_sampled_idxs,

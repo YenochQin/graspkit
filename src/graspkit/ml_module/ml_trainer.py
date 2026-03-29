@@ -14,6 +14,7 @@ import time
 
 # 第三方库导入
 import numpy as np
+import polars as pl
 import torch
 
 # from imblearn.over_sampling import SMOTE
@@ -27,9 +28,70 @@ from ..data_IO import (
 from ..utils.data_modules import MLDataCounts
 from .ml_types import EvaluationResults, PredictionOutputs
 from .ml_results_analyzer import save_training_results
+from .ml_initializer import (
+    combine_importance_and_reference_scores,
+    compute_pairwise_gap_error_matrix,
+    score_correction_candidates_from_ci,
+)
 
 # 本地模块导入
 from .neural_network import ANNClassifier
+
+
+def _is_hybrid_reference_ranking_enabled(
+    config: MLCalConfig,
+    selected_energy_data: pl.DataFrame | None,
+) -> bool:
+    return (
+        selected_energy_data is not None
+        and len(config.cal_settings.reference_energy_levels) > 1
+        and getattr(config.cal_settings, "reference_energy_mode", "monitor")
+        == "hybrid_rank"
+        and getattr(config.cal_settings, "reference_energy_score_weight", 0.0) > 0
+    )
+
+
+def _write_candidate_hybrid_scores(
+    unselected_idxs: np.ndarray,
+    per_level_scores: np.ndarray,
+    importance_scores: np.ndarray,
+    correction_scores: np.ndarray,
+    final_scores: np.ndarray,
+    dominant_pairs: np.ndarray,
+    selected_idxs: np.ndarray,
+    config: MLCalConfig,
+    logger: logging.Logger,
+) -> None:
+    spectral_term = config.cal_settings.spectral_term
+    selected_idx_set = {int(idx) for idx in selected_idxs.tolist()}
+    rows: list[dict[str, str | int | float | bool]] = []
+
+    for row_idx, global_idx in enumerate(unselected_idxs.tolist()):
+        dominant_pair = dominant_pairs[row_idx]
+        if dominant_pair[0] >= 0 and dominant_pair[1] >= 0:
+            top_pair = (
+                f"{spectral_term[int(dominant_pair[0])]}|"
+                f"{spectral_term[int(dominant_pair[1])]}"
+            )
+        else:
+            top_pair = ""
+
+        dominant_level_idx = int(np.argmax(per_level_scores[row_idx]))
+        rows.append(
+            {
+                "csf_index": int(global_idx),
+                "importance_score": float(importance_scores[row_idx]),
+                "correction_score": float(correction_scores[row_idx]),
+                "final_score": float(final_scores[row_idx]),
+                "selected": int(global_idx) in selected_idx_set,
+                "dominant_target_level": spectral_term[dominant_level_idx],
+                "top_contributing_level_pair": top_pair,
+            }
+        )
+
+    output_path = config.cal_path.results_path / "candidate_hybrid_scores.csv"
+    pl.DataFrame(rows).write_csv(output_path)
+    logger.info("候选CSF混合评分已保存到: %s", output_path)
 
 
 def _select_model_architecture(
@@ -414,6 +476,7 @@ def predict_model(
     config: MLCalConfig,
     train_data_counts: MLDataCounts,
     logger: logging.Logger,
+    selected_energy_data: pl.DataFrame | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
@@ -428,16 +491,60 @@ def predict_model(
         X_unselected_for_prediction,
         batch_size=10_000_000,  # 可根据内存调整
     )
-    # 多能级情况：在所有能级中取最大概率值，然后与阈值比较
-    max_unselected_probability = np.max(y_unselected_probability, axis=1)
-    y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
+    # 多能级情况：在所有能级中取最大概率值作为基础重要性分数
+    importance_score = np.max(y_unselected_probability, axis=1)
+    correction_score = np.zeros_like(importance_score, dtype=np.float64)
+    final_score = importance_score.copy()
+    dominant_pairs = np.full((len(unselected_idxs), 2), -1, dtype=np.int64)
+
+    if _is_hybrid_reference_ranking_enabled(config, selected_energy_data):
+        pairwise_gap_error_matrix = compute_pairwise_gap_error_matrix(
+            selected_energy_data,
+            config.cal_settings.spectral_term,
+            config.cal_settings.reference_energy_levels,
+        )
+        correction_score, dominant_pairs = score_correction_candidates_from_ci(
+            y_unselected_probability,
+            pairwise_gap_error_matrix,
+            pair_weighting=config.cal_settings.reference_gap_pair_weighting,
+            top_pair_count=config.cal_settings.reference_energy_top_pair_count,
+        )
+        final_score, normalized_importance, normalized_correction = (
+            combine_importance_and_reference_scores(
+                importance_score,
+                correction_score,
+                importance_weight=config.cal_settings.reference_energy_importance_weight,
+                correction_weight=config.cal_settings.reference_energy_score_weight,
+            )
+        )
+        logger.info(
+            "混合排序已启用: importance_weight=%.3f, correction_weight=%.3f",
+            config.cal_settings.reference_energy_importance_weight,
+            config.cal_settings.reference_energy_score_weight,
+        )
+        logger.info(
+            "修正分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+            float(np.min(normalized_correction)),
+            float(np.max(normalized_correction)),
+            float(np.mean(normalized_correction)),
+        )
+        logger.info(
+            "组合分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+            float(np.min(final_score)),
+            float(np.max(final_score)),
+            float(np.mean(final_score)),
+        )
+    else:
+        normalized_importance = importance_score
+
+    y_unselected_prediction = (final_score > 0.5).astype(int)
 
     logger.info(f"推理了 {len(y_unselected_probability)} 个未选择CSF组态")
     logger.info(
-        "未选择CSF预测概率统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
-        float(np.min(max_unselected_probability)),
-        float(np.max(max_unselected_probability)),
-        float(np.mean(max_unselected_probability)),
+        "未选择CSF重要性分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        float(np.min(importance_score)),
+        float(np.max(importance_score)),
+        float(np.mean(importance_score)),
     )
 
     # 为绘图准备当前计算CSF的预测概率
@@ -519,7 +626,7 @@ def predict_model(
         logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
 
         # 获取ML预测重要组态的最大概率（在所有能级中取最大值）
-        ml_predicted_important_probabilities = max_unselected_probability[
+        ml_predicted_important_probabilities = final_score[
             ml_predicted_important_local_idxs
         ]
 
@@ -547,16 +654,16 @@ def predict_model(
                 "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
                 new_sampling_CSFs_num,
             )
-            probability_sorted_idxs = np.argsort(max_unselected_probability)[::-1]
+            probability_sorted_idxs = np.argsort(final_score)[::-1]
             top_k_local_idxs = probability_sorted_idxs[:new_sampling_CSFs_num]
             ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
             logger.info(
-                "回退采样完成：选取了 %s 个概率最高的未选择组态，最高概率=%.4f，最低入选概率=%.4f",
+                "回退采样完成：选取了 %s 个组合分数最高的未选择组态，最高分=%.4f，最低入选分=%.4f",
                 len(ml_sampled_idxs),
-                float(max_unselected_probability[top_k_local_idxs[0]])
+                float(final_score[top_k_local_idxs[0]])
                 if len(top_k_local_idxs) > 0
                 else 0.0,
-                float(max_unselected_probability[top_k_local_idxs[-1]])
+                float(final_score[top_k_local_idxs[-1]])
                 if len(top_k_local_idxs) > 0
                 else 0.0,
             )
@@ -564,6 +671,18 @@ def predict_model(
     train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
     train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
     train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
+
+    _write_candidate_hybrid_scores(
+        unselected_idxs=unselected_idxs,
+        per_level_scores=y_unselected_probability,
+        importance_scores=importance_score,
+        correction_scores=correction_score,
+        final_scores=final_score,
+        dominant_pairs=dominant_pairs,
+        selected_idxs=ml_sampled_idxs,
+        config=config,
+        logger=logger,
+    )
 
     return (
         ml_sampled_idxs,
