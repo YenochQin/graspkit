@@ -382,18 +382,6 @@ def predict_regression_model(
     train_data_counts.ml_predicted_count = len(unselected_idxs)
     train_data_counts.ml_sampled_count = len(ml_sampled_idxs)
 
-    _write_candidate_hybrid_scores(
-        unselected_idxs=unselected_idxs,
-        per_level_scores=y_predicted_log_ci,
-        importance_scores=importance_score,
-        correction_scores=correction_score,
-        final_scores=final_score,
-        dominant_pairs=dominant_pairs,
-        selected_idxs=ml_sampled_idxs,
-        config=config,
-        logger=logger,
-    )
-
     return (
         ml_sampled_idxs,
         verified_important_idxs,
