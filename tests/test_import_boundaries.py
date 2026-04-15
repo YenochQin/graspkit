@@ -5,8 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
@@ -55,7 +53,7 @@ print(json.dumps({
 """
     )
 
-    assert result["all"] == ["__author__", "__version__"]
+    assert result["all"] == ["__author__", "__version__", "MLCalConfig", "CalPath", "load_config"]
     assert result["ml_loaded"] is False
     assert result["plot_loaded"] is False
 
@@ -79,37 +77,28 @@ print(json.dumps({
     assert result["plot_loaded"] is False
 
 
-def test_root_legacy_export_warns_and_loads_on_demand() -> None:
+def test_root_core_export_loads_on_demand_without_ml() -> None:
     _clear_graspkit_modules()
     graspkit = importlib.import_module("graspkit")
 
     assert "graspkit.data_IO" not in sys.modules
 
-    with pytest.warns(
-        FutureWarning,
-        match=r"`graspkit\.MLCalConfig` is deprecated.*graspkit\.data_IO\.MLCalConfig",
-    ):
-        ml_config_model = graspkit.MLCalConfig
+    ml_config_model = graspkit.MLCalConfig
 
     assert ml_config_model.__name__ == "MLCalConfig"
     assert "graspkit.data_IO" in sys.modules
     assert "graspkit.ml_module" not in sys.modules
 
 
-def test_utils_plot_export_warns_and_loads_on_demand() -> None:
+def test_root_no_longer_exposes_ml_or_plot_compat_exports() -> None:
     _clear_graspkit_modules()
+    graspkit = importlib.import_module("graspkit")
     graspkit_utils = importlib.import_module("graspkit.utils")
 
+    assert not hasattr(graspkit, "train_model")
+    assert not hasattr(graspkit, "inter_coupling_channel_bar")
+    assert not hasattr(graspkit_utils, "inter_coupling_channel_bar")
+    assert not hasattr(graspkit_utils, "fig_settings")
+
+    assert "graspkit.ml_module" not in sys.modules
     assert "graspkit.utils.plot_functions" not in sys.modules
-
-    with pytest.warns(
-        FutureWarning,
-        match=(
-            r"`graspkit\.utils\.inter_coupling_channel_bar` is deprecated.*"
-            r"graspkit\.utils\.plot_functions\.inter_coupling_channel_bar"
-        ),
-    ):
-        plot_function = graspkit_utils.inter_coupling_channel_bar
-
-    assert plot_function.__name__ == "inter_coupling_channel_bar"
-    assert "graspkit.utils.plot_functions" in sys.modules
