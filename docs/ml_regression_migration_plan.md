@@ -55,7 +55,7 @@ BCEWithLogitsLoss 均衡点：z ≈ 0.311 → σ(z) > 0.5 → 全正预测
 |------|------|------|--------|
 | Phase 1 | 主路径切换为多输出回归 | `ml_initializer.py`、`__init__.py`、调用方 | P0（根本修复）|
 | Phase 1 | 坍缩检测与 CRITICAL 日志 | `ml_trainer.py` | P1（0 副作用）|
-| Phase 2 | config 开关 | `data_IO/ml_cal_config_module.py` | P1 |
+| Phase 2 | config 开关 | `graspkit_config/ml_config_models.py` | P1 |
 | Phase 2 | 诊断日志与评估对接 | `ml_initializer.py`、`ml_results_analyzer.py` | P2 |
 | Phase 3 | 自适应截断兜底（分类路径） | `ml_initializer.py` | P2 |
 | Phase 3 | 相对排名标签（分类路径） | `ml_initializer.py` | P2 |
@@ -76,8 +76,8 @@ src/graspkit/ml_module/
 ├── __init__.py               ← 暴露新函数
 └── ml_types.py               ← 可选：新增 RegressionMetrics TypedDict
 
-src/graspkit/data_IO/
-└── ml_cal_config_module.py   ← 新增配置字段
+src/graspkit_config/
+└── ml_config_models.py       ← 新增配置字段
 
 外部调用方（ml_CSFs_selection_scripts/）
 └── 主训练入口                ← 添加路径分支逻辑
@@ -89,7 +89,7 @@ src/graspkit/data_IO/
 
 ### Step 1  添加配置字段
 
-**文件**：`src/graspkit/data_IO/ml_cal_config_module.py`
+**文件**：`src/graspkit_config/ml_config_models.py`
 
 在 `MLConfig`（或等效配置类）中追加字段：
 
@@ -347,7 +347,7 @@ if high_ratio_mask.any():
 ## 五、实施顺序
 
 ```
-Step 1   data_IO/ml_cal_config_module.py   添加 use_regression_model 等字段
+Step 1   graspkit_config/ml_config_models.py   添加 use_regression_model 等字段
 Step 2   ml_initializer.py                新增 generate_regression_descriptors_from_config()
 Step 3   ml_module/__init__.py            暴露新函数
 Step 4   主训练入口                        添加 if use_regression_model 分支
@@ -506,7 +506,7 @@ if len(accumulated_idxs) < MIN_REGRESSION_SAMPLES:
 ### 9.3 修订后的实施顺序
 
 ```
-Step 1   data_IO/ml_cal_config_module.py   在 CalSettings（非 MlConfig）中添加
+Step 1   graspkit_config/ml_config_models.py   在 CalSettings（非 MlConfig）中添加
                                             use_regression_model / regression_min_clip
 Step 2   ml_initializer.py                 新增 generate_regression_descriptors_from_config()
                                             ＋ 首轮样本数保护（< 1000 时回退分类路径）

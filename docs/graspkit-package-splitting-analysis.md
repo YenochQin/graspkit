@@ -70,7 +70,7 @@
 
 ### 4.2 已验证可复用的模式
 
-当前 [src/graspkit/data_IO/ml_cal_config_module.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/ml_cal_config_module.py) 已作为兼容转发层，实际模型定义位于 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)。
+当前配置模型已直接位于 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)，`graspkit.data_IO` 只保留对 `MLCalConfig` / `CalPath` 的正式导出，不再经过兼容转发层。
 
 这证明下列模式可用：
 
@@ -437,7 +437,7 @@ warning 至少需要包含：
 2. 兼容 warning 测试
 3. 显式子模块导入测试
 4. `graspkit.utils` 不自动导入 plotting 的测试
-5. `graspkit.data_IO.ml_cal_config_module` 转发兼容测试
+5. `graspkit.data_IO` 对 `MLCalConfig` / `CalPath` 的正式导出测试
 
 建议测试文件：
 
