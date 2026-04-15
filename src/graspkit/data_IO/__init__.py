@@ -5,8 +5,7 @@
 @author :YenochQin (秦毅)
 """
 
-
-from .ml_cal_config_module import CalPath, MLCalConfig  # noqa: F401
+from graspkit_config import CalPath, MLCalConfig  # noqa: F401
 from .loaders.base_loader import BaseLoader  # noqa: F401
 from .loaders.binary_file_loader import BinaryFileLoader  # noqa: F401
 from .loaders.csf_loader import CSFLoader  # noqa: F401

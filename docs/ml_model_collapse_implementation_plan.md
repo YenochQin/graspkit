@@ -110,7 +110,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/data_IO/ml_cal_config_module.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/ml_cal_config_module.py)
+- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
 
 建议在 `CalSettings` 中新增以下字段：
 
@@ -281,7 +281,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/data_IO/ml_cal_config_module.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/ml_cal_config_module.py)
+- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
 
 建议新增：
 

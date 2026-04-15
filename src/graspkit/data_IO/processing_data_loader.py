@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 import polars as pl
 
-from .ml_cal_config_module import MLCalConfig
+from graspkit_config import MLCalConfig
 
 
 def csfs_idxs_ci_loader(
@@ -221,4 +221,3 @@ def _get_parquet_metadata(scan_parquet: pl.LazyFrame) -> dict[str, int]:
         "n_rows": n_rows,
         "n_columns": len(schema),
     }
-
