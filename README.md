@@ -18,6 +18,27 @@ GraspKit is a Python toolkit for reading, restructuring, and analyzing output fr
 - `ml_module/`: `ANNClassifier`, `ANNRegressor`, training/evaluation helpers, iterative screening utilities
 - `utils/`: shared dataclasses, environment detection, plotting helpers, shell/quantum-number utilities
 
+## Logical Packages
+
+Stage 2 of the package-splitting plan adds stable logical package entry points without moving the underlying implementation directories yet:
+
+- `graspkit_config`: lightweight Pydantic configuration models
+- `graspkit_core`: data loaders, CSF processing, result extraction, and lightweight utilities
+- `graspkit_ml`: machine-learning training, inference, and iterative screening helpers
+- `graspkit_plot`: optional plotting and matplotlib styling helpers
+
+Recommended imports for new code:
+
+```python
+from graspkit_config import MLCalConfig
+from graspkit_core.data_IO import load_config
+from graspkit_core.grasp_data_extractor import format_energy_configurations
+from graspkit_ml import train_model, evaluate_model
+from graspkit_plot import configure_matplotlib_for_publication
+```
+
+Legacy imports through `graspkit` remain available for compatibility, but new code should prefer the logical package entry points above.
+
 ## Installation
 
 The project currently requires Python `>=3.14`.
