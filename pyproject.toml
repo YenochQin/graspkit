@@ -132,7 +132,13 @@ classifiers = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/graspkit"]
+packages = [
+    "src/graspkit",
+    "src/graspkit_config",
+    "src/graspkit_core",
+    "src/graspkit_ml",
+    "src/graspkit_plot",
+]
 
 [tool.ruff.lint]
 select = ["NPY201"]
