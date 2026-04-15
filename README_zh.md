@@ -18,6 +18,27 @@ GraspKit 是一个面向 GRASP 原子结构计算结果的 Python 工具包，�
 - `ml_module/`：`ANNClassifier`、`ANNRegressor`、训练/评估辅助函数、迭代筛选工具
 - `utils/`：通用数据结构、环境检测、绘图辅助、量子数和字符串工具
 
+## 逻辑包入口
+
+拆包计划的阶段 2 已新增稳定的逻辑包入口，但暂时还没有搬动底层实现目录：
+
+- `graspkit_config`：轻量的 Pydantic 配置模型
+- `graspkit_core`：数据加载、CSF 处理、结果提取和轻量工具
+- `graspkit_ml`：机器学习训练、推理与迭代筛选辅助逻辑
+- `graspkit_plot`：可选的绘图和 matplotlib 样式工具
+
+新代码建议优先使用这些逻辑包入口：
+
+```python
+from graspkit_config import MLCalConfig
+from graspkit_core.data_IO import load_config
+from graspkit_core.grasp_data_extractor import format_energy_configurations
+from graspkit_ml import train_model, evaluate_model
+from graspkit_plot import configure_matplotlib_for_publication
+```
+
+旧的 `graspkit` 兼容导入仍然保留，但新增代码应优先切换到上面的逻辑包路径。
+
 ## 安装
 
 项目当前要求 Python `>=3.14`。
