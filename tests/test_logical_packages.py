@@ -31,20 +31,20 @@ def _run_python(code: str) -> dict[str, object]:
     return json.loads(result.stdout)
 
 
-def test_import_graspkit_core_keeps_ml_and_plot_unloaded() -> None:
+def test_import_graspkit_keeps_core_boundary_without_ml_and_plot() -> None:
     result = _run_python(
         """
 import json
 import sys
 
-import graspkit_core
-from graspkit_core.data_IO import MLCalConfig
+import graspkit
+from graspkit.data_IO import MLCalConfig
 
 print(json.dumps({
     "ml_loaded": any(name == "graspkit.ml_module" or name.startswith("graspkit.ml_module.") for name in sys.modules),
     "plot_loaded": any(name == "graspkit.utils.plot_functions" or name.startswith("graspkit.utils.plot_functions.") for name in sys.modules),
     "config_name": MLCalConfig.__name__,
-    "has_energy_loader": hasattr(graspkit_core, "EnergyFileLoader"),
+    "has_load_config": hasattr(graspkit, "load_config"),
 }))
 """
     )
@@ -52,7 +52,7 @@ print(json.dumps({
     assert result["ml_loaded"] is False
     assert result["plot_loaded"] is False
     assert result["config_name"] == "MLCalConfig"
-    assert result["has_energy_loader"] is True
+    assert result["has_load_config"] is True
 
 
 def test_import_graspkit_ml_loads_ml_layer() -> None:
@@ -104,7 +104,6 @@ def test_core_sources_do_not_import_ml_module() -> None:
         ROOT / "src" / "graspkit" / "utils" / "environment_config.py",
         ROOT / "src" / "graspkit" / "utils" / "quadrupole_deformation.py",
         ROOT / "src" / "graspkit" / "utils" / "tool_function.py",
-        ROOT / "src" / "graspkit_core",
     ]
 
     offending_imports: list[str] = []

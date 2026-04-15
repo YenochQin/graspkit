@@ -20,10 +20,10 @@ GraspKit is a Python toolkit for reading, restructuring, and analyzing output fr
 
 ## Logical Packages
 
-Stage 2 of the package-splitting plan adds stable logical package entry points without moving the underlying implementation directories yet:
+Stage 3 of the package-splitting plan keeps the repository unified but settles on `graspkit` itself as the core package entry point:
 
 - `graspkit_config`: lightweight Pydantic configuration models
-- `graspkit_core`: data loaders, CSF processing, result extraction, and lightweight utilities
+- `graspkit`: data loaders, CSF processing, result extraction, and lightweight utilities
 - `graspkit_ml`: machine-learning training, inference, and iterative screening helpers
 - `graspkit_plot`: optional plotting and matplotlib styling helpers
 
@@ -31,13 +31,13 @@ Recommended imports for new code:
 
 ```python
 from graspkit_config import MLCalConfig
-from graspkit_core.data_IO import load_config
-from graspkit_core.grasp_data_extractor import format_energy_configurations
+from graspkit.data_IO import load_config
+from graspkit.grasp_data_extractor import format_energy_configurations
 from graspkit_ml import train_model, evaluate_model
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 
-Legacy imports through `graspkit` remain available for compatibility, but new code should prefer the logical package entry points above.
+Legacy flat root exports for ML and plotting are no longer part of the supported API. New code should treat `graspkit` as the core layer and import ML helpers from `graspkit_ml`.
 
 ## Installation
 
@@ -96,7 +96,7 @@ python -m build
 
 ## Notes On Current Scope
 
-- The public API is largely re-exported from `src/graspkit/__init__.py`.
+- `graspkit` is the core package; `graspkit_ml` and `graspkit_plot` are the layered extensions.
 - DataFrames are built with Polars; descriptor and model data use NumPy.
 - PyTorch is optional at install time and selected through the `cpu` or `gpu` extras.
 - SLURM/debug environment detection lives in `graspkit.utils.environment_config`.

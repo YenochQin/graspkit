@@ -20,10 +20,10 @@ GraspKit 是一个面向 GRASP 原子结构计算结果的 Python 工具包，�
 
 ## 逻辑包入口
 
-拆包计划的阶段 2 已新增稳定的逻辑包入口，但暂时还没有搬动底层实现目录：
+拆包计划的阶段 3 保持单仓库结构，但已经将 `graspkit` 明确收敛为 core 包入口：
 
 - `graspkit_config`：轻量的 Pydantic 配置模型
-- `graspkit_core`：数据加载、CSF 处理、结果提取和轻量工具
+- `graspkit`：数据加载、CSF 处理、结果提取和轻量工具
 - `graspkit_ml`：机器学习训练、推理与迭代筛选辅助逻辑
 - `graspkit_plot`：可选的绘图和 matplotlib 样式工具
 
@@ -31,13 +31,13 @@ GraspKit 是一个面向 GRASP 原子结构计算结果的 Python 工具包，�
 
 ```python
 from graspkit_config import MLCalConfig
-from graspkit_core.data_IO import load_config
-from graspkit_core.grasp_data_extractor import format_energy_configurations
+from graspkit.data_IO import load_config
+from graspkit.grasp_data_extractor import format_energy_configurations
 from graspkit_ml import train_model, evaluate_model
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 
-旧的 `graspkit` 兼容导入仍然保留，但新增代码应优先切换到上面的逻辑包路径。
+旧的根包平面 ML 和 plotting 兼容导出不再属于推荐 API。新增代码应将 `graspkit` 视为 core 层，并从 `graspkit_ml` 导入机器学习能力。
 
 ## 安装
 
@@ -95,7 +95,7 @@ python -m build
 
 ## 当前代码库范围说明
 
-- 公开 API 主要由 `src/graspkit/__init__.py` 统一导出。
+- `graspkit` 是 core 包，`graspkit_ml` 和 `graspkit_plot` 是其上层扩展入口。
 - 表格数据主要使用 Polars，描述符和模型数据主要使用 NumPy。
 - PyTorch 通过 `cpu` 或 `gpu` extra 进行可选安装。
 - SLURM 和调试环境检测位于 `graspkit.utils.environment_config`。

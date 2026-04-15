@@ -135,7 +135,6 @@ classifiers = [
 packages = [
     "src/graspkit",
     "src/graspkit_config",
-    "src/graspkit_core",
     "src/graspkit_ml",
     "src/graspkit_plot",
 ]
