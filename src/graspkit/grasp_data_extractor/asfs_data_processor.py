@@ -10,12 +10,12 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import ClassVar, TypedDict, cast
 
 import polars as pl
 
 from ..data_IO.loaders.energy_file_loader import EnergyFileLoader
-from ..data_IO.loaders.lsj_comp_loader import LSJCompLoader
+from ..data_IO.loaders.lsj_comp_loader import CompositionUnit, LSJCompLoader
 from ..utils.tool_function import LS_shell_full_charged
 
 #######################################################################
@@ -60,6 +60,14 @@ class ShellInfo:
     inter_ls: InterCoupled_LS | None  # 组间LS耦合信息，可能缺省
 
 
+class CompositionRecord(TypedDict, total=False):
+    """组成项字典结构。"""
+
+    coefficient: float
+    weight: float
+    configuration: str
+
+
 class ShellFormatter:
     """原子轨道格式化器类
     用于解析和格式化原子轨道配置字符串
@@ -72,13 +80,29 @@ class ShellFormatter:
     - _7P: 组间LS耦合（multiplicity=7, L=P）
     """
 
-    SUBSHELL_RE = re.compile(
-        r"^(?P<n>\d*)"
-        r"(?P<shell>[spdfghi])"
-        r"(?:\((?P<ele>\d+)\))?"
-        r"(?(ele)(?:(?P<intra_coupling>(?P<intra_S>\d+)(?P<intra_L>[SPDFGHIKLMNO])(?P<intra_J>\d+)?))?)"
-        r"(?P<inter_coupling>_(?P<inter_S>\d+)(?P<inter_L>[SPDFGHIKLMNO]))?"
-        r"$"
+    SUBSHELL_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"""
+        ^
+        (?P<n>\d*)
+        (?P<shell>[spdfghi])
+        (?:\((?P<ele>\d+)\))?
+        (?(ele)
+            (?:
+                (?P<intra_coupling>
+                    (?P<intra_S>\d+)
+                    (?P<intra_L>[SPDFGHIKLMNO])
+                    (?P<intra_J>\d+)?
+                )
+            )?
+        )
+        (?P<inter_coupling>
+            _
+            (?P<inter_S>\d+)
+            (?P<inter_L>[SPDFGHIKLMNO])
+        )?
+        $
+        """,
+        re.VERBOSE,
     )
 
     @classmethod
@@ -195,14 +219,27 @@ def format_configuration(
     支持处理多个子轨道的组合配置，如"4f(7)3S0_7P.5d(3)2F_5G"
 
     Args:
-        temp_configuration: 原子配置字符串，可包含换行符
+        temp_configuration: 原子配置字符串，可包含换行符；空字符串将返回空结果
         show_full_charged_subshell: 是否显示满电子子轨道，默认False
         format_to_word_document: 是否格式化为Word文档兼容的LaTeX，默认False
 
     Returns:
         Tuple[str, str]: (格式化的配置字符串, 组间LS耦合字符串)
+
+    Raises:
+        TypeError: 当输入不是字符串时抛出异常
     """
-    temp_configuration = re.sub(r"\n", "", temp_configuration)
+    if not isinstance(temp_configuration, str):
+        raise TypeError(
+            "temp_configuration must be a string, "
+            f"got {type(temp_configuration).__name__}"
+        )
+
+    temp_configuration = re.sub(r"\n", "", temp_configuration).strip()
+
+    if temp_configuration == "":
+        return "", ""
+
     temp_conf_list = temp_configuration.split(".")
 
     formatted_conf = r""
@@ -273,16 +310,15 @@ def format_energy_configurations(
             f"configuration_raw column not found in DataFrame. \nAvailable columns: {energy_df.columns}"
         )
 
-    formatted_result = pl.col("configuration_raw").map_elements(
-        lambda config_str: (
-            ["", ""]
-            if config_str == ""
-            else list(
-                format_configuration(
-                    config_str, show_full_charged_subshell, format_to_word_document
-                )
+    def _format_configuration_to_list(config_str: str) -> list[str]:
+        return list(
+            format_configuration(
+                config_str, show_full_charged_subshell, format_to_word_document
             )
-        ),
+        )
+
+    formatted_result = pl.col("configuration_raw").map_elements(
+        _format_configuration_to_list,
         return_dtype=pl.List(pl.Utf8),
     )
 
@@ -296,9 +332,7 @@ def format_energy_configurations(
             .when(lsj_expr == "")
             .then(configuration_expr)
             .otherwise(
-                configuration_expr.str.replace(r"\\;$", "")
-                + pl.lit(r"\;")
-                + lsj_expr
+                configuration_expr.str.replace(r"\\;$", "") + pl.lit(r"\;") + lsj_expr
             )
         )
 
@@ -348,7 +382,9 @@ def format_compositions(
         # 如果没有组成列，返回原DataFrame
         return energy_df
 
-    def _merge_compositions(row: dict[str, Any], row_idx: int) -> list[dict[str, Any]]:
+    def _merge_compositions(
+        row: dict[str, object], row_idx: int
+    ) -> list[CompositionRecord]:
         """合并多个组成列表为一个
 
         Args:
@@ -361,26 +397,25 @@ def format_compositions(
         Raises:
             ValueError: 如果同一行有多个 compositions_raw_* 列包含数据
         """
-        non_empty_cols: list[Any] = []
-        merged: list[Any] = []
+        non_empty_cols: list[str] = []
+        merged: list[CompositionRecord] = []
 
         for col in comp_columns:
             comp_data = row.get(col)
-            if comp_data is not None and len(comp_data) > 0:
+            if isinstance(comp_data, list) and len(comp_data) > 0:
                 non_empty_cols.append(col)
-                merged.extend(comp_data)
+                merged.extend(cast(list[CompositionRecord], comp_data))
 
         # 检查是否有冲突
         if len(non_empty_cols) > 1:
             raise ValueError(
-                f"第 {row_idx} 行存在数据冲突：多个列包含组成数据 {non_empty_cols}。"
-                f"同一能级只能有一个组态的组成数据。"
+                f"第 {row_idx} 行存在数据冲突：多个列包含组成数据 {non_empty_cols}。\n同一能级只能有一个组态的组成数据。"
             )
 
         return merged
 
     def _format_single_composition(
-        comp_data: list[dict[str, Any]] | None,
+        comp_data: list[CompositionRecord] | None,
     ) -> str:
         """格式化单个能级的组成数据
 
@@ -393,7 +428,7 @@ def format_compositions(
         if comp_data is None or len(comp_data) == 0:
             return ""
 
-        parts: list[Any] = []
+        parts: list[str] = []
         for comp in comp_data:
             weight = comp.get("weight", 0.0)
             configuration = comp.get("configuration", "")
@@ -419,7 +454,7 @@ def format_compositions(
 
     # 1. 合并所有 compositions_raw_* 列为一个新的 compositions_raw 列
     # 先收集所有行的合并数据
-    merged_data: list[Any] = []
+    merged_data: list[list[CompositionRecord]] = []
     for idx, row in enumerate(energy_df.iter_rows(named=True)):
         merged_data.append(_merge_compositions(row, idx))
 
@@ -571,7 +606,7 @@ def merge_lsj_compositions(
         # 获取格式化后的组成字符串（在这里做过滤和格式化）
         for level in lsj_loader.get_levels():
             # 过滤组成
-            level_comps: list[Any] = []
+            level_comps: list[CompositionUnit] = []
             count = 0
             for comp in level.compositions:
                 # 过滤逻辑
@@ -588,7 +623,7 @@ def merge_lsj_compositions(
             if not level_comps:
                 comp_str = ""
             else:
-                parts: list[Any] = []
+                parts: list[str] = []
                 for comp in level_comps:
                     weight = comp.weight
                     configuration = comp.configuration
