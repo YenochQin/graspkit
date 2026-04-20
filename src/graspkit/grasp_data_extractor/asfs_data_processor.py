@@ -252,6 +252,7 @@ def format_configuration(
 def format_energy_configurations(
     energy_df: pl.DataFrame,
     show_full_charged_subshell: bool = False,
+    merge_output: bool = False,
     format_to_word_document: bool = False,
 ) -> pl.DataFrame:
     """格式化能级数据中的配置列
@@ -261,6 +262,7 @@ def format_energy_configurations(
     Args:
         energy_df: 能级DataFrame，必须包含 configuration_raw 列
         show_full_charged_subshell: 是否显示满电子子轨道
+        merge_output: 是否将格式化后的 configuration 和 LSJ 合并到 configuration 列
         format_to_word_document: 是否格式化为Word文档兼容的LaTeX
 
     Returns:
@@ -268,28 +270,43 @@ def format_energy_configurations(
     """
     if "configuration_raw" not in energy_df.columns:
         raise ValueError(
-            f"configuration_raw column not found in DataFrame. "
-            f"Available columns: {energy_df.columns}"
+            f"configuration_raw column not found in DataFrame. \nAvailable columns: {energy_df.columns}"
         )
 
-    # 应用 format_configuration 函数
-    def _format_conf(config_str: str) -> tuple[str, str]:
-        if config_str == "":
-            return "", ""
-        return format_configuration(
-            config_str, show_full_charged_subshell, format_to_word_document
-        )
-
-    # 使用 map_elements 应用格式化函数
-    formatted_result = energy_df["configuration_raw"].map_elements(
-        _format_conf, return_dtype=pl.List(pl.Utf8)
+    formatted_result = pl.col("configuration_raw").map_elements(
+        lambda config_str: (
+            ["", ""]
+            if config_str == ""
+            else list(
+                format_configuration(
+                    config_str, show_full_charged_subshell, format_to_word_document
+                )
+            )
+        ),
+        return_dtype=pl.List(pl.Utf8),
     )
+
+    configuration_expr = formatted_result.list.get(0)
+    lsj_expr = formatted_result.list.get(1)
+
+    if merge_output:
+        configuration_expr = (
+            pl.when(configuration_expr == "")
+            .then(lsj_expr)
+            .when(lsj_expr == "")
+            .then(configuration_expr)
+            .otherwise(
+                configuration_expr.str.replace(r"\\;$", "")
+                + pl.lit(r"\;")
+                + lsj_expr
+            )
+        )
 
     # 分离结果为两列
     energy_df = energy_df.with_columns(
         [
-            formatted_result.list.get(0).alias("configuration"),
-            formatted_result.list.get(1).alias("LSJ"),
+            configuration_expr.alias("configuration"),
+            lsj_expr.alias("LSJ"),
         ]
     )
 
@@ -458,9 +475,7 @@ def iterative_levels_collection(
     mark = marks[0]
     key_cols = ["Pos", "J", "Parity"]
     rename_mapping = {
-        col: f"{col}_{mark}"
-        for col in energy_data.columns
-        if col not in key_cols
+        col: f"{col}_{mark}" for col in energy_data.columns if col not in key_cols
     }
     energy_data = energy_data.rename(rename_mapping)
 
@@ -475,16 +490,12 @@ def iterative_levels_collection(
 
         # 重命名列 - 所有非键列都需要添加 mark 后缀
         rename_mapping = {
-            col: f"{col}_{mark}"
-            for col in temp_df.columns
-            if col not in key_cols
+            col: f"{col}_{mark}" for col in temp_df.columns if col not in key_cols
         }
         temp_df = temp_df.rename(rename_mapping)
 
         # 合并（只保留用于匹配的键列一次）
-        cols_to_join = [
-            col for col in temp_df.columns if col not in key_cols
-        ]
+        cols_to_join = [col for col in temp_df.columns if col not in key_cols]
         energy_data = energy_data.join(
             temp_df.select(key_cols + cols_to_join),
             on=key_cols,
