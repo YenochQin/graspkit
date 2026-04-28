@@ -229,11 +229,9 @@ def format_configuration(
     Raises:
         TypeError: 当输入不是字符串时抛出异常
     """
+
     if not isinstance(temp_configuration, str):
-        raise TypeError(
-            "temp_configuration must be a string, "
-            f"got {type(temp_configuration).__name__}"
-        )
+        raise TypeError("temp_configuration must be a string")
 
     temp_configuration = re.sub(r"\n", "", temp_configuration).strip()
 
@@ -336,6 +334,17 @@ def format_energy_configurations(
             )
         )
 
+    configuration_expr = (
+        pl.when(configuration_expr == "")
+        .then(pl.lit(""))
+        .otherwise(pl.lit("$") + configuration_expr + pl.lit("$"))
+    )
+    lsj_expr = (
+        pl.when(lsj_expr == "")
+        .then(pl.lit(""))
+        .otherwise(pl.lit("$") + lsj_expr + pl.lit("$"))
+    )
+
     # 分离结果为两列
     energy_df = energy_df.with_columns(
         [
@@ -401,10 +410,15 @@ def format_compositions(
         merged: list[CompositionRecord] = []
 
         for col in comp_columns:
-            comp_data = row.get(col)
-            if isinstance(comp_data, list) and len(comp_data) > 0:
+            comp_data_obj = row.get(col)
+            if isinstance(comp_data_obj, list):
+                comp_data = cast(list[CompositionRecord], comp_data_obj)
+            else:
+                comp_data = None
+
+            if comp_data:
                 non_empty_cols.append(col)
-                merged.extend(cast(list[CompositionRecord], comp_data))
+                merged.extend(comp_data)
 
         # 检查是否有冲突
         if len(non_empty_cols) > 1:
