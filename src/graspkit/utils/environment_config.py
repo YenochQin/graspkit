@@ -1,17 +1,24 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id: environment_config.py
-@date: 2025/01/22
-@author: YenochQin (秦毅)
-@description: 统一的环境检测和配置模块
-"""
-
 import os
 import sys
 from typing import NotRequired, TextIO, TypedDict
 
 
 class EnvironmentInfo(TypedDict):
+    """Detected execution-environment metadata.
+
+    Attributes:
+        is_slurm: Whether SLURM variables were detected.
+        is_debug: Whether debug mode is enabled.
+        is_interactive: Whether Python is running interactively.
+        is_production: Whether the process is a non-debug SLURM run.
+        cpu_count: Detected CPU core count.
+        slurm_job_id: SLURM job id, if present.
+        slurm_procid: SLURM process id, if present.
+        slurm_localid: SLURM local id, if present.
+        slurm_task_pid: SLURM task pid, if present.
+    """
+
     is_slurm: bool
     is_debug: bool
     is_interactive: bool
@@ -24,6 +31,16 @@ class EnvironmentInfo(TypedDict):
 
 
 class ProgressConfig(TypedDict):
+    """Keyword options passed to progress-bar helpers.
+
+    Attributes:
+        disable: Whether progress bars should be disabled.
+        leave: Whether progress bars should remain after completion.
+        dynamic_ncols: Whether progress bars should auto-size columns.
+        file: Optional stream used for progress output.
+        colour: Optional display color supported by tqdm.
+    """
+
     disable: bool
     leave: bool
     dynamic_ncols: bool
@@ -32,16 +49,30 @@ class ProgressConfig(TypedDict):
 
 
 class EnvironmentConfig:
-    """环境配置管理器，用于检测运行环境和设置相应的配置"""
+    """Detect runtime context and provide environment-aware defaults.
+
+    The class centralizes SLURM, debug, interactivity, logging, and progress
+    configuration so calculation scripts can use consistent behavior across
+    local and batch environments.
+    """
 
     def __init__(self) -> None:
+        """Initialize cached environment flags.
+
+        The detection work is performed once so repeated property access does
+        not repeatedly inspect environment variables or interpreter flags.
+        """
         self._is_slurm = self._detect_slurm_environment()
         self._is_interactive = self._detect_interactive()
         self._is_debug = self._detect_debug_mode()
         self._cpu_count = os.cpu_count() or 4
 
     def _detect_slurm_environment(self) -> bool:
-        """检测是否在SLURM环境中运行"""
+        """Detect whether the current process is running under SLURM.
+
+        Returns:
+            True if common SLURM environment variables are present.
+        """
         slurm_indicators: list[str] = [
             "SLURM_JOB_ID",
             "SLURM_PROCID",
@@ -51,7 +82,11 @@ class EnvironmentConfig:
         return any(env_var in os.environ for env_var in slurm_indicators)
 
     def _detect_debug_mode(self) -> bool:
-        """检测是否处于调试模式"""
+        """Detect whether debug mode was requested.
+
+        Returns:
+            True when debug-related environment variables or CLI flags are set.
+        """
         # 检查环境变量
         if os.environ.get("DEBUG", "").lower() in ("1", "true", "yes"):
             return True
@@ -65,36 +100,65 @@ class EnvironmentConfig:
         return False
 
     def _detect_interactive(self) -> bool:
-        """检测是否在交互式环境（REPL/Jupyter）中运行"""
+        """Detect whether Python is running interactively.
+
+        Returns:
+            True in a REPL-like or interactive Python session.
+        """
         return hasattr(sys, "ps1") or bool(sys.flags.interactive)
 
     @property
     def is_interactive(self) -> bool:
-        """是否在交互式环境（REPL/Jupyter）中运行"""
+        """Whether Python is running interactively.
+
+        Returns:
+            True in a REPL-like or interactive Python session.
+        """
         return self._is_interactive
 
     @property
     def is_slurm_environment(self) -> bool:
-        """是否在SLURM环境中运行"""
+        """Whether SLURM environment variables were detected.
+
+        Returns:
+            True when common SLURM variables are present.
+        """
         return self._is_slurm
 
     @property
     def is_debug_mode(self) -> bool:
-        """是否处于调试模式"""
+        """Whether debug mode is enabled.
+
+        Returns:
+            True when debug environment variables or CLI flags are set.
+        """
         return self._is_debug
 
     @property
     def is_production_mode(self) -> bool:
-        """是否处于生产模式（SLURM环境且非调试模式）"""
+        """Whether the process is in non-debug SLURM production mode.
+
+        Returns:
+            True for SLURM jobs that are not running in debug mode.
+        """
         return self._is_slurm and not self._is_debug
 
     @property
     def cpu_count(self) -> int:
-        """系统CPU核心数"""
+        """Detected CPU core count.
+
+        Returns:
+            Number of available CPU cores, with a conservative fallback.
+        """
         return self._cpu_count
 
     def get_environment_info(self) -> EnvironmentInfo:
-        """获取环境信息摘要"""
+        """Return a dictionary summary of detected environment flags.
+
+        Returns:
+            EnvironmentInfo dictionary including SLURM identifiers when
+            present.
+        """
         return {
             "is_slurm": self.is_slurm_environment,
             "is_debug": self.is_debug_mode,
@@ -108,7 +172,11 @@ class EnvironmentConfig:
         }
 
     def get_progress_config(self) -> ProgressConfig:
-        """获取进度条配置"""
+        """Return progress-bar defaults for the current environment.
+
+        Returns:
+            ProgressConfig dictionary suitable for tqdm-style progress bars.
+        """
         if self.is_production_mode:
             # 生产模式：关闭进度条
             return {
@@ -127,7 +195,11 @@ class EnvironmentConfig:
             }
 
     def get_logging_config(self) -> dict[str, str]:
-        """获取标准日志配置（兼容 logging.basicConfig）"""
+        """Return logging.basicConfig-compatible logging options.
+
+        Returns:
+            Dictionary containing logging level and format strings.
+        """
         if self.is_production_mode:
             return {
                 "level": "INFO",
@@ -140,7 +212,11 @@ class EnvironmentConfig:
             }
 
     def get_display_config(self) -> dict[str, bool]:
-        """获取应用层日志显示选项（非标准 logging 键）"""
+        """Return non-standard display flags used by application logging.
+
+        Returns:
+            Dictionary of display flags consumed by higher-level logging code.
+        """
         if self.is_production_mode:
             return {
                 "show_progress_logs": False,
@@ -157,7 +233,11 @@ class EnvironmentConfig:
 _env_config: EnvironmentConfig | None = None
 
 def get_environment_config() -> EnvironmentConfig:
-    """获取全局环境配置实例"""
+    """Return the process-wide EnvironmentConfig singleton.
+
+    Returns:
+        Cached EnvironmentConfig instance, creating it on first use.
+    """
     global _env_config
     if _env_config is None:
         _env_config = EnvironmentConfig()
@@ -165,15 +245,27 @@ def get_environment_config() -> EnvironmentConfig:
 
 
 def is_slurm_environment() -> bool:
-    """快捷函数：检查是否在SLURM环境"""
+    """Check whether the process is running under SLURM.
+
+    Returns:
+        True when SLURM variables are present.
+    """
     return get_environment_config().is_slurm_environment
 
 
 def is_debug_mode() -> bool:
-    """快捷函数：检查是否在调试模式"""
+    """Check whether debug mode is enabled.
+
+    Returns:
+        True when debug mode is enabled.
+    """
     return get_environment_config().is_debug_mode
 
 
 def is_production_mode() -> bool:
-    """快捷函数：检查是否在生产模式"""
+    """Check whether the process is in non-debug SLURM mode.
+
+    Returns:
+        True for non-debug SLURM execution.
+    """
     return get_environment_config().is_production_mode

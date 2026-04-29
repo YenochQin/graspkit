@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :CSFs_compress_extract.py
-@date :2025/03/10 16:02:06
-@author :YenochQin (秦毅)
-"""
-
 import re
 
 import numpy as np
@@ -20,8 +14,14 @@ from ..utils.tool_function import chunk_string
 
 
 def subshell_charged_state(subshell_CSF: str) -> dict[str, str]:
-    """
-    解析轨道电荷状态，返回包含主量子数、轨道名称和电荷数的字典。
+    """Parse the charge state encoded in a subshell CSF fragment.
+
+    Args:
+        subshell_CSF: Fixed-width subshell fragment such as ``"5s ( 2)"``.
+
+    Returns:
+        Dictionary with the main quantum number, subshell label, and charge
+        count stored as strings.
     """
     temp_subshell_state = re.findall(
         r"([0-9]*)([s,p,d,f,g][\s,-])\( (\d+)\)", subshell_CSF
@@ -37,6 +37,17 @@ def subshell_charged_state(subshell_CSF: str) -> dict[str, str]:
 
 
 def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> bool:
+    """Check whether a relativistic subshell is fully occupied.
+
+    Args:
+        subshell_name: Relativistic subshell label, for example ``"p-"`` or
+            ``"d "``.
+        subshell_charged_num: Number of electrons occupying the subshell.
+
+    Returns:
+        True if the electron count equals the configured full occupation for
+        the subshell.
+    """
     full_charged: dict[str, int] = {
         "s ": 2,
         "p-": 2,
@@ -56,6 +67,15 @@ def if_subshell_full_charged(subshell_name: str, subshell_charged_num: int) -> b
 
 
 def CSF_subshell_split(CSFs_configuration_raw: str) -> list[str]:
+    """Split a raw CSF configuration line into fixed-width subshell fields.
+
+    Args:
+        CSFs_configuration_raw: CSF configuration line with trailing newline
+            already removed.
+
+    Returns:
+        List of 9-character subshell fields.
+    """
     # CSFs_configuration_raw need drop '\n' first !!!
 
     subshells_charged: list[str] = [
@@ -86,8 +106,13 @@ def get_CSFs_peel_subshells(CSFs_file_data: CSFs) -> list[str]:
 
 
 def csf_J(csf_3rd_line: str) -> tuple[str, str]:
-    """
-    extract J from CSF 3rd line
+    """Extract the total angular momentum and parity from a CSF third line.
+
+    Args:
+        csf_3rd_line: Third line of a GRASP CSF record.
+
+    Returns:
+        Tuple containing the raw J string and parity symbol.
     """
     # 按空格分割字符串
     parts: list[str] = csf_3rd_line.split()
@@ -104,12 +129,14 @@ def csf_J(csf_3rd_line: str) -> tuple[str, str]:
 
 
 def J_to_doubleJ(J_str: str) -> int:
-    """
-    将J字符串转换为二倍值(2J)
-    示例:
-    '3/2' -> 3
-    '2' -> 4
-    '5/2' -> 5
+    """Convert a J quantum-number string to its doubled integer value.
+
+    Args:
+        J_str: Angular momentum value such as ``"3/2"``, ``"2"``, or
+            ``"5/2"``.
+
+    Returns:
+        Integer value of ``2J``.
     """
     J_str = J_str.strip()
     if "/" in J_str:
@@ -123,6 +150,15 @@ def J_to_doubleJ(J_str: str) -> int:
 
 
 def CSF_item_2_dict(CSF_item_list: list[str]) -> dict[str, str]:
+    """Convert the three raw lines of a CSF item into a small metadata dict.
+
+    Args:
+        CSF_item_list: Three-line CSF record containing the subshell line,
+            intermediate coupling line, and final coupling line.
+
+    Returns:
+        Dictionary with raw CSF fields plus parsed final parity and J value.
+    """
     CSF_item_dict: dict[str, str] = {}
 
     CSF_item_dict.update(
@@ -309,8 +345,15 @@ def batch_process_csfs_to_descriptors(CSFs_file_data: CSFs) -> np.ndarray:
 def batch_process_csfs_parquet_to_descriptors(
     CSFs_file_header: dict[str, dict[str, str]], CSFs_file_data: pl.DataFrame
 ) -> np.ndarray:
-    """
-    批量处理CSFs文件中的所有CSF数据，转换为描述符数组
+    """Convert parquet-backed CSF rows into descriptor vectors.
+
+    Args:
+        CSFs_file_header: Parsed CSF header containing peel subshell metadata.
+        CSFs_file_data: DataFrame with ``line1``, ``line2``, and ``line3``
+            columns for each CSF record.
+
+    Returns:
+        NumPy matrix with one descriptor row per CSF.
     """
     # 获取剥离子壳层列表
     peel_subshells = CSFs_file_header["header_info"]["header_lines"][3]

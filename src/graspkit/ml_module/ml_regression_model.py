@@ -23,7 +23,11 @@ from sklearn.model_selection import train_test_split
 
 
 def _set_random_seed(seed: int) -> None:
-    """设置所有相关库的随机种子以保证可重复性"""
+    """Set random seeds for reproducible PyTorch and NumPy behavior.
+
+    Args:
+        seed: Seed value applied to CPU, CUDA, and NumPy RNGs.
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -97,7 +101,12 @@ class ANNRegressor:
         self.logger = logging.getLogger(__name__)
 
     def _build_model(self) -> nn.Module:
-        """构建标准全连接回归网络（输出层无激活函数）"""
+        """Build the fully connected regression network.
+
+        Returns:
+            PyTorch module with a linear output layer for ``log10(CI^2)``
+            prediction.
+        """
         model = nn.Sequential(
             nn.Linear(self.input_size, self.hidden_size),
             nn.LayerNorm(self.hidden_size),
@@ -114,7 +123,11 @@ class ANNRegressor:
         return model
 
     def _initialize_weights(self, model: nn.Module) -> None:
-        """初始化模型权重（Xavier 均匀分布）"""
+        """Initialize linear-layer weights and biases.
+
+        Args:
+            model: PyTorch module whose linear layers should be initialized.
+        """
         for module in model.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
@@ -122,7 +135,16 @@ class ANNRegressor:
                     nn.init.zeros_(module.bias)
 
     def _validate_input_data(self, X: np.ndarray, y: np.ndarray) -> None:
-        """验证输入数据的有效性"""
+        """Validate feature and label arrays before training.
+
+        Args:
+            X: Feature matrix with shape ``(n_samples, input_size)``.
+            y: Label matrix with shape ``(n_samples, output_size)``.
+
+        Raises:
+            ValueError: If sample counts or dimensions do not match the model
+                configuration.
+        """
         if X.shape[0] != y.shape[0]:
             raise ValueError("X 和 y 的样本数量不匹配")
         if X.shape[1] != self.input_size:
@@ -225,7 +247,16 @@ class ANNRegressor:
     def _train_epoch(
         self, X_train: torch.Tensor, y_train: torch.Tensor, batch_size: int
     ) -> float:
-        """训练一个 epoch，返回平均损失"""
+        """Train the regressor for one epoch.
+
+        Args:
+            X_train: Training feature tensor.
+            y_train: Training target tensor.
+            batch_size: Mini-batch size.
+
+        Returns:
+            Average training loss across mini-batches.
+        """
         self.model.train()
         total_loss = 0.0
         num_batches = 0
@@ -250,7 +281,15 @@ class ANNRegressor:
     def _validate_epoch(
         self, X_val: torch.Tensor, y_val: torch.Tensor
     ) -> tuple[float, float]:
-        """验证一个 epoch，返回 (huber_loss, mae)"""
+        """Evaluate one validation epoch.
+
+        Args:
+            X_val: Validation feature tensor.
+            y_val: Validation target tensor.
+
+        Returns:
+            Tuple of Huber loss and mean absolute error.
+        """
         self.model.eval()
         with torch.no_grad():
             outputs = self.model(X_val)
@@ -380,7 +419,11 @@ class ANNRegressor:
         plt.close()
 
     def save_model(self, path: str) -> None:
-        """保存模型完整状态"""
+        """Save model parameters, optimizer state, and training metadata.
+
+        Args:
+            path: Destination checkpoint path.
+        """
         save_dict = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -397,7 +440,15 @@ class ANNRegressor:
 
     @classmethod
     def load_model(cls, path: str, device: str | None = None) -> "ANNRegressor":
-        """从 checkpoint 自动重建并加载回归模型"""
+        """Restore an ANNRegressor from a saved checkpoint.
+
+        Args:
+            path: Checkpoint path created by ``save_model``.
+            device: Optional target device for loading model tensors.
+
+        Returns:
+            Reconstructed regressor with weights and training history loaded.
+        """
         checkpoint = torch.load(path, map_location=device or "cpu")
         hyperparameters = checkpoint["hyperparameters"]
 

@@ -34,6 +34,16 @@ def _is_hybrid_reference_ranking_enabled(
     config: MLCalConfig,
     selected_energy_data: pl.DataFrame | None,
 ) -> bool:
+    """Check whether hybrid reference-energy ranking can be applied.
+
+    Args:
+        config: ML calculation configuration.
+        selected_energy_data: Energy data for the currently selected levels.
+
+    Returns:
+        True when reference levels, selected energy data, and positive scoring
+        weight are all configured.
+    """
     return (
         selected_energy_data is not None
         and len(config.cal_settings.reference_energy_levels) > 1
@@ -54,6 +64,19 @@ def _write_candidate_hybrid_scores(
     config: MLCalConfig,
     logger: logging.Logger,
 ) -> None:
+    """Write per-candidate hybrid ranking scores to CSV.
+
+    Args:
+        unselected_idxs: Global CSF indices for prediction candidates.
+        per_level_scores: Per-level regression or importance scores.
+        importance_scores: Model-derived base importance score per candidate.
+        correction_scores: Reference-energy correction score per candidate.
+        final_scores: Combined ranking score per candidate.
+        dominant_pairs: Dominant reference-level pair indices per candidate.
+        selected_idxs: Global CSF indices selected for the next calculation.
+        config: ML calculation configuration with output paths.
+        logger: Logger used for the save message.
+    """
     spectral_term = config.cal_settings.spectral_term
     selected_idx_set = {int(idx) for idx in selected_idxs.tolist()}
     rows: list[dict[str, str | int | float | bool]] = []
@@ -124,20 +147,18 @@ def train_regression_model(
     config: MLCalConfig,
     logger: logging.Logger | None = None,
 ) -> tuple[ANNRegressor, dict[str, float]]:
-    """
-    训练回归模型
+    """训练回归模型。
 
     Args:
         train_data: 训练数据，shape: (n_samples, n_features + n_levels)
-                   由 generate_regression_train_descriptors 生成
+            由 generate_regression_train_descriptors 生成。
         config: ML 计算配置对象
-        loop_num: 当前计算轮次（用于决定是否加载已有模型）
         logger: 日志记录器（可选）
 
     Returns:
-        (model, metrics_dict)
-        metrics_dict 包含: mae, rmse, spearman_rho, overfitting_gap,
-                          train_mae, train_rmse, train_spearman_rho
+        训练后的回归模型和指标字典。指标包含 ``mae``、``rmse``、
+        ``spearman_rho``、``overfitting_gap``、``train_mae``、
+        ``train_rmse`` 和 ``train_spearman_rho``。
     """
     if logger is None:
         logger = logging.getLogger(__name__)
@@ -287,11 +308,10 @@ def predict_regression_model(
         logger: 日志记录器（可选）
 
     Returns:
-        (ml_sampled_idxs, verified_important_idxs, y_predicted_log_ci, train_data_counts)
-        - ml_sampled_idxs: ML 选出的新增 CSF 全局索引
-        - verified_important_idxs: 已验证重要 CSF 全局索引（透传）
-        - y_predicted_log_ci: 预测的 log₁₀(CI²) 值，shape: (n_unselected, n_levels)
-        - train_data_counts: 更新后的计数对象
+        ``(ml_sampled_idxs, verified_important_idxs, y_predicted_log_ci,
+        train_data_counts)``。其中 ``ml_sampled_idxs`` 是 ML 选出的新增
+        CSF 全局索引，``y_predicted_log_ci`` 的形状为
+        ``(n_unselected, n_levels)``。
     """
     if logger is None:
         logger = logging.getLogger(__name__)

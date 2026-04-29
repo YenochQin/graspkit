@@ -1,11 +1,5 @@
 # -*- encoding: utf-8 -*-
 """
-@Id :__init__.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
-"""
 GraspKit 加载器模块
 
 该模块提供用于加载 GRASP2018 输出文件的专用加载器。

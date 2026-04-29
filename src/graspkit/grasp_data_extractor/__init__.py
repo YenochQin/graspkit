@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :__init__.py
-@date :2025/06/16 15:59:20
-@author :YenochQin (秦毅)
-"""
-
 from .asfs_data_processor import (
     format_compositions,
     format_configuration,

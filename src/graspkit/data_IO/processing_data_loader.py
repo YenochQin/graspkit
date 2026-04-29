@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :processing_data_load.py
-@date :2025/06/16 16:30:36
-@author :YenochQin (秦毅)
-"""
-
 from pathlib import Path
 from typing import cast
 import rtoml
@@ -28,10 +22,9 @@ def csfs_idxs_ci_loader(
         csfs_id_ci_file_path: 索引文件路径（无扩展名时自动补 .npz）
 
     Returns:
-        tuple: (csfs_idx, csfs_ci_squared)
-            csfs_idx:  NDArray[np.int64]   CSFs整数索引（一维，长度 n_csfs）
-            csfs_ci_squared:   NDArray[np.float64] CI系数平方值，二维 (n_levels, n_csfs)，
-                       shape[1] 与 csfs_idx 等长
+        ``(csfs_idx, csfs_ci_squared)``，其中 ``csfs_idx`` 是一维 CSF
+        整数索引数组，``csfs_ci_squared`` 是形状为
+        ``(n_levels, n_csfs)`` 的 CI 系数平方值数组。
 
     Raises:
         FileNotFoundError: 文件不存在

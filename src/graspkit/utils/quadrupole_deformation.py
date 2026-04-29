@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :quadrupole_deformation.py
-@date :2025/09/11 20:45:35
-@author :YenochQin (秦毅)
-"""
-
 import math
 
 
@@ -14,17 +8,16 @@ def calculate_deformation(
     spin_I: float,
     Q_s: float,
 ) -> dict[str, float]:
-    """
-    根据原子核参数计算内禀电四极矩和四极形变参数。
+    """Calculate intrinsic quadrupole moment and deformation parameter.
 
-    参数:
-    Z (int): 原子序数（质子数）
-    A (int): 质量数
-    spin_I (float): 核自旋量子数
-    Q_s (float): 光谱四极矩 (单位: 靶恩 b, 1 b = 100 fm²)
+    Args:
+        Z: Atomic number, equal to the proton count.
+        A: Mass number.
+        spin_I: Nuclear spin quantum number.
+        Q_s: Spectroscopic quadrupole moment in barns.
 
-    返回:
-    dict: 包含内禀电四极矩(Q_0)和四极形变参数(beta_2)的字典
+    Returns:
+        Dictionary containing ``Q_0`` and ``beta_2``.
     """
 
     # 常数定义

@@ -1,18 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :plot_functions.py
-@date :2026/02/28 10:37:58
-@author :YenochQin (秦毅)
-
-图表可视化工具模块
-
-提供各种专业的数据可视化图表函数，包括：
-- 双轴柱状图（用于展示占比和贡献值）
-- 玫瑰图
-- 其他专业图表
-
-所有图表函数都集成了fig_settings.py中的专业发表级图表设置。
-"""
 import warnings
 import re
 from typing import Any
@@ -84,6 +70,14 @@ def inter_coupling_channel_bar(
 
     # 处理元组类别名称
     def format_category(cat: Any) -> str:
+        """Convert a category value to a display label.
+
+        Args:
+            cat: Category value, possibly represented as a tuple.
+
+        Returns:
+            String label suitable for axis ticks and legends.
+        """
         if isinstance(cat, tuple):
             return '-'.join(str(item) for item in cat)
         else:
@@ -519,4 +513,3 @@ def auto_plot_wavefunction_comparison(
         fig.subplots_adjust(top=0.92)
 
     return fig, axes
-

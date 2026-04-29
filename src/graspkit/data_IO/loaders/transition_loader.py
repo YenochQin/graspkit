@@ -1,12 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :transition_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-
-@version 2.0: Refactored with file scanning mechanism and multiple file support
-"""
-
 import re
 from pathlib import Path
 
@@ -201,12 +193,12 @@ def parse_electric_transition_line(line1: str, line2: str) -> dict[str, str]:
     """解析电性跃迁数据行
 
     电性跃迁有两行数据：
+
     - 第一行：f1/f2 上能级Pos 上能级J 上能级宇称  f1/f2 下能级Pos 下能级J 下能级宇称  能量 规范 A_C gf_C S_C
     - 第二行：B规范数据
 
-    例如：
-    f2  1    2 +  f1  1    1 -        6489.57 C  6.06225D+00  1.07902D-06  5.47381D-05
-                                              B  9.08381D-04  1.61683D-10  8.20207D-09
+    Example:
+        第一行包含 C 规范数据，第二行包含 B 规范数据。
 
     Args:
         line1: 第一行数据（必需）
@@ -435,8 +427,8 @@ class TransitionLoader(BaseLoader[list[str]]):
     1. 单文件模式：直接加载指定的跃迁文件
     2. 目录扫描模式：扫描目录中的所有跃迁文件并合并
 
-    返回值：
-        list[str] - 文件行列表（单文件或合并后的多文件）
+    Returns:
+        File lines from one transition file or from merged directory results.
     """
 
     def __init__(
@@ -826,4 +818,3 @@ class TransitionLoader(BaseLoader[list[str]]):
             )
 
         return df
-

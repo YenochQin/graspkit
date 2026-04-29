@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :ml_results_analyzer.py
-@date :2025/08/29 10:28:25
-@author :YenochQin (秦毅)
-"""
-
 import csv
 import logging
 
@@ -123,10 +117,9 @@ def select_csfs_for_coverage(
             形状为 (n_candidates, n_features)，每个轨道占 3 列，第 0 列为电子填充数。
 
     Returns:
-        tuple[NDArray[np.float64], NDArray[np.int64]]:
-            - 更新后的描述符数组：将新选取的行追加到 descriptors 之后，
-            形状为 (n_csfs + n_selected, n_features)。
-            - 选取的相对索引数组：对应 candidate_descriptors 中被选行的索引，形状为 (n_selected,)，已排序、去重；若无可选则为空数组。
+        更新后的描述符数组和选取的相对索引数组。相对索引对应
+        ``candidate_descriptors`` 中被选行的位置，已排序、去重；若无可选
+        则为空数组。
     """
     empty_idxs: NDArray[np.int64] = np.empty(0, dtype=np.int64)
 

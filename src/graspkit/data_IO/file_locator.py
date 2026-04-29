@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :file_locator.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 import re
 from pathlib import Path
 

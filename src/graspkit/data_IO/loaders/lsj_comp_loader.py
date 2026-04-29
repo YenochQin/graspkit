@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :lsj_comp_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,7 +79,7 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
     用于加载 GRASP2018 生成的 LSJ 组成文件（.lsj.lbl）。
     解析能级的 LSJ 组成信息并构建为 polars DataFrame。
 
-    文件格式示例:
+    Examples:
         Pos   J   Parity      Energy Total      Comp. of ASF
           1    1     -        -11257.596876908      97.449%
              0.95591698    0.91377727   5s(2).4d(10)1S0_1S.5p(6).6s(2).4f(7)8S0_8S.5d_7D

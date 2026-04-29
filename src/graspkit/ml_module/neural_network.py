@@ -30,7 +30,11 @@ from sklearn.metrics import (
 
 
 def _set_random_seed(seed: int) -> None:
-    """设置所有相关库的随机种子以保证可重复性"""
+    """Set random seeds for reproducible PyTorch and NumPy behavior.
+
+    Args:
+        seed: Seed value applied to CPU, CUDA, and NumPy RNGs.
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -224,7 +228,12 @@ class ANNClassifier:
         self.logger = logging.getLogger(__name__)
 
     def _build_model(self) -> nn.Module:
-        """构建神经网络模型"""
+        """Build the configured classifier architecture.
+
+        Returns:
+            PyTorch module for the selected ``standard`` or ``tensornet``
+            architecture.
+        """
         model: nn.Module
         if self.model_architecture == "tensornet":
             # TensorNet 架构
@@ -253,7 +262,11 @@ class ANNClassifier:
         return model
 
     def _initialize_weights(self, model: nn.Module) -> None:
-        """初始化模型权重"""
+        """Initialize linear-layer weights and biases.
+
+        Args:
+            model: PyTorch module whose linear layers should be initialized.
+        """
         for module in model.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
@@ -391,7 +404,18 @@ class ANNClassifier:
     def _train_epoch(
         self, X_train: torch.Tensor, y_train: torch.Tensor, batch_size: int, epoch: int = 0, max_epochs: int = 150
     ) -> float:
-        """训练一个epoch"""
+        """Train the classifier for one epoch.
+
+        Args:
+            X_train: Training feature tensor.
+            y_train: Training label tensor.
+            batch_size: Mini-batch size.
+            epoch: Current epoch index for diagnostic logging.
+            max_epochs: Total planned epoch count for diagnostic logging.
+
+        Returns:
+            Average training loss across mini-batches.
+        """
         self.model.train()
         total_loss = 0.0
         num_batches = 0
@@ -439,7 +463,15 @@ class ANNClassifier:
     def _validate_epoch(
         self, X_val: torch.Tensor, y_val: torch.Tensor
     ) -> tuple[float, float]:
-        """验证一个epoch"""
+        """Evaluate one validation epoch.
+
+        Args:
+            X_val: Validation feature tensor.
+            y_val: Validation label tensor.
+
+        Returns:
+            Tuple of validation loss and validation accuracy.
+        """
         self.model.eval()
         total_loss = 0.0
         correct = 0.0
@@ -584,7 +616,16 @@ class ANNClassifier:
         return pos_weight_tensor
 
     def _validate_input_data(self, X: np.ndarray, y: np.ndarray) -> None:
-        """验证输入数据的有效性"""
+        """Validate feature and label arrays before training.
+
+        Args:
+            X: Feature matrix with shape ``(n_samples, input_size)``.
+            y: Label array for single-label or multi-label classification.
+
+        Raises:
+            ValueError: If sample counts, feature dimensions, label dimensions,
+                or label values are incompatible with the model configuration.
+        """
         if X.shape[0] != y.shape[0]:
             raise ValueError("X和y的样本数量不匹配")
 
@@ -613,7 +654,15 @@ class ANNClassifier:
                 )
 
     def predict(self, X: np.ndarray, threshold: float = 0.5) -> np.ndarray:
-        """预测类别"""
+        """Predict binary labels from classifier probabilities.
+
+        Args:
+            X: Feature matrix with shape ``(n_samples, input_size)``.
+            threshold: Probability threshold used for binary decisions.
+
+        Returns:
+            Predicted labels as a NumPy array.
+        """
         predictions = self.predict_proba(X)
         if self.multi_label:
             # 多标签分类：每个标签独立 sigmoid，返回 0/1 标签
@@ -756,7 +805,11 @@ class ANNClassifier:
         return metrics
 
     def save_model(self, path: str) -> None:
-        """保存模型完整状态"""
+        """Save model parameters, optimizer state, and training metadata.
+
+        Args:
+            path: Destination checkpoint path.
+        """
         saved_class_weights = (
             None
             if self.class_weights is None
@@ -782,7 +835,15 @@ class ANNClassifier:
 
     @classmethod
     def load_model(cls, path: str, device: str | None = None) -> "ANNClassifier":
-        """从 checkpoint 自动重建并加载模型"""
+        """Restore an ANNClassifier from a saved checkpoint.
+
+        Args:
+            path: Checkpoint path created by ``save_model``.
+            device: Optional target device for loading model tensors.
+
+        Returns:
+            Reconstructed classifier with weights and training history loaded.
+        """
         checkpoint = torch.load(path, map_location=device or "cpu")
         hyperparameters = checkpoint["hyperparameters"]
 
@@ -1155,7 +1216,17 @@ class ANNClassifier:
     def _permutation_importance(
         self, X: np.ndarray, y: np.ndarray | None = None, n_repeats: int = 10
     ) -> np.ndarray:
-        """置换重要性 - 通过随机打乱特征来评估其重要性"""
+        """Estimate feature importance by repeated feature permutation.
+
+        Args:
+            X: Feature matrix to evaluate.
+            y: Optional ground-truth labels. When omitted, predictions from the
+                unpermuted model are used as a compatibility fallback.
+            n_repeats: Number of permutations per feature.
+
+        Returns:
+            Importance score for each feature.
+        """
         y_pred = self.predict(X)
         # 如果没有提供 y，使用预测结果作为基准（这不是最佳实践，但保持向后兼容）
         if y is None:
@@ -1191,7 +1262,14 @@ class ANNClassifier:
         return np.array(importance_scores)
 
     def _gradient_importance(self, X: np.ndarray) -> np.ndarray:
-        """梯度重要性"""
+        """Estimate feature importance from input gradients.
+
+        Args:
+            X: Feature matrix for which gradients are computed.
+
+        Returns:
+            Mean absolute gradient magnitude for each input feature.
+        """
         self.model.eval()
         X_tensor = torch.tensor(X, dtype=torch.float32, requires_grad=True).to(
             self.device

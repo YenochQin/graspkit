@@ -1,17 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :transition_data_processor.py
-@date :2024/01/15 15:15:57
-@author :YenochQin (秦毅)
-
-@version 2.0: 迁移到使用新的 TransitionLoader
-@version 2.1: 移除重复的数据解析功能，全部使用 TransitionLoader
-@version 3.0: 移除 TransitionDataCollection 和 LSJTransitionDataCollection 类，
-            数据加载和解析功能完全由 TransitionLoader 提供
-@version 4.0: 合并 transition_data_analyzer.py，
-            整合跃迁数据处理和分析功能
-"""
-
 import numpy as np
 import polars as pl
 

@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :mix_coef_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 from typing import cast, override
 
 import numpy as np
