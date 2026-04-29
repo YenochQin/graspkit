@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :CSFs_choosing.py
-@date :2024/08/02 20:38:24
-@author :YenochQin (秦毅)
-"""
-
 
 from numpy import intp
 import logging
@@ -160,15 +154,14 @@ def batch_asfs_mix_square_above_threshold(
 
 
 def CSFs_block_get_CSF(CSFs_block: list[list[str]], CSf_idx: list[int] | np.ndarray) -> list[list[str]]:
-    """
-    根据CSF的索引获取对应的CSF
+    """Select CSF records from a block by index.
 
-    参数：
-        CSFs_block: 包含CSF的列表
-        CSf_idx: 要获取的CSF的索引，元组形式
+    Args:
+        CSFs_block: CSF records in one block.
+        CSf_idx: Indices of the CSF records to select.
 
-    返回：
-        对应的CSF，如果索引无效则返回None
+    Returns:
+        Selected CSF records in the same order as ``CSf_idx``.
     """
     selected_data: list[list[str]] = [CSFs_block[i] for i in CSf_idx]
 
@@ -178,17 +171,40 @@ def CSFs_block_get_CSF(CSFs_block: list[list[str]], CSf_idx: list[int] | np.ndar
 #######################################################################
 
 class CouplingJInfo(TypedDict):
+    """Summary for CSFs sharing the same final coupling-J pattern.
+
+    Attributes:
+        count: Number of CSFs that match the coupling pattern.
+        idxs: CSF indices in the source block.
+    """
+
     count: int
     idxs: list[int]
 
 
 class CouplingJInfoWithSumCi(TypedDict):
+    """Coupling-J summary with one accumulated CI-square contribution.
+
+    Attributes:
+        count: Number of CSFs that match the coupling pattern.
+        idxs: CSF indices in the source block.
+        sum_ci: Sum of squared CI coefficients for the matching CSFs.
+    """
+
     count: int
     idxs: list[int]
     sum_ci: float
 
 
 class CouplingJInfoWithSumCiList(TypedDict):
+    """Coupling-J summary with CI-square contributions for multiple ASFs.
+
+    Attributes:
+        count: Number of CSFs that match the coupling pattern.
+        idxs: CSF indices in the source block.
+        sum_ci: Per-ASF sums of squared CI coefficients.
+    """
+
     count: int
     idxs: list[int]
     sum_ci: list[float]
@@ -197,17 +213,17 @@ class CouplingJInfoWithSumCiList(TypedDict):
 def single_block_csfs_final_coupling_J_collector(
     block_csfs: list[list[str]], coupling_level: int | None = None
 ) -> dict[tuple[str, ...], CouplingJInfo]:
-    """
-    从CSF块中提取耦合J值集合
+    """Collect final coupling-J patterns from one CSF block.
 
-    参数：
-        block_csfs: 包含CSF的列表，每个CSF是长度为3的list[str]，
-                    第三个元素（索引2）为空格分隔的耦合信息字符串。
-        coupling_level: 取最后N个token；None表示取全部token。
-                        若CSF的token数少于coupling_level，则取全部（降级）。
+    Args:
+        block_csfs: CSF records whose third line contains whitespace-separated
+            coupling tokens.
+        coupling_level: Number of trailing coupling tokens to keep. If None,
+            all tokens are used. Shorter CSF records fall back to all tokens.
 
-    返回：
-        dict，键为tuple[str, ...]（耦合模式），值为 {"count": int, "idxs": list[int]}
+    Returns:
+        Mapping from coupling-token pattern to its occurrence count and CSF
+        indices.
     """
     all_tokens: list[tuple[str, ...]] = [
         tuple(csf[2].lstrip().split()) for csf in block_csfs
@@ -235,6 +251,17 @@ def single_block_csfs_final_coupling_J_collector(
 def batch_blocks_csfs_final_coupling_J_collection(
     blocks_csfs_list: list[list[list[str]]], coupling_level: int | None = None
 ) -> dict[int, dict[tuple[str, ...], CouplingJInfo]]:
+    """Collect final coupling-J patterns for every CSF block.
+
+    Args:
+        blocks_csfs_list: CSF blocks, where each block contains three-line CSF
+            records.
+        coupling_level: Number of trailing coupling tokens to keep for each
+            CSF pattern.
+
+    Returns:
+        Dictionary keyed by block index with per-pattern coupling summaries.
+    """
     blocks_coupling_J_collection: dict[int, dict[tuple[str, ...], CouplingJInfo]] = {}
     for block, block_csfs in enumerate(blocks_csfs_list):
         logger.info("Block {block + 1}: 包含 {len(block_csfs)} 个 CSF")
@@ -249,6 +276,17 @@ def single_asf_csfs_final_coupling_J_mix_coefficient_sum(
     block_csfs_coupling_J_collection_dict: dict[tuple[str, ...], CouplingJInfo],
     mix_coefficient_list: list[float] | np.ndarray,
 ) -> dict[tuple[str, ...], CouplingJInfoWithSumCi]:
+    """Sum squared CI coefficients for each coupling-J pattern in one ASF.
+
+    Args:
+        block_csfs_coupling_J_collection_dict: Coupling summaries for a CSF
+            block.
+        mix_coefficient_list: CI coefficients aligned with the CSFs in the
+            same block.
+
+    Returns:
+        Coupling summaries augmented with the summed squared CI contribution.
+    """
     coeff_array = np.asarray(mix_coefficient_list)
     result: dict[tuple[str, ...], CouplingJInfoWithSumCi] = {}
     for pattern, info in block_csfs_coupling_J_collection_dict.items():
@@ -265,6 +303,21 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
     block_asfs_position: list[int] | np.ndarray | None = None,
     coupling_level: int | None = None,
 ) -> dict[tuple[str, ...], CouplingJInfoWithSumCiList]:
+    """Collect coupling-J contributions for selected ASFs in one CSF block.
+
+    Args:
+        block_CSFs: CSF records for a single block.
+        block_asfs_mix_coefficient_list: Matrix-like ASF by CSF CI
+            coefficients for the block.
+        block_asfs_position: ASF indices to include. If None, all ASFs are
+            included.
+        coupling_level: Number of trailing coupling tokens used to define each
+            coupling pattern.
+
+    Returns:
+        Mapping from coupling pattern to counts, CSF indices, and per-ASF
+        summed squared CI coefficients.
+    """
     # 修复可变默认参数
     if block_asfs_position is None:
         block_asfs_position = list(range(len(block_asfs_mix_coefficient_list)))
@@ -298,6 +351,24 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
     asfs_position: list[np.ndarray] | None = None,
     coupling_level: int | None = None,
 ) -> dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]]:
+    """Collect coupling-J CI-square summaries for all CSF blocks.
+
+    Args:
+        blocks_CSFs_list: CSF blocks aligned with ``asfs_mix_data``.
+        asfs_mix_data: Parsed ASF mixing-coefficient data.
+        asfs_position: Optional selected ASF indices for each block. Defaults
+            to ``asfs_mix_data.block_levels_idx_list``.
+        coupling_level: Number of trailing coupling tokens used to define each
+            coupling pattern.
+
+    Returns:
+        Nested dictionary keyed first by block index and then by coupling
+        pattern.
+
+    Raises:
+        ValueError: If ASF positions are inconsistent with the mixing data or
+            CSF and coefficient lengths do not match.
+    """
     # 1. 如果调用者没给，就用数据自带的
     if asfs_position is None:
         asfs_position = asfs_mix_data.block_levels_idx_list
@@ -349,14 +420,13 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
 
 
 def union_lists_with_order(*lists: list[int | str]) -> list[int | str]:
-    """
-    计算多个列表的并集，保留元素首次出现的顺序。
+    """Return the ordered union of multiple lists.
 
-    参数:
-        *lists: 任意数量的列表
+    Args:
+        *lists: Lists whose elements should be merged.
 
-    返回:
-        包含所有列表元素并去重，且保留元素首次出现顺序的列表
+    Returns:
+        De-duplicated list that preserves the first occurrence order.
     """
     # 使用 dict.fromkeys 保留元素顺序并去重
     all_elements: list[int | str] = []
@@ -373,18 +443,21 @@ def CSFs_sort_by_mix_coefficient(
     mix_coefficients: np.ndarray,
     threshold: float | None = None
 ) -> list[list[str]]:
-    """
-    根据多个混合系数的对应元素和来对CSF块进行排序，并可选择返回截断值对应的索引
+    """Sort CSFs by the summed square of their mixing coefficients.
 
-    参数：
-        CSFs_block: 包含CSF的列表
-        *mix_coefficients: 一个或多个混合系数数组
-        对于同一个block拥有多个asfs的情况，现将asfs的系数进行求和，再进行排序
-        threshold: 可选，截断阈值
+    Args:
+        CSFs_block: CSF records in one block.
+        mix_coefficients: Coefficient array whose length matches
+            ``CSFs_block``.
+        threshold: Optional coefficient cutoff. When provided, only CSFs whose
+            combined squared coefficient is above ``threshold ** 2`` are kept.
 
-    返回：
-        如果threshold为None: 返回排序后的CSF块
-        如果threshold不为None: 返回元组(排序后的CSF块, 截断值对应的原始索引列表)
+    Returns:
+        CSF records sorted by descending combined squared coefficient.
+
+    Raises:
+        ValueError: If the CSF block or coefficient array is empty, or if their
+            lengths do not match.
     """
     # 检查输入参数的有效性
     if len(CSFs_block) == 0 or len(mix_coefficients) == 0:
@@ -422,17 +495,14 @@ def CSFs_sort_by_mix_coefficient(
 
 
 def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
-    """
-    生成指定数量不重复的随机正整数
+    """Generate unique random positive integers.
 
-    参数:
-        max_num: 随机数的最大值(包含)
-        count: 需要生成的随机数数量
+    Args:
+        max_num: Inclusive upper bound for generated numbers.
+        count: Number of unique values to generate.
 
-    返回:
-        包含不重复随机数的列表，按升序排列
-    使用下面的代码替代：
-    random.sample(range(1, max_num + 1), count)
+    Returns:
+        List of unique sampled integers in the range ``[1, max_num]``.
     """
     number: list[int]= random.sample(range(1, max_num + 1), count)
     return number
@@ -444,13 +514,18 @@ def radom_choose_csfs(
     ratio_or_quality: float,
     selected_csfs_idxs: list[list[str]] = [],
 ) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
-    """
-    优化版的大规模CSF随机选择函数
+    """Randomly choose additional CSFs from a block.
 
-    优化点：
-    1. 使用numpy加速数组操作
-    2. 减少中间变量创建
-    3. 优化索引计算逻辑
+    Args:
+        block_csfs_list: Candidate CSFs in one block.
+        method: Selection mode. ``"ratio"`` treats ``ratio_or_quality`` as a
+            fraction of the block size; ``"quality"`` treats it as an absolute
+            target count.
+        ratio_or_quality: Ratio or target count, depending on ``method``.
+        selected_csfs_idxs: Indices that have already been selected.
+
+    Returns:
+        Tuple of selected CSF records, selected indices, and unselected indices.
     """
     block_csfs_num = len(block_csfs_list)
     selected_csfs_num = len(selected_csfs_idxs)

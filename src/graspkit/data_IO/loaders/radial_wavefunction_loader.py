@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :radial_wavefunction_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 import struct
 
 import numpy as np
@@ -16,14 +10,15 @@ from typing import override
 from .binary_file_loader import BinaryFileLoader
 
 def align_2d_list_columns(two_dimensional_list: list[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
-    """
-    根据最长列的长度，对二维列表中的所有列进行补0对齐。
+    """Pad one-dimensional arrays to the longest column length.
 
-    参数:
-    two_dimensional_list: 一个二维列表（numpy数组的列表），其中每列的长度可能不同。
+    Args:
+        two_dimensional_list: List of one-dimensional arrays with possibly
+            different lengths.
 
-    返回:
-    一个新的二维列表，其中所有列的长度都与最长列对齐。
+    Returns:
+        New list where each array has been right-padded with zeros to the
+        maximum input length.
     """
     if not two_dimensional_list:
         return []
@@ -46,8 +41,18 @@ def align_2d_list_columns(two_dimensional_list: list[NDArray[np.float64]]) -> li
 
 def int_nl_2_str_nl(n: int, kappa: int) -> str:
     r"""
-    $j = l + 1/2, \kappa = -(l+1)$
-    $j = l - 1/2, \kappa = +l $
+    Convert integer quantum numbers to a GRASP orbital label.
+
+    Args:
+        n: Principal quantum number.
+        kappa: Dirac kappa value.
+
+    Returns:
+        Orbital label such as ``"5s "`` or ``"4d-"``.
+
+    Notes:
+        For ``j = l + 1/2``, ``kappa = -(l + 1)``. For ``j = l - 1/2``,
+        ``kappa = +l``.
     """
     l_list: list[str] = ["s", "p", "d", "f", "g", "h", "i"]
     str_nl: str = ""

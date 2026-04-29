@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :machine_learning_initialization.py
-@date :2025/06/09 15:13:58
-@author :YenochQin (秦毅)
-"""
-
 import logging
 from collections import Counter
 from pathlib import Path
@@ -33,7 +27,12 @@ from ..utils import (
 
 
 def setup_directories(root_path: Path) -> None:
-    """创建必要的目录结构"""
+    """Create standard output directories under a calculation root.
+
+    Args:
+        root_path: Root directory where ``models``, ``roc_curves``, and
+            ``results`` should be created.
+    """
 
     directories = ["models", "roc_curves", "results"]
 
@@ -42,7 +41,14 @@ def setup_directories(root_path: Path) -> None:
 
 
 def setup_logging(log_dir: Path) -> logging.Logger:
-    """配置日志系统，支持环境感知"""
+    """Configure environment-aware logging for ML workflows.
+
+    Args:
+        log_dir: Directory where the training log file should be written.
+
+    Returns:
+        Logger for this module after global logging has been configured.
+    """
     env_config = get_environment_config()
     log_config = env_config.get_logging_config()
 
@@ -88,25 +94,16 @@ def training_data_loader(
     cal_method: str,
     logger: logging.Logger
 ) -> tuple[pl.LazyFrame, int, pl.DataFrame, MixCoefficientData, np.ndarray, int]:
-    """加载数据文件
+    """加载当前计算轮次所需的数据文件。
 
     Args:
         paths_cfg: config的cal_path子类，即config.cal_path
         cal_method: 计算方法 ("rmcdhf" 或 "rci")
-        descriptor_file_type:
-            h5: 是否使用C++生成的HDF5文件格式
-            parquet: 是否使用Rust生成的parquet文件（惰性加载，只加载需要的索引）
         logger: 日志记录器
 
     Returns:
-        tuple: (
-            raw_csfs_descriptors,
-            total_csfs_count,
-            energy_level_data,
-            rmix_file_data,
-            caled_csfs_idxs_array,
-            cal_csfs_count,
-        )
+        ``(raw_csfs_descriptors, total_csfs_count, energy_level_data,
+        rmix_file_data, caled_csfs_idxs_array, cal_csfs_count)``.
     """
 
     # 加载初始 CSFs 描述符文件
@@ -258,7 +255,15 @@ def check_configuration_coupling(
 
 
 def _load_loop_energy_csv(config: MLCalConfig, loop_num: int) -> pl.DataFrame | None:
-    """加载指定轮次的 correct_levels.csv，文件不存在时返回 None"""
+    """Load ``correct_levels.csv`` for a previous calculation loop.
+
+    Args:
+        config: ML calculation configuration.
+        loop_num: Calculation loop number to load.
+
+    Returns:
+        DataFrame if the file exists, otherwise None.
+    """
     csv_path = (
         config.cal_settings.root_path
         / f"{config.target.conf}_{loop_num}"
@@ -308,7 +313,21 @@ def compute_reference_gap_errors(
     spectral_term: list[str],
     reference_energy_levels: list[float],
 ) -> pl.DataFrame:
-    """计算每个目标谱项相对于参考零点的相对能级误差。"""
+    """Compute relative-energy errors against reference levels.
+
+    Args:
+        selected_energy_data: DataFrame containing selected level energies.
+        spectral_term: Target spectral terms in the expected output order.
+        reference_energy_levels: Reference energies in ``cm^-1`` aligned with
+            ``spectral_term``.
+
+    Returns:
+        DataFrame with reference-relative energy, calculated-relative energy,
+        and absolute gap error for each target term.
+
+    Raises:
+        ValueError: If any target spectral term is missing from the energy data.
+    """
     term_energy: dict[str, float] = {}
     for row in selected_energy_data.iter_rows(named=True):
         term = row["configuration_raw"]
@@ -343,7 +362,18 @@ def compute_pairwise_gap_error_matrix(
     spectral_term: list[str],
     reference_energy_levels: list[float],
 ) -> NDArray[np.float64]:
-    """计算目标谱项之间的成对相对能级间隙误差矩阵。"""
+    """Compute pairwise relative-energy gap errors between target terms.
+
+    Args:
+        selected_energy_data: DataFrame containing selected level energies.
+        spectral_term: Target spectral terms in the expected output order.
+        reference_energy_levels: Reference energies in ``cm^-1`` aligned with
+            ``spectral_term``.
+
+    Returns:
+        Square matrix whose ``(i, j)`` entry is the absolute error between the
+        calculated and reference energy gaps for terms ``i`` and ``j``.
+    """
     reference_gap_errors = compute_reference_gap_errors(
         selected_energy_data,
         spectral_term,
@@ -367,7 +397,18 @@ def score_correction_candidates_from_ci(
     pair_weighting: str = "error_magnitude",
     top_pair_count: int | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-    """根据多能级预测差异和当前参考间隙误差为候选 CSF 打分。"""
+    """Score candidate CSFs by their ability to correct reference-gap errors.
+
+    Args:
+        candidate_level_scores: Per-candidate, per-level model scores.
+        pairwise_gap_error_matrix: Pairwise relative-energy gap error matrix.
+        pair_weighting: Strategy for weighting level-pair errors.
+        top_pair_count: Optional number of highest-error level pairs to use.
+
+    Returns:
+        Tuple of correction scores and dominant level-pair indices for each
+        candidate.
+    """
     n_candidates, n_levels = candidate_level_scores.shape
     correction_scores = np.zeros(n_candidates, dtype=np.float64)
     dominant_pairs = np.full((n_candidates, 2), -1, dtype=np.int64)
@@ -416,9 +457,33 @@ def combine_importance_and_reference_scores(
     importance_weight: float,
     correction_weight: float,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-    """归一化并组合重要性分数与参考修正分数。"""
+    """Normalize and combine model-importance and reference-correction scores.
+
+    Args:
+        importance_scores: Base model importance score for each candidate.
+        reference_correction_scores: Reference-energy correction score for
+            each candidate.
+        importance_weight: Weight assigned to normalized model importance.
+        correction_weight: Weight assigned to normalized correction scores.
+
+    Returns:
+        Tuple of final combined scores, normalized importance scores, and
+        normalized reference-correction scores.
+
+    Raises:
+        ValueError: If the sum of the two weights is not positive.
+    """
 
     def _normalize_scores(scores: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Normalize a score vector to the range ``[0, 1]``.
+
+        Args:
+            scores: Raw score vector.
+
+        Returns:
+            Normalized score vector with stable handling for empty or constant
+            inputs.
+        """
         if scores.size == 0:
             return scores.astype(np.float64)
         min_value = float(np.min(scores))
@@ -779,25 +844,25 @@ def merge_historical_ci_data(
     current_ci_squared: NDArray[np.float64], 
     logger: logging.Logger
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    将历史轮次与当前轮次的 CI 系数平方数据合并为累积数据集。
+    """将历史轮次与当前轮次的 CI 系数平方数据合并为累积数据集。
 
     合并规则：
+
     - 索引取并集，覆盖写入：先写历史数据，再用当前数据覆盖，
       交集 CSF 的 CI 系数以当前轮次为准（反映最新自洽场收敛结果）。
     - 并集索引经 np.union1d 排序，保证输出有序。
 
     Args:
-        previous_idxs:      前序轮次累积的 CSF 索引，一维，shape (n_prev,)
+        previous_idxs: 前序轮次累积的 CSF 索引，一维，shape (n_prev,)
         previous_ci_squared: 前序轮次对应的 CI 系数平方，二维，shape (n_levels, n_prev)
-        current_idxs:       当前轮次参与计算的 CSF 索引，一维，shape (n_curr,)
+        current_idxs: 当前轮次参与计算的 CSF 索引，一维，shape (n_curr,)
         current_ci_squared: 当前轮次对应的 CI 系数平方，二维，shape (n_levels, n_curr)
-        logger:             日志记录器
+        logger: 日志记录器
 
     Returns:
-        tuple:
-            merged_idxs:      合并后的 CSF 索引，一维，shape (n_merged,)，已排序
-            merged_ci_squared: 合并后的 CI 系数平方，二维，shape (n_levels, n_merged)
+        ``(merged_idxs, merged_ci_squared)``，其中 ``merged_idxs`` 为排序后的
+        CSF 索引，``merged_ci_squared`` 为形状 ``(n_levels, n_merged)`` 的
+        CI 系数平方数组。
     """
 
     # 取索引并集，np.union1d 保证结果升序且无重复

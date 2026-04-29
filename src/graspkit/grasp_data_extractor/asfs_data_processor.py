@@ -1,12 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :asfs_data_processor.py
-@date :2023/04/28 11:08:58
-@author :YenochQin (秦毅)
-
-@version 2.0: Refactored to use polars instead of pandas
-"""
-
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,7 +53,13 @@ class ShellInfo:
 
 
 class CompositionRecord(TypedDict, total=False):
-    """组成项字典结构。"""
+    """Formatted LSJ composition entry.
+
+    Attributes:
+        coefficient: Signed mixing coefficient when available.
+        weight: Percentage or squared-coefficient weight for the component.
+        configuration: Formatted configuration string for the component.
+    """
 
     coefficient: float
     weight: float
@@ -309,6 +307,14 @@ def format_energy_configurations(
         )
 
     def _format_configuration_to_list(config_str: str) -> list[str]:
+        """Format one raw configuration string for Polars map_elements.
+
+        Args:
+            config_str: Raw GRASP configuration string.
+
+        Returns:
+            Two-item list containing formatted configuration and LSJ strings.
+        """
         return list(
             format_configuration(
                 config_str, show_full_charged_subshell, format_to_word_document

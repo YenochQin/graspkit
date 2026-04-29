@@ -24,6 +24,17 @@ _CORE_EXPORTS: dict[str, tuple[str, str | None]] = {
 
 
 def __getattr__(name: str) -> Any:
+    """Lazily import selected public objects from subpackages.
+
+    Args:
+        name: Attribute name requested from the package root.
+
+    Returns:
+        Imported attribute cached in module globals.
+
+    Raises:
+        AttributeError: If ``name`` is not a supported lazy export.
+    """
     export = _CORE_EXPORTS.get(name)
     if export is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -36,4 +47,9 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
+    """Return package-root attributes including lazy public exports.
+
+    Returns:
+        Sorted list of available attribute names.
+    """
     return sorted(set(globals()) | set(__all__) | set(_CORE_EXPORTS))

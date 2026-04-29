@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :produced_data_write.py
-@date :2025/06/16 16:15:12
-@author :YenochQin (秦毅)
-"""
-
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,21 +14,15 @@ import polars as pl
 def write_sorted_CSFs_to_cfile(
     CSFs_file_info: list[str], sorted_CSFs_data_list: list[list[list[str]]], output_file: str | Path
 ) -> None:
-    """
-    将排序后的CSFs数据写入到指定的输出文件中。
+    """将排序后的 CSFs 数据写入指定的输出文件。
 
     Args:
-        CSFs_file_info (list): CSFs文件的头部信息(CSF(s):行上面的信息)
-        sorted_CSFs_data (list): 排序后的CSFs数据列表
-            sorted_CSFs_data[block
-                                [CSFs
-                                    [CSFS_1]
-                                    [CSFS_2]
-                                    ...
-                                    [CSFS_n]
-                                ]
-            ]
-        output_file (str): 输出文件的路径。
+        CSFs_file_info: CSFs 文件的头部信息，即 ``CSF(s):`` 行之前的内容。
+        sorted_CSFs_data_list: 按 block 分组的 CSF 三行记录列表。
+        output_file: 输出 ``.c`` 文件路径。
+
+    Raises:
+        ValueError: 头部信息行数不符合预期。
     """
     if len(CSFs_file_info) != 4:
         raise ValueError("CSFs file header info error!")
@@ -61,6 +49,18 @@ def write_CSFs_pl_to_cfile(
     CSFs_data_df: pl.DataFrame,
     output_file: str | Path
 ) -> None:
+    """Write CSF records from a Polars DataFrame to a GRASP ``.c`` file.
+
+    Args:
+        CSFs_file_info: Header lines to write before CSF records.
+        CSFs_data_df: DataFrame containing ``line1``, ``line2``, and ``line3``
+            columns.
+        output_file: Destination file path.
+
+    Raises:
+        ValueError: If the header does not contain the expected number of
+            lines.
+    """
     if len(CSFs_file_info) != 5:
         raise ValueError("CSFs file header info error!")
 

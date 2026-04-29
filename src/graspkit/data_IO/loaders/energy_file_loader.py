@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :energy_file_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 from pathlib import Path
 
 import polars as pl

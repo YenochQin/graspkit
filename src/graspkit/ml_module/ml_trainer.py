@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :machine_learning_traning.py
-@date :2025/06/09 15:58:42
-@author :YenochQin (秦毅)
-"""
-
 # 标准库导入
 import logging
 import math
@@ -42,6 +36,16 @@ def _is_hybrid_reference_ranking_enabled(
     config: MLCalConfig,
     selected_energy_data: pl.DataFrame | None,
 ) -> bool:
+    """Check whether hybrid reference-energy ranking can be applied.
+
+    Args:
+        config: ML calculation configuration.
+        selected_energy_data: Energy data for the currently selected levels.
+
+    Returns:
+        True when reference levels, selected energy data, and positive scoring
+        weight are all configured.
+    """
     return (
         selected_energy_data is not None
         and len(config.cal_settings.reference_energy_levels) > 1
@@ -62,6 +66,19 @@ def _write_candidate_hybrid_scores(
     config: MLCalConfig,
     logger: logging.Logger,
 ) -> None:
+    """Write per-candidate hybrid ranking scores to CSV.
+
+    Args:
+        unselected_idxs: Global CSF indices for prediction candidates.
+        per_level_scores: Per-level model probabilities.
+        importance_scores: Model-derived base importance score per candidate.
+        correction_scores: Reference-energy correction score per candidate.
+        final_scores: Combined ranking score per candidate.
+        dominant_pairs: Dominant reference-level pair indices per candidate.
+        selected_idxs: Global CSF indices selected for the next calculation.
+        config: ML calculation configuration with output paths.
+        logger: Logger used for the save message.
+    """
     spectral_term = config.cal_settings.spectral_term
     selected_idx_set = {int(idx) for idx in selected_idxs.tolist()}
     rows: list[dict[str, str | int | float | bool]] = []
@@ -101,7 +118,18 @@ def _select_model_architecture(
     positive_sample_count: int,
     logger: logging.Logger,
 ) -> str:
-    """为小样本训练选择更稳健的模型结构。"""
+    """Select a robust classifier architecture for the current iteration.
+
+    Args:
+        cal_loop_num: Current calculation loop number.
+        current_loop_sample_count: Number of samples from the current loop.
+        accumulated_sample_count: Number of samples accumulated across loops.
+        positive_sample_count: Number of positive training labels.
+        logger: Logger used for architecture-selection messages.
+
+    Returns:
+        Architecture name understood by ``ANNClassifier``.
+    """
     if cal_loop_num <= 3:
         logger.info(
             "当前处于前3轮迭代，固定使用 standard 架构以保证早期小样本阶段稳定性"
@@ -128,7 +156,18 @@ def train_model(
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
 ) -> tuple[ANNClassifier, np.ndarray, np.ndarray]:
-    """训练机器学习模型（支持多标签分类）"""
+    """Train the multi-label ANN classifier used for CSF selection.
+
+    Args:
+        config: ML calculation configuration.
+        caled_csfs_descriptors: Descriptor matrix with label columns appended.
+        correct_levels_ci: CI-square values for the selected target levels.
+        logger: Logger used for training diagnostics.
+
+    Returns:
+        Tuple of trained classifier, feature matrix used for training, and
+        label matrix used for training.
+    """
 
     # 数据提取：支持多标签分类
     # caled_csfs_descriptors 形状: (n_current_csfs, descriptor_features + n_correct_levels)
@@ -478,6 +517,24 @@ def predict_model(
     logger: logging.Logger,
     selected_energy_data: pl.DataFrame | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
+    """Predict and select additional CSFs for the next calculation loop.
+
+    Args:
+        model: Trained ANN classifier.
+        raw_csfs_descriptors: Descriptor matrix for all available CSFs.
+        caled_csfs_idxs_array: Global indices already included in calculation.
+        correct_levels_ci_squared: CI-square values for calculated CSFs and
+            selected target levels.
+        config: ML calculation configuration.
+        train_data_counts: Mutable counters updated with selection statistics.
+        logger: Logger used for prediction and selection diagnostics.
+        selected_energy_data: Optional energy data used by hybrid reference
+            ranking.
+
+    Returns:
+        Tuple containing newly sampled CSF indices, verified important CSF
+        indices, current calculated CSF probabilities, and updated counters.
+    """
     # 获取未选择的CSF索引
     total_csfs_count = raw_csfs_descriptors.shape[0]
     all_csfs_idxs = np.arange(total_csfs_count, dtype=np.int64)
@@ -693,7 +750,12 @@ def predict_model(
 
 
 def handle_calculation_error(config: MLCalConfig, logger: logging.Logger) -> None:
-    """处理计算错误的情况"""
+    """Record a calculation error and update continuation state.
+
+    Args:
+        config: ML calculation configuration.
+        logger: Logger used for error-handling messages.
+    """
     config_file_path = config.cal_settings.root_path / "config.toml"
     if config.cal_settings.cal_error_num < 3:
         # 更新配置文件

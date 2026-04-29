@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :csf_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 import re
 from .base_loader import BaseLoader
 from ...utils.data_modules import CSFs

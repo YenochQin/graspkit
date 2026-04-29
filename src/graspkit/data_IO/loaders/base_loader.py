@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :base_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Generic, TypeVar

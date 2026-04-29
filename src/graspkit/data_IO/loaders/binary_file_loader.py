@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :binary_file_loader.py
-@date :2026/01/19
-@author :YenochQin (秦毅)
-"""
-
 import struct
 from abc import ABC
 from typing import IO, TypeVar

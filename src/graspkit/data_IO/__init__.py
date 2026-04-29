@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :__init__.py
-@date :2025/06/16 15:59:13
-@author :YenochQin (秦毅)
-"""
-
 from graspkit_config import CalPath, MLCalConfig  # noqa: F401
 from .loaders.base_loader import BaseLoader  # noqa: F401
 from .loaders.binary_file_loader import BinaryFileLoader  # noqa: F401

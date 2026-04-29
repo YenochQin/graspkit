@@ -1,11 +1,5 @@
 # -*- encoding: utf-8 -*-
 """
-@Id :fig_settings.py
-@date :2026/02/04 16:24:02
-@author :YenochQin (秦毅)
-"""
-
-"""
 图表样式设置模块
 
 提供统一的图表样式配置，适用于科学发表。

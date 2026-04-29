@@ -1,10 +1,4 @@
 # -*- encoding: utf-8 -*-
-"""
-@Id :__init__.py
-@date :2025/06/16 15:59:17
-@author :YenochQin (秦毅)
-"""
-
 from .neural_network import ANNClassifier
 from .ml_initializer import (
     setup_logging,
