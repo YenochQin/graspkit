@@ -10,6 +10,7 @@ from .base_loader import BaseLoader
 from .binary_file_loader import BinaryFileLoader
 from .csf_loader import CSFLoader
 from .energy_file_loader import EnergyFileLoader
+from .hyperfine_structure_loader import HyperfineStructureLoader, NuclearParameters
 from .lsj_comp_loader import LSJCompLoader
 from .mix_coef_loader import MixCoefLoader
 from .radial_wavefunction_loader import RWFNFileLoader
@@ -19,6 +20,8 @@ __all__ = [
     "BaseLoader",
     "BinaryFileLoader",
     "EnergyFileLoader",
+    "HyperfineStructureLoader",
+    "NuclearParameters",
     "MixCoefLoader",
     "LSJCompLoader",
     "CSFLoader",
