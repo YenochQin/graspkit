@@ -4,6 +4,7 @@ from .loaders.base_loader import BaseLoader  # noqa: F401
 from .loaders.binary_file_loader import BinaryFileLoader  # noqa: F401
 from .loaders.csf_loader import CSFLoader  # noqa: F401
 from .loaders.energy_file_loader import EnergyFileLoader  # noqa: F401
+from .loaders.gj_factor_loader import GJFactorLoader  # noqa: F401
 from .loaders.hyperfine_structure_loader import (  # noqa: F401
     HyperfineStructureLoader,
     NuclearParameters,
@@ -36,6 +37,7 @@ __all__ = [
     "BinaryFileLoader",
     "CSFLoader",
     "EnergyFileLoader",
+    "GJFactorLoader",
     "HyperfineStructureLoader",
     "NuclearParameters",
     "LSJCompLoader",
