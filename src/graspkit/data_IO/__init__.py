@@ -4,6 +4,10 @@ from .loaders.base_loader import BaseLoader  # noqa: F401
 from .loaders.binary_file_loader import BinaryFileLoader  # noqa: F401
 from .loaders.csf_loader import CSFLoader  # noqa: F401
 from .loaders.energy_file_loader import EnergyFileLoader  # noqa: F401
+from .loaders.hyperfine_structure_loader import (  # noqa: F401
+    HyperfineStructureLoader,
+    NuclearParameters,
+)
 from .loaders.lsj_comp_loader import LSJCompLoader  # noqa: F401
 from .loaders.mix_coef_loader import MixCoefLoader  # noqa: F401
 from .loaders.radial_wavefunction_loader import RWFNFileLoader  # noqa: F401
@@ -32,6 +36,8 @@ __all__ = [
     "BinaryFileLoader",
     "CSFLoader",
     "EnergyFileLoader",
+    "HyperfineStructureLoader",
+    "NuclearParameters",
     "LSJCompLoader",
     "MixCoefLoader",
     "RWFNFileLoader",
