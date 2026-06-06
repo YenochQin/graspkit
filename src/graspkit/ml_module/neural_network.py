@@ -28,6 +28,8 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+from .cnn import BilousCNN
+
 
 def _set_random_seed(seed: int) -> None:
     """Set random seeds for reproducible PyTorch and NumPy behavior.
@@ -125,7 +127,7 @@ class ANNClassifier:
         class_weights: list[float] | None = None,
         device: str | None = None,
         use_dynamic_weights: bool = True,
-        model_architecture: Literal["standard", "tensornet"] = "standard",
+        model_architecture: Literal["standard", "tensornet", "cnn"] = "standard",
         tensor_channels: int = 3,
         random_seed: int | None = None,
         multi_label: bool | None = None,
@@ -143,7 +145,8 @@ class ANNClassifier:
             class_weights: 类别权重用于处理不平衡数据（如果use_dynamic_weights为True则忽略）
             device: 计算设备，如果为None则自动选择
             use_dynamic_weights: 是否使用动态权重计算（基于训练数据中正负样本比例）
-            model_architecture: 模型架构类型 ("standard" 标准全连接 或 "tensornet" 张量网络)
+            model_architecture: 模型架构类型 ("standard" 标准全连接, "tensornet" 张量网络,
+                或 "cnn" Bilous-style 1D CNN)
             tensor_channels: TensorNet的通道数（必须能整除input_size）
             random_seed: 随机种子（用于可重复性）
             multi_label: 是否使用多标签分类（None时自动判断：output_size > 1 时启用）
@@ -170,11 +173,11 @@ class ANNClassifier:
         else:
             self.multi_label = multi_label
 
-        # 验证 TensorNet 参数
-        if model_architecture == "tensornet":
+        # 验证结构化三通道架构参数
+        if model_architecture in {"tensornet", "cnn"}:
             if input_size % tensor_channels != 0:
                 raise ValueError(
-                    f"对于 TensorNet 架构，input_size ({input_size}) "
+                    f"对于 {model_architecture} 架构，input_size ({input_size}) "
                     f"必须能被 tensor_channels ({tensor_channels}) 整除"
                 )
 
@@ -231,7 +234,7 @@ class ANNClassifier:
         """Build the configured classifier architecture.
 
         Returns:
-            PyTorch module for the selected ``standard`` or ``tensornet``
+            PyTorch module for the selected ``standard``, ``tensornet``, or ``cnn``
             architecture.
         """
         model: nn.Module
@@ -242,6 +245,12 @@ class ANNClassifier:
                 input_shape=(seq_length, self.tensor_channels),
                 hidden_dim=self.hidden_size,
                 num_classes=self.output_size,
+            ).to(self.device)
+        elif self.model_architecture == "cnn":
+            model = BilousCNN(
+                input_size=self.input_size,
+                output_size=self.output_size,
+                channels=self.tensor_channels,
             ).to(self.device)
         else:
             # 标准全连接架构 - 简化版本，避免过度正则化
