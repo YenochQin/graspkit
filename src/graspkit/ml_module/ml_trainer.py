@@ -112,7 +112,6 @@ def _write_candidate_hybrid_scores(
 
 
 def _select_model_architecture(
-    cal_loop_num: int,
     current_loop_sample_count: int,
     accumulated_sample_count: int,
     positive_sample_count: int,
@@ -121,7 +120,6 @@ def _select_model_architecture(
     """Select a robust classifier architecture for the current iteration.
 
     Args:
-        cal_loop_num: Current calculation loop number.
         current_loop_sample_count: Number of samples from the current loop.
         accumulated_sample_count: Number of samples accumulated across loops.
         positive_sample_count: Number of positive training labels.
@@ -129,15 +127,9 @@ def _select_model_architecture(
 
     Returns:
         Architecture name understood by ``CSFClassifier``: ``standard`` for
-        early or low-positive-count data, otherwise ``cnn`` for late-stage
+        low-coverage or low-positive-count data, otherwise ``cnn`` for
         CSF-sequence learning.
     """
-    if cal_loop_num <= 3:
-        logger.info(
-            "当前处于前3轮迭代，固定使用 standard 架构以保证早期小样本阶段稳定性"
-        )
-        return "standard"
-
     if current_loop_sample_count < 50_000 or positive_sample_count < 2_048:
         logger.info(
             "检测到小样本训练场景，使用 standard 架构以避免结构化模型在低覆盖率数据下塌缩"
@@ -228,7 +220,6 @@ def train_model(
     pos_weight = negative_count / positive_count if positive_count > 0 else 1.0
     class_weights = [1.0, pos_weight]  # [负样本权重, 正样本权重]
     desired_architecture = _select_model_architecture(
-        cal_loop_num=config.cal_settings.cal_loop_num,
         current_loop_sample_count=current_loop_sample_count,
         accumulated_sample_count=len(X_train),
         positive_sample_count=positive_sample_count,
