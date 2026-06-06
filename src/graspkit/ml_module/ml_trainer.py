@@ -29,7 +29,7 @@ from .ml_initializer import (
 )
 
 # 本地模块导入
-from .neural_network import ANNClassifier
+from .neural_network import CSFClassifier
 
 
 def _is_hybrid_reference_ranking_enabled(
@@ -128,7 +128,7 @@ def _select_model_architecture(
         logger: Logger used for architecture-selection messages.
 
     Returns:
-        Architecture name understood by ``ANNClassifier``: ``standard`` for
+        Architecture name understood by ``CSFClassifier``: ``standard`` for
         early or low-positive-count data, otherwise ``cnn`` for late-stage
         CSF-sequence learning.
     """
@@ -157,7 +157,7 @@ def train_model(
     caled_csfs_descriptors: np.ndarray,
     correct_levels_ci: np.ndarray,
     logger: logging.Logger,
-) -> tuple[ANNClassifier, np.ndarray, np.ndarray]:
+) -> tuple[CSFClassifier, np.ndarray, np.ndarray]:
     """Train the multi-label ANN classifier used for CSF selection.
 
     Args:
@@ -242,7 +242,7 @@ def train_model(
 
     if config.cal_settings.cal_loop_num == 1:
         # 第一轮：直接创建新模型
-        model: ANNClassifier = ANNClassifier(
+        model: CSFClassifier = CSFClassifier(
             input_size=X_train.shape[1],
             output_size=n_correct_levels,  # 自动根据 output_size>1 启用多标签分类
             hidden_size=hidden_size,
@@ -269,7 +269,7 @@ def train_model(
             / f"{config.target.conf}_{config.cal_settings.cal_loop_num - 1}.pkl"
         )
         if model_path.exists():
-            model = ANNClassifier.load_model(str(model_path))
+            model = CSFClassifier.load_model(str(model_path))
             logger.info(f"加载已有模型: {model_path}")
             # 验证模型输出维度和架构是否匹配
             if (
@@ -281,7 +281,7 @@ def train_model(
                     f"输出维度 {model.output_size}->{n_correct_levels}, "
                     f"架构 {model.model_architecture}->{desired_architecture}，将创建新模型"
                 )
-                model = ANNClassifier(
+                model = CSFClassifier(
                     input_size=X_train.shape[1],
                     output_size=n_correct_levels,
                     hidden_size=hidden_size,
@@ -316,7 +316,7 @@ def train_model(
                     f"输出维度 {model.output_size}->{n_correct_levels}, "
                     f"架构 {legacy_architecture}->{desired_architecture}，将创建新模型"
                 )
-                model = ANNClassifier(
+                model = CSFClassifier(
                     input_size=X_train.shape[1],
                     output_size=n_correct_levels,
                     hidden_size=hidden_size,
@@ -335,7 +335,7 @@ def train_model(
                 )
         else:
             # 模型文件不存在，创建新模型
-            model = ANNClassifier(
+            model = CSFClassifier(
                 input_size=X_train.shape[1],
                 output_size=n_correct_levels,
                 hidden_size=hidden_size,
@@ -427,7 +427,7 @@ def train_model(
 
 
 def evaluate_model(
-        model: ANNClassifier,
+        model: CSFClassifier,
         X_labeled: np.ndarray,
         y_labeled: np.ndarray,
         config: MLCalConfig,
@@ -455,7 +455,7 @@ def evaluate_model(
     eval_time = time.time() - start_time
 
     labeled_f1, labeled_roc_auc, labeled_accuracy, labeled_precision, labeled_recall = (
-        ANNClassifier.model_evaluation(
+        CSFClassifier.model_evaluation(
             y_labeled, y_prediction_labeled, y_probability_labeled
         )
     )
@@ -512,7 +512,7 @@ def evaluate_model(
 
 
 def predict_model(
-    model: ANNClassifier,
+    model: CSFClassifier,
     raw_csfs_descriptors: np.ndarray,
     caled_csfs_idxs_array: np.ndarray,
     correct_levels_ci_squared: np.ndarray,

@@ -3,6 +3,7 @@
 from graspkit.ml_module import (  # noqa: F401
     ANNClassifier,
     ANNRegressor,
+    CSFClassifier,
     check_configuration_coupling,
     check_reference_energy_agreement,
     check_energy_convergence,
@@ -30,6 +31,7 @@ from graspkit.ml_module import (  # noqa: F401
 )
 
 __all__ = [
+    "CSFClassifier",
     "ANNClassifier",
     "setup_logging",
     "setup_directories",

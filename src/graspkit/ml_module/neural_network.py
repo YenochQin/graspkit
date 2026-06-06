@@ -2,8 +2,8 @@
 神经网络模块 - 提供多种架构的人工神经网络分类器
 
 本模块包含：
-1. TensorNet: 张量网络架构，适合处理结构化特征
-2. ANNClassifier: 优化的人工神经网络分类器
+1. CSFClassifier: 优化的CSF重要性分类器包装器
+2. 兼容入口：从 ann.py、cnn.py 等模块选择具体网络骨干
 """
 
 import logging
@@ -28,6 +28,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+from .ann import StandardANN
 from .cnn import BilousCNN
 
 
@@ -104,9 +105,9 @@ class TensorNet(nn.Module):
         return a3
 
 
-class ANNClassifier:
+class CSFClassifier:
     """
-    优化的人工神经网络分类器
+    Machine-learning classifier wrapper for CSF importance selection.
 
     主要改进：
     1. 支持多种模型架构（标准全连接、TensorNet张量网络）
@@ -133,7 +134,7 @@ class ANNClassifier:
         multi_label: bool | None = None,
     ):
         """
-        初始化ANN分类器
+        初始化CSF分类器
 
         Args:
             input_size: 输入特征数量
@@ -253,20 +254,11 @@ class ANNClassifier:
                 channels=self.tensor_channels,
             ).to(self.device)
         else:
-            # 标准全连接架构 - 简化版本，避免过度正则化
-            model = nn.Sequential(
-                nn.Linear(self.input_size, self.hidden_size),
-                nn.BatchNorm1d(self.hidden_size),  # 改用BatchNorm，更稳定
-                nn.GELU(),
-                nn.Dropout(0.1),  # 减少Dropout
-                nn.Linear(self.hidden_size, self.hidden_size // 2),
-                nn.BatchNorm1d(self.hidden_size // 2),
-                nn.GELU(),
-                nn.Dropout(0.1),  # 减少Dropout
-                nn.Linear(self.hidden_size // 2, self.output_size),
+            model = StandardANN(
+                input_size=self.input_size,
+                hidden_size=self.hidden_size,
+                output_size=self.output_size,
             ).to(self.device)
-            # 初始化权重
-            self._initialize_weights(model)
 
         return model
 
@@ -843,8 +835,8 @@ class ANNClassifier:
         torch.save(save_dict, path)
 
     @classmethod
-    def load_model(cls, path: str, device: str | None = None) -> "ANNClassifier":
-        """Restore an ANNClassifier from a saved checkpoint.
+    def load_model(cls, path: str, device: str | None = None) -> "CSFClassifier":
+        """Restore a CSFClassifier from a saved checkpoint.
 
         Args:
             path: Checkpoint path created by ``save_model``.
@@ -1154,7 +1146,7 @@ class ANNClassifier:
 
     @staticmethod
     def predict_in_batches(
-        model: ANNClassifier,
+        model: CSFClassifier,
         X: np.ndarray,
         batch_size: int = 4000000,
         predict_proba: bool = False,
@@ -1299,3 +1291,6 @@ class ANNClassifier:
             return gradients.cpu().numpy()
         else:
             return np.zeros(X.shape[1], dtype=np.float64)
+
+
+ANNClassifier = CSFClassifier

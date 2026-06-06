@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
+from .ann import StandardANN
 from .cnn import BilousCNN
-from .neural_network import ANNClassifier
+from .neural_network import ANNClassifier, CSFClassifier
 from .ml_initializer import (
     setup_logging,
     setup_directories,
@@ -41,7 +42,9 @@ from .ml_regression_trainer import (
 
 __all__ = [
     # neural_network
+    "CSFClassifier",
     "ANNClassifier",
+    "StandardANN",
     "BilousCNN",
     # ml_initializer
     "setup_logging",

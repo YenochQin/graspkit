@@ -10,7 +10,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from graspkit.ml_module import ml_results_analyzer, ml_trainer
-from graspkit.ml_module.neural_network import ANNClassifier
+from graspkit.ml_module.neural_network import ANNClassifier, CSFClassifier
 
 
 def make_config(tmp_path: Path, loop_num: int = 1) -> SimpleNamespace:
@@ -72,7 +72,7 @@ def test_train_model_uses_all_labeled_samples_without_validation_split(
     config = make_config(tmp_path)
     logger = logging.getLogger("train-model-test")
 
-    monkeypatch.setattr(ml_trainer, "ANNClassifier", DummyClassifier)
+    monkeypatch.setattr(ml_trainer, "CSFClassifier", DummyClassifier)
     monkeypatch.setattr(ml_trainer.torch.cuda, "is_available", lambda: False)
     monkeypatch.setattr(ml_trainer.torch, "set_num_threads", lambda n: None)
 
@@ -218,3 +218,20 @@ def test_annclassifier_checkpoint_roundtrip(tmp_path: Path) -> None:
     assert original_state.keys() == loaded_state.keys()
     for key in original_state:
         assert torch.equal(original_state[key].cpu(), loaded_state[key].cpu())
+
+
+def test_csfclassifier_checkpoint_roundtrip(tmp_path: Path) -> None:
+    model = CSFClassifier(
+        input_size=6,
+        output_size=2,
+        hidden_size=12,
+        model_architecture="standard",
+        random_seed=123,
+    )
+    checkpoint_path = tmp_path / "csf_checkpoint.pt"
+
+    model.save_model(str(checkpoint_path))
+    loaded = CSFClassifier.load_model(str(checkpoint_path), device="cpu")
+
+    assert isinstance(loaded, CSFClassifier)
+    assert loaded.model_architecture == "standard"
