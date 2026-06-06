@@ -4,7 +4,7 @@
 
 ## 一、目标
 
-基于 [`docs/ml_model_collapse_diagnosis.md`](/Users/yiqin/Documents/PythonProjects/GraspKit/docs/ml_model_collapse_diagnosis.md) 与当前仓库实现，制定一份可直接落地的实施计划，解决以下问题：
+基于 [`docs/ml_model_collapse_diagnosis.md`](/Users/yiqin/Documents/PythonProjects/graspkit/docs/ml_model_collapse_diagnosis.md) 与当前仓库实现，制定一份可直接落地的实施计划，解决以下问题：
 
 - 当前多标签分类训练在高正样本比例下坍缩为近似全正预测
 - 推理阶段仍以固定 `0.5` 阈值为主，放大了训练坍缩问题
@@ -20,7 +20,7 @@
 
 ### 2.1 标签生成仍使用绝对阈值
 
-当前训练标签在 [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py#L756) 的 `generate_train_csfs_descriptors()` 中生成：
+当前训练标签在 [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py#L756) 的 `generate_train_csfs_descriptors()` 中生成：
 
 ```python
 important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
@@ -34,7 +34,7 @@ important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
 
 ### 2.2 训练阶段只报警，不干预
 
-[`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py#L63) 的 `train_model()` 已统计正样本比例，并在过高时告警：
+[`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py#L63) 的 `train_model()` 已统计正样本比例，并在过高时告警：
 
 ```python
 if avg_positive_ratio > 0.35:
@@ -49,7 +49,7 @@ if avg_positive_ratio > 0.35:
 
 ### 2.3 推理阶段仍以固定阈值为主
 
-[`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py#L395) 的 `predict_model()` 先做：
+[`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py#L395) 的 `predict_model()` 先做：
 
 ```python
 y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
@@ -68,7 +68,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 ### 2.4 动态权重不是根因修复
 
-[`src/graspkit/ml_module/neural_network.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/neural_network.py#L466) 的 `_calculate_dynamic_weights()` 会按正样本比例计算 `pos_weight`，但当前逻辑无法从根本上修复标签定义失真导致的坍缩。
+[`src/graspkit/ml_module/neural_network.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/neural_network.py#L466) 的 `_calculate_dynamic_weights()` 会按正样本比例计算 `pos_weight`，但当前逻辑无法从根本上修复标签定义失真导致的坍缩。
 
 结论：
 
@@ -79,9 +79,9 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 仓库中已有以下文件：
 
-- [`src/graspkit/ml_module/ml_regression_model.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_regression_model.py)
-- [`src/graspkit/ml_module/ml_regression_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_regression_trainer.py)
-- [`docs/regression_module_changes.md`](/Users/yiqin/Documents/PythonProjects/GraspKit/docs/regression_module_changes.md)
+- [`src/graspkit/ml_module/ml_regression_model.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_regression_model.py)
+- [`src/graspkit/ml_module/ml_regression_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_regression_trainer.py)
+- [`docs/regression_module_changes.md`](/Users/yiqin/Documents/PythonProjects/graspkit/docs/regression_module_changes.md)
 
 这些模块已经支持：
 
@@ -110,7 +110,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
+- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py)
 
 建议在 `CalSettings` 中新增以下字段：
 
@@ -137,7 +137,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py#L756)
+- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py#L756)
 
 改动目标：
 
@@ -164,7 +164,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py#L756)
+- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py#L756)
 
 新增日志内容：
 
@@ -183,7 +183,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py#L756)
+- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py#L756)
 
 逻辑：
 
@@ -203,7 +203,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py#L395)
+- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py#L395)
 
 建议改法：
 
@@ -236,8 +236,8 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 涉及文件：
 
-- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py)
-- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py#L395)
+- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py)
+- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py#L395)
 
 目标：
 
@@ -248,7 +248,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py#L324)
+- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py#L324)
 
 建议在 `evaluate_model()` 中加入以下规则：
 
@@ -281,7 +281,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
+- [`src/graspkit_config/ml_config_models.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py)
 
 建议新增：
 
@@ -311,9 +311,9 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 涉及模块：
 
-- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_initializer.py)
-- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_trainer.py)
-- [`src/graspkit/ml_module/ml_regression_trainer.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/ml_regression_trainer.py)
+- [`src/graspkit/ml_module/ml_initializer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_initializer.py)
+- [`src/graspkit/ml_module/ml_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_trainer.py)
+- [`src/graspkit/ml_module/ml_regression_trainer.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/ml_regression_trainer.py)
 - 以及实际启动迭代训练的入口文件
 
 ### 6.3 回归模式的接入原则
@@ -344,7 +344,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 修改文件：
 
-- [`src/graspkit/ml_module/neural_network.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_module/neural_network.py#L466)
+- [`src/graspkit/ml_module/neural_network.py`](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_module/neural_network.py#L466)
 
 定位：
 
@@ -367,7 +367,7 @@ y_unselected_prediction = (max_unselected_probability > 0.5).astype(int)
 
 当前已有测试覆盖了迭代训练的基础接口，但还没有覆盖本次修复的关键风险点。
 
-建议新增测试文件或扩展 [`tests/test_iterative_training_mode.py`](/Users/yiqin/Documents/PythonProjects/GraspKit/tests/test_iterative_training_mode.py)。
+建议新增测试文件或扩展 [`tests/test_iterative_training_mode.py`](/Users/yiqin/Documents/PythonProjects/graspkit/tests/test_iterative_training_mode.py)。
 
 至少应包含以下测试：
 

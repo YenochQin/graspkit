@@ -1,4 +1,4 @@
-"""Lightweight configuration-model exports for GraspKit."""
+"""Lightweight configuration-model exports for graspkit."""
 
 from .ml_config_models import (
     CalPath,

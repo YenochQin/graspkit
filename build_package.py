@@ -1,8 +1,8 @@
 """
-GraspKit Package Build Script
+graspkit Package Build Script
 
 This script builds the graspkit package and moves the generated packages
-to ../Graspkit-tools/package directory.
+to ../graspkit-tools/package directory.
 
 Works with UV, Pixi, or traditional pip environments.
 
@@ -95,7 +95,7 @@ def detect_environment_manager():
 
 def ensure_package_directory():
     """Ensure the target package directory exists."""
-    package_dir = Path(__file__).parent.parent / "Graspkit-tools" / "package"
+    package_dir = Path(__file__).parent.parent / "graspkit-tools" / "package"
     package_dir.mkdir(parents=True, exist_ok=True)
     print(f"Package directory: {package_dir}")
     return package_dir
@@ -168,7 +168,7 @@ def move_packages_to_target(dist_dir, target_dir):
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description="Build GraspKit package")
+    parser = argparse.ArgumentParser(description="Build graspkit package")
     parser.add_argument(
         "--clean",
         action="store_true",
@@ -179,7 +179,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("GraspKit Package Build Script")
+    print("graspkit Package Build Script")
     print("=" * 60)
 
     try:

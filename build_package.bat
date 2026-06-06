@@ -1,11 +1,11 @@
 @echo off
-REM GraspKit Package Build Script for Windows
+REM graspkit Package Build Script for Windows
 REM This script builds the graspkit package and moves the generated packages
-REM to ../Graspkit-tools/package directory.
+REM to ../graspkit-tools/package directory.
 REM Works with UV, Pixi, or traditional pip environments.
 
 echo ============================================================
-echo GraspKit Package Build Script
+echo graspkit Package Build Script
 echo ============================================================
 echo.
 
@@ -53,6 +53,6 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo Build completed successfully!
-echo Packages are available in: ..\Graspkit-tools\package
+echo Packages are available in: ..\graspkit-tools\package
 echo.
 pause

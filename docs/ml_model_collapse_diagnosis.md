@@ -233,7 +233,7 @@ if mask_early.any():
 
 这份数据反而更支持把主方案切到“多输出回归”，不是削弱这个结论。
 
-我直接看了 /Users/yiqin/Documents/PythonProjects/GraspKit-Tools/tests/rmix_data/rmix_data.npy。它是 shape=(2, 393887)，两个能级各自一条 CI 序列。关键结论是：
+我直接看了 /Users/yiqin/Documents/PythonProjects/graspkit-tools/tests/rmix_data/rmix_data.npy。它是 shape=(2, 393887)，两个能级各自一条 CI 序列。关键结论是：
 
 1. CI² 的跨度极大，单能级上从约 1e-20 到 1.6e-1。
 2. max(CI²) 的 log10 分布大约从 -16 到 -0.8，跨了 15 个数量级。

@@ -1,4 +1,4 @@
-"""Machine-learning exports for the staged GraspKit package split."""
+"""Machine-learning exports for the staged graspkit package split."""
 
 from graspkit.ml_module import (  # noqa: F401
     ANNClassifier,

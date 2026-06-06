@@ -30,7 +30,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 ```bash
 git clone https://github.com/YenochQin/graspkit.git
-cd GraspKit
+cd graspkit
 
 uv venv
 
@@ -80,7 +80,7 @@ uv run mypy src/
 
 ```bash
 git clone https://github.com/YenochQin/graspkit.git
-cd GraspKit
+cd graspkit
 
 pixi install
 pixi shell
