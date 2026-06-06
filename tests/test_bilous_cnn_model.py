@@ -103,21 +103,19 @@ def test_ann_classifier_cnn_save_and_load(tmp_path) -> None:
     np.testing.assert_allclose(before, after, rtol=1e-6, atol=1e-6)
 
 
-def test_select_model_architecture_keeps_standard_for_early_iterations() -> None:
+def test_select_model_architecture_uses_cnn_for_early_iterations_with_enough_data() -> None:
     architecture = _select_model_architecture(
-        cal_loop_num=2,
         current_loop_sample_count=100_000,
         accumulated_sample_count=150_000,
         positive_sample_count=10_000,
         logger=logging.getLogger("test"),
     )
 
-    assert architecture == "standard"
+    assert architecture == "cnn"
 
 
 def test_select_model_architecture_uses_cnn_for_large_late_csf_level_data() -> None:
     architecture = _select_model_architecture(
-        cal_loop_num=4,
         current_loop_sample_count=100_000,
         accumulated_sample_count=150_000,
         positive_sample_count=10_000,
@@ -129,7 +127,6 @@ def test_select_model_architecture_uses_cnn_for_large_late_csf_level_data() -> N
 
 def test_select_model_architecture_keeps_standard_for_late_small_positive_data() -> None:
     architecture = _select_model_architecture(
-        cal_loop_num=4,
         current_loop_sample_count=100_000,
         accumulated_sample_count=150_000,
         positive_sample_count=500,
