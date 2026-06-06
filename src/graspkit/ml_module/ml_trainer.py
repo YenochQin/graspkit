@@ -128,7 +128,9 @@ def _select_model_architecture(
         logger: Logger used for architecture-selection messages.
 
     Returns:
-        Architecture name understood by ``ANNClassifier``.
+        Architecture name understood by ``ANNClassifier``: ``standard`` for
+        early or low-positive-count data, otherwise ``cnn`` for late-stage
+        CSF-sequence learning.
     """
     if cal_loop_num <= 3:
         logger.info(
@@ -138,16 +140,16 @@ def _select_model_architecture(
 
     if current_loop_sample_count < 50_000 or positive_sample_count < 2_048:
         logger.info(
-            "检测到小样本训练场景，使用 standard 架构以避免 TensorNet 在低覆盖率数据下塌缩"
+            "检测到小样本训练场景，使用 standard 架构以避免结构化模型在低覆盖率数据下塌缩"
         )
         return "standard"
 
     logger.info(
-        "使用 tensornet 架构进行训练（本轮CSF数=%s, 累积样本数=%s）",
+        "使用 cnn 架构进行训练（Bilous-style CSF序列卷积；本轮CSF数=%s, 累积样本数=%s）",
         current_loop_sample_count,
         accumulated_sample_count,
     )
-    return "tensornet"
+    return "cnn"
 
 
 def train_model(
@@ -235,6 +237,8 @@ def train_model(
 
     # CPU优化：减少hidden_size以降低计算量
     hidden_size = 96 if not torch.cuda.is_available() else 128
+    model_params = getattr(config, "model_params", None)
+    random_seed = getattr(model_params, "random_state", None)
 
     if config.cal_settings.cal_loop_num == 1:
         # 第一轮：直接创建新模型
@@ -245,7 +249,7 @@ def train_model(
             learning_rate=0.001,
             class_weights=class_weights,
             model_architecture=desired_architecture,
-            random_seed=config.model_params.random_state,
+            random_seed=random_seed,
         )
         logger.info(
             f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
@@ -284,7 +288,7 @@ def train_model(
                     learning_rate=0.001,
                     class_weights=class_weights,
                     model_architecture=desired_architecture,
-                    random_seed=config.model_params.random_state,
+                    random_seed=random_seed,
                 )
                 logger.info(
                     f"创建新模型（输出维度={n_correct_levels}, 架构={desired_architecture}）"
@@ -319,7 +323,7 @@ def train_model(
                     learning_rate=0.001,
                     class_weights=class_weights,
                     model_architecture=desired_architecture,
-                    random_seed=config.model_params.random_state,
+                    random_seed=random_seed,
                 )
                 logger.info(
                     f"创建新模型（输出维度={n_correct_levels}, 架构={desired_architecture}）"
@@ -338,7 +342,7 @@ def train_model(
                 learning_rate=0.001,
                 class_weights=class_weights,
                 model_architecture=desired_architecture,
-                random_seed=config.model_params.random_state,
+                random_seed=random_seed,
             )
             logger.info(
                 f"创建新模型（{'多标签' if model.multi_label else '单标签'}分类，输出维度={n_correct_levels}），"
