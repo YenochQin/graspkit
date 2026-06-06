@@ -2,7 +2,7 @@
 REM graspkit Package Build Script for Windows
 REM This script builds the graspkit package and moves the generated packages
 REM to ../graspkit-tools/package directory.
-REM Works with UV, Pixi, or traditional pip environments.
+REM Works with UV or traditional pip environments.
 
 echo ============================================================
 echo graspkit Package Build Script
@@ -22,9 +22,6 @@ if exist "uv.lock" (
         exit /b 1
     )
     set PYTHON_CMD=.venv\Scripts\python.exe
-) else if exist "pixi.toml" (
-    echo Detected Pixi environment
-    set PYTHON_CMD=pixi run python
 ) else if exist ".venv\Scripts\python.exe" (
     echo Detected traditional pip environment
     set PYTHON_CMD=.venv\Scripts\python.exe
@@ -32,7 +29,6 @@ if exist "uv.lock" (
     echo Error: No supported virtual environment found
     echo Please set up an environment first using one of:
     echo   UV: uv venv && .venv\Scripts\activate && uv pip install -e .
-    echo   Pixi: pixi install && pixi shell
     echo   Pip: python -m venv .venv && .venv\Scripts\activate && pip install -e .
     pause
     exit /b 1

@@ -72,41 +72,9 @@ uv run ruff check .
 uv run mypy src/
 ```
 
-## 方式二：使用 Pixi
+## 方式二：使用 pip
 
-仓库已经包含 Pixi 配置，适合希望直接使用项目预定义环境的人。
-
-### 安装并进入环境
-
-```bash
-git clone https://github.com/YenochQin/graspkit.git
-cd graspkit
-
-pixi install
-pixi shell
-```
-
-默认环境启用 `gpu + dev`。如果你需要其他环境：
-
-```bash
-pixi shell -e cpu
-pixi shell -e gpu
-pixi shell -e dev
-pixi shell -e dev-gpu
-pixi shell -e all
-```
-
-在 Pixi 环境中可直接执行：
-
-```bash
-python -c "import graspkit; print(graspkit.__version__)"
-pytest tests/
-ruff check .
-```
-
-## 方式三：使用 pip
-
-如果你不使用 `uv` 或 `pixi`，也可以直接基于 extras 安装。当前仓库没有 `requirements-cpu.txt` 或 `requirements-gpu.txt`，请不要再使用旧文档中的那些命令。
+如果你不使用 `uv`，也可以直接基于 extras 安装。当前仓库没有 `requirements-cpu.txt` 或 `requirements-gpu.txt`，请不要再使用旧文档中的那些命令。
 
 ### 创建虚拟环境
 

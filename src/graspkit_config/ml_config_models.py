@@ -203,8 +203,6 @@ class ServerSettings(BaseModel):
     cpu_threads: int = 16
     python_source: str
     uv_env_path: str | None = None
-    conda_path: str | None = None
-    conda_env_name: str | None = None
     graspkit_tools_path: str
     module_load: list[str] | None = None
 
@@ -218,22 +216,10 @@ class ServerSettings(BaseModel):
     @model_validator(mode="after")
     def validate_python_source_config(self) -> "ServerSettings":
         """Validate consistency between python_source and environment fields."""
-        if self.python_source == "uv":
-            if self.uv_env_path is None:
-                raise ValueError("当 python_source='uv' 时，必须提供 uv_env_path")
-            if self.conda_path is not None or self.conda_env_name is not None:
-                raise ValueError("当 python_source='uv' 时，conda_path 和 conda_env_name 应该为空")
-        elif self.python_source == "conda":
-            if self.conda_path is None:
-                raise ValueError("当 python_source='conda' 时，必须提供 conda_path")
-            if self.conda_env_name is None:
-                raise ValueError("当 python_source='conda' 时，必须提供 conda_env_name")
-            if self.uv_env_path is not None:
-                raise ValueError("当 python_source='conda' 时，uv_env_path 应该为空")
-        else:
-            raise ValueError(
-                f"python_source 必须是 'uv' 或 'conda'，当前值: {self.python_source}"
-            )
+        if self.python_source != "uv":
+            raise ValueError(f"python_source 必须是 'uv'，当前值: {self.python_source}")
+        if self.uv_env_path is None:
+            raise ValueError("当 python_source='uv' 时，必须提供 uv_env_path")
         return self
 
 

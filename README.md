@@ -60,18 +60,6 @@ uv sync --extra gpu
 uv sync --extra gpu --extra dev
 ```
 
-### Pixi
-
-```bash
-pixi install
-pixi shell
-
-# optional environment variants
-pixi shell -e cpu
-pixi shell -e gpu
-pixi shell -e dev-gpu
-```
-
 ### Verify The Import
 
 ```bash
