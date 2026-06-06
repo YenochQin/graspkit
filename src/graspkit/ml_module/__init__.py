@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
-from .ann import StandardANN
-from .cnn import BilousCNN
+from .ann import CSFMLPBackbone
+from .cnn import CSFConv1DBackbone
 from .neural_network import ANNClassifier, CSFClassifier
 from .ml_initializer import (
     setup_logging,
@@ -44,8 +44,8 @@ __all__ = [
     # neural_network
     "CSFClassifier",
     "ANNClassifier",
-    "StandardANN",
-    "BilousCNN",
+    "CSFMLPBackbone",
+    "CSFConv1DBackbone",
     # ml_initializer
     "setup_logging",
     "setup_directories",

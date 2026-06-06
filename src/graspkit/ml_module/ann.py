@@ -1,4 +1,4 @@
-"""Standard feed-forward ANN backbone for CSF descriptors."""
+"""Feed-forward MLP backbone for CSF descriptors."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 
 
-class StandardANN(nn.Module):
-    """Fully connected ANN for flat CSF descriptor vectors."""
+class CSFMLPBackbone(nn.Module):
+    """Fully connected MLP backbone for flat CSF descriptor vectors."""
 
     def __init__(
         self,
@@ -16,7 +16,7 @@ class StandardANN(nn.Module):
         output_size: int = 2,
         dropout: float = 0.1,
     ) -> None:
-        """Initialize the standard feed-forward ANN.
+        """Initialize the CSF MLP backbone.
 
         Args:
             input_size: Number of flat descriptor features.

@@ -5,12 +5,12 @@ import pytest
 import torch
 
 from graspkit.ml_module import ANNClassifier
-from graspkit.ml_module.cnn import BilousCNN
+from graspkit.ml_module.cnn import CSFConv1DBackbone
 from graspkit.ml_module.ml_trainer import _select_model_architecture
 
 
-def test_bilous_cnn_forward_accepts_flat_descriptor() -> None:
-    model = BilousCNN(input_size=18, output_size=3)
+def test_csf_conv1d_backbone_forward_accepts_flat_descriptor() -> None:
+    model = CSFConv1DBackbone(input_size=18, output_size=3)
     x = torch.randn(5, 18)
 
     logits = model(x)
@@ -18,8 +18,8 @@ def test_bilous_cnn_forward_accepts_flat_descriptor() -> None:
     assert logits.shape == (5, 3)
 
 
-def test_bilous_cnn_forward_accepts_structured_descriptor() -> None:
-    model = BilousCNN(input_size=18, output_size=2)
+def test_csf_conv1d_backbone_forward_accepts_structured_descriptor() -> None:
+    model = CSFConv1DBackbone(input_size=18, output_size=2)
     x = torch.randn(5, 6, 3)
 
     logits = model(x)
@@ -27,9 +27,9 @@ def test_bilous_cnn_forward_accepts_structured_descriptor() -> None:
     assert logits.shape == (5, 2)
 
 
-def test_bilous_cnn_rejects_non_three_channel_input_size() -> None:
+def test_csf_conv1d_backbone_rejects_non_three_channel_input_size() -> None:
     with pytest.raises(ValueError, match="input_size"):
-        BilousCNN(input_size=17, output_size=2)
+        CSFConv1DBackbone(input_size=17, output_size=2)
 
 
 def test_ann_classifier_builds_cnn_architecture() -> None:
@@ -40,7 +40,7 @@ def test_ann_classifier_builds_cnn_architecture() -> None:
         random_seed=7,
     )
 
-    assert isinstance(classifier.model, BilousCNN)
+    assert isinstance(classifier.model, CSFConv1DBackbone)
     assert classifier.multi_label is True
 
 
@@ -99,7 +99,7 @@ def test_ann_classifier_cnn_save_and_load(tmp_path) -> None:
     after = restored.predict_proba(x)
 
     assert restored.model_architecture == "cnn"
-    assert isinstance(restored.model, BilousCNN)
+    assert isinstance(restored.model, CSFConv1DBackbone)
     np.testing.assert_allclose(before, after, rtol=1e-6, atol=1e-6)
 
 

@@ -28,8 +28,8 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-from .ann import StandardANN
-from .cnn import BilousCNN
+from .ann import CSFMLPBackbone
+from .cnn import CSFConv1DBackbone
 
 
 def _set_random_seed(seed: int) -> None:
@@ -248,13 +248,13 @@ class CSFClassifier:
                 num_classes=self.output_size,
             ).to(self.device)
         elif self.model_architecture == "cnn":
-            model = BilousCNN(
+            model = CSFConv1DBackbone(
                 input_size=self.input_size,
                 output_size=self.output_size,
                 channels=self.tensor_channels,
             ).to(self.device)
         else:
-            model = StandardANN(
+            model = CSFMLPBackbone(
                 input_size=self.input_size,
                 hidden_size=self.hidden_size,
                 output_size=self.output_size,
