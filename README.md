@@ -1,8 +1,8 @@
-# GraspKit
+# graspkit
 
 English | [简体中文](README_zh.md)
 
-GraspKit is a Python toolkit for reading, restructuring, and analyzing output from GRASP atomic-structure calculations. The package focuses on three practical workflows:
+graspkit is a Python toolkit for reading, restructuring, and analyzing output from GRASP atomic-structure calculations. The package focuses on three practical workflows:
 
 - loading GRASP text and binary files into typed Python objects or Polars DataFrames
 - converting CSFs into descriptor matrices for downstream analysis and machine learning

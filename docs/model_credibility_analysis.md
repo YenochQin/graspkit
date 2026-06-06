@@ -1,7 +1,7 @@
 # 迭代式主动学习模型可信度分析
 
 > **分析日期**: 2026-02-27
-> **代码版本**: GraspKit 2.9.1
+> **代码版本**: graspkit 2.9.1
 > **分析范围**: `ml_trainer.py`, `ml_initializer.py`, `neural_network.py`
 
 ---

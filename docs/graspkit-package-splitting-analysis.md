@@ -1,15 +1,15 @@
-# GraspKit Package Splitting Implementation Spec
+# graspkit Package Splitting Implementation Spec
 
 ## 文档信息
 
 - 状态：Draft
 - 目标版本：`3.2.x` 起始，跨两个小版本完成迁移
 - 负责人：Yenoch(Yi) Qin
-- 适用范围：当前单仓库 `GraspKit`
+- 适用范围：当前单仓库 `graspkit`
 
 ## 1. 目标
 
-本实施规范定义 `GraspKit` 从“单一大包 + 平面导出”演进为“分层包边界 + 可选安装能力”的落地路径。
+本实施规范定义 `graspkit` 从“单一大包 + 平面导出”演进为“分层包边界 + 可选安装能力”的落地路径。
 
 本次改造的直接目标不是立即拆成多仓库，而是：
 
@@ -40,9 +40,9 @@
 
 但包边界仍然不清晰，主要问题如下：
 
-1. [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/__init__.py) 进行了大规模平面重导出
-2. [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/__init__.py) 默认导入了绘图接口
-3. [src/graspkit/utils/plot_functions.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/plot_functions.py) 和 [src/graspkit/utils/fig_settings.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/fig_settings.py) 直接依赖 `matplotlib`
+1. [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/__init__.py) 进行了大规模平面重导出
+2. [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/__init__.py) 默认导入了绘图接口
+3. [src/graspkit/utils/plot_functions.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/plot_functions.py) 和 [src/graspkit/utils/fig_settings.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/fig_settings.py) 直接依赖 `matplotlib`
 4. `ml_module` 依赖 `data_IO` 和 `utils`，但调用侧常通过根包访问，导致轻量场景也会触发重模块导入
 5. 目前 `pyproject.toml` 仍把 `matplotlib`、`scikit-learn` 等能力放在统一安装集合中
 
@@ -70,7 +70,7 @@
 
 ### 4.2 已验证可复用的模式
 
-当前配置模型已直接位于 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)，`graspkit.data_IO` 只保留对 `MLCalConfig` / `CalPath` 的正式导出，不再经过兼容转发层。
+当前配置模型已直接位于 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py)，`graspkit.data_IO` 只保留对 `MLCalConfig` / `CalPath` 的正式导出，不再经过兼容转发层。
 
 这证明下列模式可用：
 
@@ -94,7 +94,7 @@
 
 当前主要文件：
 
-- [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
+- [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py)
 
 #### `graspkit-core`
 
@@ -180,8 +180,8 @@
 
 #### 修改范围
 
-- [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/__init__.py)
-- [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/__init__.py)
+- [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/__init__.py)
+- [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/__init__.py)
 
 #### 必做任务
 
@@ -227,7 +227,7 @@
 
 #### 优先迁移对象
 
-1. `GraspKit-Tools/ml_CSFs_selection_scripts`
+1. `graspkit-tools/ml_CSFs_selection_scripts`
 2. `pyscript/`
 3. 文档中的示例代码
 
@@ -295,21 +295,21 @@ from graspkit.utils.data_modules import MLDataCounts
 
 `config`：
 
-- [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py)
+- [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py)
 
 `core`：
 
-- [src/graspkit/data_IO/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/__init__.py)
-- [src/graspkit/data_IO/file_locator.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/file_locator.py)
-- [src/graspkit/data_IO/processing_data_loader.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/processing_data_loader.py)
-- [src/graspkit/data_IO/produced_data_writor.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/produced_data_writor.py)
+- [src/graspkit/data_IO/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/data_IO/__init__.py)
+- [src/graspkit/data_IO/file_locator.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/data_IO/file_locator.py)
+- [src/graspkit/data_IO/processing_data_loader.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/data_IO/processing_data_loader.py)
+- [src/graspkit/data_IO/produced_data_writor.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/data_IO/produced_data_writor.py)
 - `src/graspkit/data_IO/loaders/*`
 - `src/graspkit/grasp_data_extractor/*`
 - `src/graspkit/CSFs_processor/*`
-- [src/graspkit/utils/data_modules.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/data_modules.py)
-- [src/graspkit/utils/tool_function.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/tool_function.py)
-- [src/graspkit/utils/environment_config.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/environment_config.py)
-- [src/graspkit/utils/quadrupole_deformation.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/quadrupole_deformation.py)
+- [src/graspkit/utils/data_modules.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/data_modules.py)
+- [src/graspkit/utils/tool_function.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/tool_function.py)
+- [src/graspkit/utils/environment_config.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/environment_config.py)
+- [src/graspkit/utils/quadrupole_deformation.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/quadrupole_deformation.py)
 
 `ml`：
 
@@ -317,8 +317,8 @@ from graspkit.utils.data_modules import MLDataCounts
 
 `plot`：
 
-- [src/graspkit/utils/plot_functions.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/plot_functions.py)
-- [src/graspkit/utils/fig_settings.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/fig_settings.py)
+- [src/graspkit/utils/plot_functions.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/plot_functions.py)
+- [src/graspkit/utils/fig_settings.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/fig_settings.py)
 
 #### 验收标准
 
@@ -335,7 +335,7 @@ from graspkit.utils.data_modules import MLDataCounts
 
 #### 修改范围
 
-- [pyproject.toml](/Users/yiqin/Documents/PythonProjects/GraspKit/pyproject.toml)
+- [pyproject.toml](/Users/yiqin/Documents/PythonProjects/graspkit/pyproject.toml)
 - 打包配置
 - 发布脚本
 - 安装文档
@@ -522,9 +522,9 @@ warning 至少需要包含：
 
 如果只做一轮最小、稳妥、收益最高的改造，本轮必须至少完成：
 
-1. 收缩 [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/__init__.py) 默认导出
-2. 收缩 [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/utils/__init__.py) 默认导出
-3. 保持 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit_config/ml_config_models.py) 继续作为轻量配置层
+1. 收缩 [src/graspkit/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/__init__.py) 默认导出
+2. 收缩 [src/graspkit/utils/__init__.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/utils/__init__.py) 默认导出
+3. 保持 [src/graspkit_config/ml_config_models.py](/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit_config/ml_config_models.py) 继续作为轻量配置层
 4. 增加导入边界测试和 warning 测试
 5. 将主要调用侧从 `import graspkit as gk` 迁移到显式子模块导入
 
@@ -539,7 +539,7 @@ warning 至少需要包含：
 3. 再稳定逻辑拆包
 4. 最后才做分发拆分
 
-只有按这个顺序推进，`GraspKit` 才能同时得到以下收益：
+只有按这个顺序推进，`graspkit` 才能同时得到以下收益：
 
 1. 更低的默认导入成本
 2. 更清晰的模块边界

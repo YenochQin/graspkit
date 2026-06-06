@@ -1,8 +1,8 @@
-# GraspKit
+# graspkit
 
 [English](README.md) | 简体中文
 
-GraspKit 是一个面向 GRASP 原子结构计算结果的 Python 工具包，主要用于把原始输出文件转换为更容易处理的 Python 对象、Polars DataFrame 和机器学习输入。当前代码库主要覆盖三类工作流：
+graspkit 是一个面向 GRASP 原子结构计算结果的 Python 工具包，主要用于把原始输出文件转换为更容易处理的 Python 对象、Polars DataFrame 和机器学习输入。当前代码库主要覆盖三类工作流：
 
 - 读取和整理 GRASP 文本文件与二进制文件
 - 将 CSF 转换为描述符矩阵，供筛选与建模使用

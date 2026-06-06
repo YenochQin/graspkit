@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-"""Core package root for GraspKit."""
+"""Core package root for graspkit."""
 
 from importlib import import_module
 from typing import Any

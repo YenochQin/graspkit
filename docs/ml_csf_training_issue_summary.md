@@ -54,8 +54,8 @@ So this threshold must be interpreted in the `CI^2` scale, not the raw `CI` scal
 
 Current code path:
 
-- `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleml_initializer.py`
-- `/Users/yiqin/Documents/PythonProjects/GraspKit`
+- `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleml_initializer.py`
+- `/Users/yiqin/Documents/PythonProjects/graspkit`
 - function: `generate_train_csfs_descriptors`
 
 Current behavior:
@@ -140,9 +140,9 @@ Instead:
 
 - `ml_CSFs_selection_scripts/ml_csf_choosing/train.py`
 - `ml_CSFs_selection_scripts/ml_csf_choosing/train_regression.py`
-- `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleml_initializer.py`
-- `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleml_trainer.py`
-- `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleneural_network.py`
+- `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleml_initializer.py`
+- `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleml_trainer.py`
+- `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleneural_network.py`
 
 ## Recommended Direction
 
@@ -216,8 +216,8 @@ For this task, more meaningful checks are:
 
 If continuing this optimization later, start with:
 
-1. inspect `generate_train_csfs_descriptors` in `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleml_initializer.py`;
-2. inspect `predict_model` in `/Users/yiqin/Documents/PythonProjects/GraspKit/src/graspkit/ml_moduleml_trainer.py`;
+1. inspect `generate_train_csfs_descriptors` in `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleml_initializer.py`;
+2. inspect `predict_model` in `/Users/yiqin/Documents/PythonProjects/graspkit/src/graspkit/ml_moduleml_trainer.py`;
 3. add `CI^2` distribution diagnostics before changing `cutoff_value`;
 4. implement top-N sampling before tuning the neural network itself;
 5. evaluate whether `train_regression.py` should become the primary path.

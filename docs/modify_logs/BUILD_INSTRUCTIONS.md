@@ -1,6 +1,6 @@
-# GraspKit Package Build Instructions
+# graspkit Package Build Instructions
 
-This document provides instructions for building the GraspKit package.
+This document provides instructions for building the graspkit package.
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ pip install build
 # Build the package
 python -m build
 
-# Move packages manually to ../Graspkit-tools/package
+# Move packages manually to ../graspkit-tools/package
 ```
 
 ## Script Options
@@ -113,7 +113,7 @@ The script will generate two types of packages:
 1. **Wheel File** (`.whl`) - Binary distribution for easy installation
 2. **Source Distribution** (`.tar.gz`) - Source code distribution
 
-Both packages will be automatically moved to `../Graspkit-tools/package/`.
+Both packages will be automatically moved to `../graspkit-tools/package/`.
 
 ## Installation
 
@@ -121,10 +121,10 @@ After building, you can install the package using:
 
 ```bash
 # Install from wheel (recommended)
-pip install ../Graspkit-tools/package/grasp_kit-*.whl
+pip install ../graspkit-tools/package/grasp_kit-*.whl
 
 # Or install from source distribution
-pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
+pip install ../graspkit-tools/package/grasp_kit-*.tar.gz
 ```
 
 ## Troubleshooting
@@ -140,7 +140,7 @@ pip install ../Graspkit-tools/package/grasp_kit-*.tar.gz
 - pip: Verify `.venv` folder exists with `Scripts/python.exe` (Windows) or `bin/python` (Linux/macOS)
 
 ### Permission Issues
-- Make sure you have write permissions to both the current directory and `../Graspkit-tools/package/`
+- Make sure you have write permissions to both the current directory and `../graspkit-tools/package/`
 - On Windows, run the command prompt as Administrator if needed
 
 ### Missing Dependencies

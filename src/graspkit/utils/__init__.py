@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-"""Lightweight utility exports for core GraspKit consumers."""
+"""Lightweight utility exports for core graspkit consumers."""
 
 from .data_modules import CSFs, MixCoefficientData, MLDataCounts
 from .environment_config import (

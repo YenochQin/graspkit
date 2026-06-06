@@ -1,11 +1,11 @@
 #!/bin/bash
-# GraspKit Package Build Script for Unix-like systems
+# graspkit Package Build Script for Unix-like systems
 # This script builds the graspkit package and moves the generated packages
-# to ../Graspkit-tools/package directory.
+# to ../graspkit-tools/package directory.
 # Works with UV, Pixi, or traditional pip environments.
 
 echo "============================================================"
-echo "GraspKit Package Build Script"
+echo "graspkit Package Build Script"
 echo "============================================================"
 echo
 
@@ -50,5 +50,5 @@ fi
 
 echo
 echo "Build completed successfully!"
-echo "Packages are available in: ../Graspkit-tools/package"
+echo "Packages are available in: ../graspkit-tools/package"
 echo

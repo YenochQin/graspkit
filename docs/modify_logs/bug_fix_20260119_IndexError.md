@@ -13,7 +13,7 @@
 ```python
 IndexError: list index out of range
 
-File ~/Documents/PythonProjects/GraspKit/src/graspkit/data_IO/grasp_data_loader.py:437
+File ~/Documents/PythonProjects/graspkit/src/graspkit/data_IO/grasp_data_loader.py:437
     437     self.raw_file_path = self.temp_path_list[0].parent
 ```
 
