@@ -43,12 +43,6 @@ uv sync --extra gpu --extra dev     # GPU version with dev tools (NVIDIA CUDA)
 uv pip install -e .
 ```
 
-#### Pixi (Alternative)
-```bash
-pixi install
-pixi shell
-```
-
 #### Traditional pip Installation
 ```bash
 # Create and activate environment
@@ -144,7 +138,6 @@ The codebase includes environment detection for HPC/SLURM environments:
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
 - **uv.lock** - UV lock file for reproducible dependency management
-- **pixi.lock** - Pixi lock file (conda-forge, Linux-64 only)
 - **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
 - **Ruff Configuration** - NumPy 2.0 compatibility rules in pyproject.toml
 
@@ -157,7 +150,7 @@ The codebase includes environment detection for HPC/SLURM environments:
 ### Current Repository Status
 - **Version**: 2.9dev2 (from `src/graspkit/version.py`)
 - **Python Version**: Requires 3.13+ (<3.14)
-- **Package Manager**: Hatchling with UV/Pixi support
+- **Package Manager**: Hatchling with UV support
 - **Build System**: Modern packaging with optional dependencies
 - **Testing**: Example files in tests/ directory (ANN.py, rwfn_plotter.py, Nightingale_rose.py, test.ipynb)
 

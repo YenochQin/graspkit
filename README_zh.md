@@ -60,18 +60,6 @@ uv sync --extra gpu
 uv sync --extra gpu --extra dev
 ```
 
-### 使用 Pixi
-
-```bash
-pixi install
-pixi shell
-
-# 可选环境
-pixi shell -e cpu
-pixi shell -e gpu
-pixi shell -e dev-gpu
-```
-
 ### 验证导入
 
 ```bash

@@ -174,25 +174,6 @@ reportMissingTypeStubs = false
 [project.urls]
 Homepage = "https://github.com/YenochQin/graspkit.git"
 
-[tool.pixi.workspace]
-channels = ["https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"]
-platforms = ["linux-64", "osx-arm64", 'win-64']
-
-[tool.pixi.pypi-dependencies]
-grasp-kit = { path = ".", editable = true }
-# rcsfs = { path = "../graspkit-tools/package/rcsfs/rcsfs-0.1.0-cp313-cp313-manylinux_2_28_x86_64.whl" }
-
-[tool.pixi.environments]
-# default = { solve-group = "default" }
-default = { features = ["gpu", "dev"], solve-group = "default" }
-all = { features = ["all"], solve-group = "default" }
-cpu = { features = ["cpu"], solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-gpu = { features = ["gpu"], solve-group = "default" }
-dev-gpu = { features = ["dev", "gpu"], solve-group = "default" }
-
-[tool.pixi.tasks]
-
 [dependency-groups]
 dev = [
     "scikit-learn-stubs>=0.0.3",

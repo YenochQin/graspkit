@@ -2,7 +2,7 @@
 # graspkit Package Build Script for Unix-like systems
 # This script builds the graspkit package and moves the generated packages
 # to ../graspkit-tools/package directory.
-# Works with UV, Pixi, or traditional pip environments.
+# Works with UV or traditional pip environments.
 
 echo "============================================================"
 echo "graspkit Package Build Script"
@@ -21,9 +21,6 @@ if [ -f "uv.lock" ]; then
         exit 1
     fi
     PYTHON_CMD=".venv/bin/python"
-elif [ -f "pixi.toml" ]; then
-    echo "Detected Pixi environment"
-    PYTHON_CMD="pixi run python"
 elif [ -f ".venv/bin/python" ]; then
     echo "Detected traditional pip environment"
     PYTHON_CMD=".venv/bin/python"
@@ -31,7 +28,6 @@ else
     echo "Error: No supported virtual environment found"
     echo "Please set up an environment first using one of:"
     echo "  UV: uv venv && source .venv/bin/activate && uv pip install -e ."
-    echo "  Pixi: pixi install && pixi shell"
     echo "  Pip: python -m venv .venv && source .venv/bin/activate && pip install -e ."
     exit 1
 fi

@@ -4,7 +4,7 @@ graspkit Package Build Script
 This script builds the graspkit package and moves the generated packages
 to ../graspkit-tools/package directory.
 
-Works with UV, Pixi, or traditional pip environments.
+Works with UV or traditional pip environments.
 
 Usage:
     python build_package.py [--clean] [--dev]
@@ -74,21 +74,6 @@ def detect_environment_manager():
     if (project_root / ".venv").exists() and (project_root / "uv.lock").exists():
         return "uv", sys.executable
 
-    # Check for Pixi environment
-    pixi_dirs = [
-        project_root / ".pixi",
-        project_root / ".pixi-env",
-    ]
-    if any(p.exists() for p in pixi_dirs):
-        # Try to find pixi command
-        try:
-            result = subprocess.run(
-                ["pixi", "--version"], capture_output=True, text=True, check=True
-            )
-            return "pixi", "pixi"
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-
     # Default to current Python
     return "python", sys.executable
 
@@ -115,13 +100,7 @@ def build_package(clean=False, dev=False):
 
     print("Building package...")
 
-    # Build command based on environment manager
-    if env_manager == "pixi":
-        build_cmd = ["pixi", "run", "python", "-m", "build"]
-    elif env_manager == "uv":
-        build_cmd = [python_cmd, "-m", "build"]
-    else:
-        build_cmd = [python_cmd, "-m", "build"]
+    build_cmd = [python_cmd, "-m", "build"]
 
     # Check if build is available and install if needed
     try:
@@ -130,12 +109,7 @@ def build_package(clean=False, dev=False):
         print(f"Build failed: {e}")
         print("Installing build tool...")
 
-        if env_manager == "pixi":
-            install_cmd = ["pixi", "add", "build"]
-        elif env_manager == "uv":
-            install_cmd = [python_cmd, "-m", "pip", "install", "build"]
-        else:
-            install_cmd = [python_cmd, "-m", "pip", "install", "build"]
+        install_cmd = [python_cmd, "-m", "pip", "install", "build"]
 
         run_command(install_cmd, cwd=project_root)
         run_command(build_cmd, cwd=project_root)
