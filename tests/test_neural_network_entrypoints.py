@@ -1,15 +1,19 @@
 import torch
 
-from graspkit.ml_module import ANNClassifier, CSFClassifier, StandardANN
-from graspkit.ml_module.ann import StandardANN as DirectStandardANN
+from graspkit.ml_module import (
+    ANNClassifier,
+    CSFClassifier,
+    CSFMLPBackbone,
+)
+from graspkit.ml_module.ann import CSFMLPBackbone as DirectCSFMLPBackbone
 from graspkit.ml_module.neural_network import ANNClassifier as LegacyANNClassifier
 from graspkit.ml_module.neural_network import CSFClassifier as DirectCSFClassifier
 
 
-def test_standard_ann_is_available_from_direct_and_package_entrypoints() -> None:
-    assert StandardANN is DirectStandardANN
+def test_csf_mlp_backbone_is_available_from_direct_and_package_entrypoints() -> None:
+    assert CSFMLPBackbone is DirectCSFMLPBackbone
 
-    model = StandardANN(input_size=18, hidden_size=12, output_size=3)
+    model = CSFMLPBackbone(input_size=18, hidden_size=12, output_size=3)
     logits = model(torch.randn(4, 18))
 
     assert logits.shape == (4, 3)

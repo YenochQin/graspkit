@@ -1,4 +1,4 @@
-"""Bilous-style convolutional neural network for CSF descriptors.
+"""Convolutional backbone for CSF descriptors.
 
 The model follows the 1D CNN block used by Bilous et al. for CSF-level
 selection, adapted to GraspKit's PyTorch multi-label BCE-with-logits pipeline.
@@ -10,8 +10,8 @@ import torch
 import torch.nn as nn
 
 
-class BilousCNN(nn.Module):
-    """1D CNN for three-channel CSF descriptors.
+class CSFConv1DBackbone(nn.Module):
+    """1D convolutional backbone for three-channel CSF descriptors.
 
     Public GraspKit callers pass flat descriptors with length
     ``3 * n_orbitals``. The module also accepts structured tensors with shape
@@ -27,7 +27,7 @@ class BilousCNN(nn.Module):
         conv2_filters: int = 16,
         dense_sizes: tuple[int, int, int] = (150, 120, 90),
     ) -> None:
-        """Initialize the Bilous-style CNN.
+        """Initialize the CSF Conv1D backbone.
 
         Args:
             input_size: Flat descriptor length, normally ``3 * n_orbitals``.
@@ -50,7 +50,7 @@ class BilousCNN(nn.Module):
         seq_length = input_size // channels
         if seq_length < 3:
             raise ValueError(
-                "BilousCNN requires at least 3 orbital positions for "
+                "CSFConv1DBackbone requires at least 3 orbital positions for "
                 "Conv1d kernel_size=3"
             )
 
