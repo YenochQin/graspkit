@@ -474,31 +474,93 @@ def test_iter_unselected_index_chunks_skips_current_indices_without_full_diff() 
     assert [chunk.tolist() for chunk in chunks] == [[0, 2], [4, 5, 7], [8]]
 
 
-def test_predict_model_streaming_rejects_hybrid_reference_ranking(
-    monkeypatch, tmp_path: Path
+def test_predict_model_streaming_matches_numpy_hybrid_reference_ranking(
+    tmp_path: Path,
 ) -> None:
     config = make_config(tmp_path)
+    config.cal_settings.cutoff_value = 0.1
+    config.cal_settings.expansion_ratio = 1.0
+    config.cal_settings.sampling_ratio = 1.0
+    config.cal_settings.spectral_term = ["low", "high"]
+    config.cal_settings.reference_energy_levels = [0.0, 100.0]
+    config.cal_settings.reference_energy_mode = "hybrid_rank"
+    config.cal_settings.reference_energy_score_weight = 1.0
+    config.cal_settings.reference_energy_importance_weight = 0.5
+    config.cal_settings.reference_gap_pair_weighting = "uniform"
+    config.cal_settings.reference_energy_top_pair_count = 1
+    config.cal_path.results_path.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("streaming-predict-hybrid-test")
-    raw_lazy = pl.DataFrame({"col_0": [0.0, 1.0]}).lazy()
 
-    class AnyModel:
+    raw_np = np.array(
+        [
+            [0.0],
+            [1.0],
+            [2.0],
+            [3.0],
+            [4.0],
+        ],
+        dtype=np.float32,
+    )
+    raw_lazy = pl.DataFrame(raw_np, schema=["col_0"]).lazy()
+    caled_idxs = np.array([0, 2], dtype=np.int64)
+    correct_levels_ci_squared = np.array([[0.2, 0.01], [0.01, 0.2]], dtype=np.float64)
+    selected_energy_data = pl.DataFrame(
+        {"configuration_raw": ["low", "high"], "EnergyLevel": [0.0, 250.0]}
+    )
+    probability_by_index = {
+        0: [0.1, 0.1],
+        1: [0.45, 0.55],
+        2: [0.1, 0.1],
+        3: [0.49, 0.49],
+        4: [0.2, 0.9],
+    }
+
+    class HybridScoresByIndex:
+        output_size = 2
+        multi_label = True
+
         def predict_proba(self, X: np.ndarray) -> np.ndarray:
-            return np.full((len(X), 1), 0.1)
+            return np.array([probability_by_index[int(row[0])] for row in X], dtype=float)
 
-    monkeypatch.setattr(ml_trainer, "_is_hybrid_reference_ranking_enabled", lambda *_: True)
+        def predict_proba_batch(
+            self, X: np.ndarray, batch_size: int = 1024
+        ) -> np.ndarray:
+            return self.predict_proba(X)
 
-    with pytest.raises(NotImplementedError, match="Hybrid reference ranking"):
-        ml_trainer.predict_model_streaming(
-            AnyModel(),
-            raw_lazy,
-            np.array([0], dtype=np.int64),
-            np.array([[0.2]], dtype=np.float64),
-            config,
-            MLDataCounts(total_csfs_count=2, cal_csfs_count=1),
-            logger,
-            selected_energy_data=pl.DataFrame({"level": [0]}),
-            batch_size=1,
-        )
+        def iter_predict_proba_batches(self, batches):
+            for batch in batches:
+                yield self.predict_proba(batch)
+
+    eager_counts = MLDataCounts(total_csfs_count=5, cal_csfs_count=2)
+    streaming_counts = MLDataCounts(total_csfs_count=5, cal_csfs_count=2)
+
+    numpy_result = ml_trainer.predict_model(
+        HybridScoresByIndex(),
+        raw_np,
+        caled_idxs,
+        correct_levels_ci_squared,
+        config,
+        eager_counts,
+        logger,
+        selected_energy_data=selected_energy_data,
+    )
+    streaming_result = ml_trainer.predict_model_streaming(
+        HybridScoresByIndex(),
+        raw_lazy,
+        caled_idxs,
+        correct_levels_ci_squared,
+        config,
+        streaming_counts,
+        logger,
+        selected_energy_data=selected_energy_data,
+        batch_size=1,
+    )
+
+    np.testing.assert_array_equal(streaming_result[0], numpy_result[0])
+    np.testing.assert_array_equal(streaming_result[1], numpy_result[1])
+    np.testing.assert_allclose(streaming_result[2], numpy_result[2])
+    assert streaming_result[3].ml_predicted_count == numpy_result[3].ml_predicted_count
+    assert streaming_result[3].ml_sampled_count == numpy_result[3].ml_sampled_count
 
 
 def test_annclassifier_checkpoint_roundtrip(tmp_path: Path) -> None:

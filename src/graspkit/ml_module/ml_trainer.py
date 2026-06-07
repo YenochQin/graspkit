@@ -838,6 +838,353 @@ def _iter_unselected_index_chunks(
             yield unselected_idxs
 
 
+def _update_score_bounds(
+    min_score: float | None,
+    max_score: float | None,
+    scores: NDArray[np.float64],
+) -> tuple[float | None, float | None]:
+    if scores.size == 0:
+        return min_score, max_score
+    batch_min = float(np.min(scores))
+    batch_max = float(np.max(scores))
+    return (
+        batch_min if min_score is None else min(min_score, batch_min),
+        batch_max if max_score is None else max(max_score, batch_max),
+    )
+
+
+def _normalize_scores_from_bounds(
+    scores: NDArray[np.float64],
+    min_score: float | None,
+    max_score: float | None,
+) -> NDArray[np.float64]:
+    scores = np.asarray(scores, dtype=np.float64)
+    if scores.size == 0:
+        return scores
+    if min_score is None or max_score is None:
+        return np.zeros_like(scores, dtype=np.float64)
+    if np.isclose(min_score, max_score):
+        if max_score <= 0:
+            return np.zeros_like(scores, dtype=np.float64)
+        return np.ones_like(scores, dtype=np.float64)
+    return (scores - min_score) / (max_score - min_score)
+
+
+def _combine_scores_from_global_bounds(
+    importance_scores: NDArray[np.float64],
+    correction_scores: NDArray[np.float64],
+    importance_min: float | None,
+    importance_max: float | None,
+    correction_min: float | None,
+    correction_max: float | None,
+    importance_weight: float,
+    correction_weight: float,
+) -> NDArray[np.float64]:
+    total_weight = importance_weight + correction_weight
+    if total_weight <= 0:
+        raise ValueError("importance_weight 和 correction_weight 的和必须大于 0")
+
+    normalized_importance = _normalize_scores_from_bounds(
+        importance_scores,
+        importance_min,
+        importance_max,
+    )
+    normalized_correction = _normalize_scores_from_bounds(
+        correction_scores,
+        correction_min,
+        correction_max,
+    )
+    return (
+        importance_weight * normalized_importance
+        + correction_weight * normalized_correction
+    ) / total_weight
+
+
+def _predict_model_streaming_hybrid(
+    model: CSFClassifier,
+    raw_csfs_descriptors: pl.LazyFrame,
+    caled_csfs_idxs_array: np.ndarray,
+    correct_levels_ci_squared: np.ndarray,
+    config: MLCalConfig,
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger,
+    selected_energy_data: pl.DataFrame,
+    batch_size: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
+    total_csfs_count = int(raw_csfs_descriptors.select(pl.len()).collect().item())
+    current_calc_idxs = caled_csfs_idxs_array.astype(np.int64, copy=False)
+
+    cutoff_value = config.cal_settings.cutoff_value
+    csfs_above_threshold_idxs = np.where(
+        np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis=0)
+    )[0]
+    verified_important_idxs = caled_csfs_idxs_array[csfs_above_threshold_idxs]
+    logger.info(f"已验证重要组态数: {len(verified_important_idxs)}")
+
+    verified_important_ci_coefficients = correct_levels_ci_squared[
+        :, csfs_above_threshold_idxs
+    ]
+    logger.info(
+        f"已提取 {verified_important_ci_coefficients.shape[1]} 个重要组态的CI系数，维度: {verified_important_ci_coefficients.shape}"
+    )
+
+    current_important_count = len(verified_important_idxs)
+    min_important_count = min(50, int(total_csfs_count * 0.01))
+    if current_important_count <= min_important_count:
+        current_important_count = min_important_count
+        logger.info(f"重要组态数目小于等于最小值，调整为{min_important_count}")
+
+    expansion_ratio = config.cal_settings.expansion_ratio
+    new_sampling_CSFs_num = math.ceil(expansion_ratio * current_important_count)
+    sampling_ratio = config.cal_settings.sampling_ratio
+    max_sampling_CSFs_num = math.ceil(total_csfs_count * sampling_ratio)
+    if new_sampling_CSFs_num + current_important_count > max_sampling_CSFs_num:
+        new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
+        logger.info(f"目标新增组态数超过最大选择数，调整为{new_sampling_CSFs_num}")
+
+    y_current_cal_probability_batches = [
+        probabilities
+        for _, probabilities in _predict_probability_batches_for_indices(
+            model,
+            raw_csfs_descriptors,
+            indices=current_calc_idxs,
+            batch_size=batch_size,
+        )
+    ]
+    if y_current_cal_probability_batches:
+        y_current_cal_probability = np.vstack(y_current_cal_probability_batches)
+    else:
+        output_size = int(getattr(model, "output_size", 1))
+        y_current_cal_probability = np.empty((0, output_size), dtype=float)
+    logger.info(
+        f"当前计算CSF数量: {len(current_calc_idxs)}, 预测概率shape: {y_current_cal_probability.shape}"
+    )
+
+    pairwise_gap_error_matrix = compute_pairwise_gap_error_matrix(
+        selected_energy_data,
+        config.cal_settings.spectral_term,
+        config.cal_settings.reference_energy_levels,
+    )
+    importance_weight = config.cal_settings.reference_energy_importance_weight
+    correction_weight = config.cal_settings.reference_energy_score_weight
+    if importance_weight + correction_weight <= 0:
+        raise ValueError("importance_weight 和 correction_weight 的和必须大于 0")
+
+    importance_min: float | None = None
+    importance_max: float | None = None
+    correction_min: float | None = None
+    correction_max: float | None = None
+    raw_importance_sum = 0.0
+    raw_importance_min: float | None = None
+    raw_importance_max: float | None = None
+    normalized_correction_sum = 0.0
+    normalized_final_sum = 0.0
+    unselected_count = 0
+
+    for unselected_idx_chunk in _iter_unselected_index_chunks(
+        total_count=total_csfs_count,
+        current_calc_idxs=current_calc_idxs,
+        chunk_size=batch_size,
+    ):
+        for global_indices, probabilities in _predict_probability_batches_for_indices(
+            model,
+            raw_csfs_descriptors,
+            indices=unselected_idx_chunk,
+            batch_size=batch_size,
+        ):
+            if probabilities.ndim == 1:
+                probabilities = probabilities.reshape(-1, 1)
+
+            importance_scores = np.max(probabilities, axis=1)
+            correction_scores, _ = score_correction_candidates_from_ci(
+                probabilities,
+                pairwise_gap_error_matrix,
+                pair_weighting=config.cal_settings.reference_gap_pair_weighting,
+                top_pair_count=config.cal_settings.reference_energy_top_pair_count,
+            )
+            importance_min, importance_max = _update_score_bounds(
+                importance_min,
+                importance_max,
+                importance_scores,
+            )
+            correction_min, correction_max = _update_score_bounds(
+                correction_min,
+                correction_max,
+                correction_scores,
+            )
+            raw_importance_min, raw_importance_max = _update_score_bounds(
+                raw_importance_min,
+                raw_importance_max,
+                importance_scores,
+            )
+            raw_importance_sum += float(np.sum(importance_scores))
+            unselected_count += len(global_indices)
+
+    positive_candidates: list[tuple[float, int, int]] = []
+    positive_chunks: list[NDArray[np.int64]] = []
+    fallback_candidates: list[tuple[float, int, int]] = []
+    ml_predicted_count = 0
+    final_min_score: float | None = None
+    final_max_score: float | None = None
+    normalized_correction_min: float | None = None
+    normalized_correction_max: float | None = None
+    selection_limit = max(new_sampling_CSFs_num, 0)
+
+    for unselected_idx_chunk in _iter_unselected_index_chunks(
+        total_count=total_csfs_count,
+        current_calc_idxs=current_calc_idxs,
+        chunk_size=batch_size,
+    ):
+        for global_indices, probabilities in _predict_probability_batches_for_indices(
+            model,
+            raw_csfs_descriptors,
+            indices=unselected_idx_chunk,
+            batch_size=batch_size,
+        ):
+            if probabilities.ndim == 1:
+                probabilities = probabilities.reshape(-1, 1)
+
+            importance_scores = np.max(probabilities, axis=1)
+            correction_scores, _ = score_correction_candidates_from_ci(
+                probabilities,
+                pairwise_gap_error_matrix,
+                pair_weighting=config.cal_settings.reference_gap_pair_weighting,
+                top_pair_count=config.cal_settings.reference_energy_top_pair_count,
+            )
+            final_scores = _combine_scores_from_global_bounds(
+                importance_scores,
+                correction_scores,
+                importance_min,
+                importance_max,
+                correction_min,
+                correction_max,
+                importance_weight,
+                correction_weight,
+            )
+            normalized_correction = _normalize_scores_from_bounds(
+                correction_scores,
+                correction_min,
+                correction_max,
+            )
+
+            ml_predicted_mask = final_scores > 0.5
+            batch_predicted_count = int(np.count_nonzero(ml_predicted_mask))
+            ml_predicted_count += batch_predicted_count
+            normalized_correction_sum += float(np.sum(normalized_correction))
+            normalized_final_sum += float(np.sum(final_scores))
+            normalized_correction_min, normalized_correction_max = _update_score_bounds(
+                normalized_correction_min,
+                normalized_correction_max,
+                normalized_correction,
+            )
+            final_min_score, final_max_score = _update_score_bounds(
+                final_min_score,
+                final_max_score,
+                final_scores,
+            )
+
+            if (
+                selection_limit > 0
+                and batch_predicted_count > 0
+                and ml_predicted_count <= selection_limit
+            ):
+                positive_chunks.append(global_indices[ml_predicted_mask])
+            elif ml_predicted_count > selection_limit:
+                positive_chunks.clear()
+
+            for global_idx, score in zip(global_indices, final_scores, strict=True):
+                if score > 0.5 and selection_limit > 0:
+                    _push_top_scored_candidate(
+                        positive_candidates,
+                        float(score),
+                        int(global_idx),
+                        selection_limit,
+                    )
+                if selection_limit > 0:
+                    _push_top_scored_candidate(
+                        fallback_candidates,
+                        float(score),
+                        int(global_idx),
+                        selection_limit,
+                    )
+
+    logger.info(
+        "混合排序已启用: importance_weight=%.3f, correction_weight=%.3f",
+        importance_weight,
+        correction_weight,
+    )
+    mean_correction = normalized_correction_sum / unselected_count if unselected_count else 0.0
+    mean_final = normalized_final_sum / unselected_count if unselected_count else 0.0
+    logger.info(
+        "修正分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        normalized_correction_min if normalized_correction_min is not None else 0.0,
+        normalized_correction_max if normalized_correction_max is not None else 0.0,
+        mean_correction,
+    )
+    logger.info(
+        "组合分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        final_min_score if final_min_score is not None else 0.0,
+        final_max_score if final_max_score is not None else 0.0,
+        mean_final,
+    )
+
+    logger.info(f"推理了 {unselected_count} 个未选择CSF组态")
+    mean_importance = raw_importance_sum / unselected_count if unselected_count else 0.0
+    logger.info(
+        "未选择CSF重要性分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        raw_importance_min if raw_importance_min is not None else 0.0,
+        raw_importance_max if raw_importance_max is not None else 0.0,
+        mean_importance,
+    )
+
+    logger.info("      组态采样")
+    logger.info("更新重要组态索引")
+    logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
+    logger.info(f"ML预测的重要组态数（在未选择中）：({ml_predicted_count},)")
+    logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
+
+    if new_sampling_CSFs_num <= 0:
+        logger.info("目标新增组态数为0，本轮不新增ML采样组态")
+        ml_sampled_idxs = np.array([], dtype=np.int64)
+    elif ml_predicted_count >= new_sampling_CSFs_num:
+        logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
+        ml_sampled_idxs = _top_candidates_to_indices(positive_candidates)
+        logger.info(
+            f"从{ml_predicted_count}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个"
+        )
+    elif ml_predicted_count > 0:
+        logger.info(f"ML预测组态不足，全部采用{ml_predicted_count}个")
+        ml_sampled_idxs = np.concatenate(positive_chunks).astype(np.int64, copy=False)
+    else:
+        logger.warning(
+            "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
+            new_sampling_CSFs_num,
+        )
+        ml_sampled_idxs = _top_candidates_to_indices(fallback_candidates)
+        selected_scores = [score for score, _, _ in sorted(fallback_candidates, reverse=True)]
+        logger.info(
+            "回退采样完成：选取了 %s 个组合分数最高的未选择组态，最高分=%.4f，最低入选分=%.4f",
+            len(ml_sampled_idxs),
+            selected_scores[0] if selected_scores else 0.0,
+            selected_scores[-1] if selected_scores else 0.0,
+        )
+
+    train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
+    train_data_counts.ml_predicted_count = ml_predicted_count
+    train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
+    logger.info(
+        "流式混合排序跳过 candidate_hybrid_scores.csv: "
+        "为保持内存有界，不缓存全部候选CSF评分"
+    )
+
+    return (
+        ml_sampled_idxs,
+        verified_important_idxs,
+        y_current_cal_probability,
+        train_data_counts,
+    )
+
+
 def predict_model_streaming(
     model: CSFClassifier,
     raw_csfs_descriptors: pl.LazyFrame,
@@ -851,8 +1198,17 @@ def predict_model_streaming(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
     """Streaming variant of ``predict_model`` for lazy descriptor sources."""
     if _is_hybrid_reference_ranking_enabled(config, selected_energy_data):
-        raise NotImplementedError(
-            "Hybrid reference ranking is not supported by predict_model_streaming yet."
+        assert selected_energy_data is not None
+        return _predict_model_streaming_hybrid(
+            model,
+            raw_csfs_descriptors,
+            caled_csfs_idxs_array,
+            correct_levels_ci_squared,
+            config,
+            train_data_counts,
+            logger,
+            selected_energy_data,
+            batch_size,
         )
 
     total_csfs_count = int(raw_csfs_descriptors.select(pl.len()).collect().item())

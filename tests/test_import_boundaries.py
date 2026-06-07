@@ -102,3 +102,11 @@ def test_root_no_longer_exposes_ml_or_plot_compat_exports() -> None:
 
     assert "graspkit.ml_module" not in sys.modules
     assert "graspkit.utils.plot_functions" not in sys.modules
+
+
+def test_graspkit_ml_exports_streaming_helpers() -> None:
+    graspkit_ml = importlib.import_module("graspkit_ml")
+
+    assert hasattr(graspkit_ml, "build_labeled_training_array_from_lazy_descriptors")
+    assert hasattr(graspkit_ml, "predict_model_streaming")
+    assert hasattr(graspkit_ml, "validate_csf_desc_coverage_streaming")
