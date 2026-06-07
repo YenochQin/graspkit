@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
@@ -229,6 +230,49 @@ def test_build_labeled_training_array_from_lazy_descriptors_does_not_full_collec
     )
 
     assert result.shape == (3, 5)
+
+
+def test_build_labeled_training_array_from_lazy_descriptors_applies_diff_ci_labels() -> None:
+    from graspkit.ml_module.ml_initializer import (
+        build_labeled_training_array_from_lazy_descriptors,
+    )
+
+    frame = pl.DataFrame(
+        {
+            "col_0": np.array([10, 20], dtype=np.float32),
+            "col_1": np.array([11, 21], dtype=np.float32),
+        }
+    ).lazy()
+    config = SimpleNamespace(
+        cal_settings=SimpleNamespace(
+            cutoff_value=0.9,
+            diff_ci_cutoff=0.2,
+            spectral_term=["low", "high"],
+            reference_energy_levels=[0.0, 100.0],
+        )
+    )
+    selected_energy_data = pl.DataFrame(
+        {"configuration_raw": ["low", "high"], "EnergyLevel": [0.0, 200.0]}
+    )
+
+    result = build_labeled_training_array_from_lazy_descriptors(
+        frame,
+        accumulated_idxs=np.array([0, 1], dtype=np.int64),
+        accumulated_ci_squared=np.array([[0.1, 0.4], [0.5, 0.2]], dtype=np.float64),
+        cutoff_value=0.9,
+        config=config,
+        selected_energy_data=selected_energy_data,
+        batch_size=2,
+    )
+
+    expected = np.array(
+        [
+            [10, 11, 0, 1],
+            [20, 21, 0, 0],
+        ],
+        dtype=np.float32,
+    )
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_validate_csf_desc_coverage_streaming_adds_first_rows_covering_missing_orbitals() -> None:

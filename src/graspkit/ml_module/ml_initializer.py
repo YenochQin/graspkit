@@ -511,6 +511,94 @@ def combine_importance_and_reference_scores(
     return final_scores, normalized_importance, normalized_reference
 
 
+def _build_diff_ci_positive_mask(
+    accumulated_ci_squared: NDArray[np.float64],
+    config: MLCalConfig,
+    selected_energy_data: pl.DataFrame | None,
+) -> NDArray[np.bool_]:
+    """Build extra positive labels from differential CI ranking criteria."""
+    if (
+        selected_energy_data is None
+        or config.cal_settings.diff_ci_cutoff <= 0
+        or len(config.cal_settings.reference_energy_levels) <= 1
+    ):
+        return np.zeros_like(accumulated_ci_squared, dtype=bool)
+
+    diff_ci_cutoff = config.cal_settings.diff_ci_cutoff
+    spectral_terms = config.cal_settings.spectral_term
+    ref_energy_list = config.cal_settings.reference_energy_levels
+    ref_zero = min(ref_energy_list)
+    ref_zero_idx = ref_energy_list.index(ref_zero)
+
+    term_to_ci_row: dict[str, int] = {}
+    term_to_calc_energy: dict[str, float] = {}
+    for ci_row_idx, energy_row in enumerate(selected_energy_data.iter_rows(named=True)):
+        term_name = energy_row["configuration_raw"]
+        if term_name in spectral_terms:
+            term_to_ci_row[term_name] = ci_row_idx
+            term_to_calc_energy[term_name] = float(energy_row["EnergyLevel"])
+
+    if len(term_to_ci_row) != len(spectral_terms):
+        return np.zeros_like(accumulated_ci_squared, dtype=bool)
+
+    calc_zero_energy = term_to_calc_energy[spectral_terms[ref_zero_idx]]
+    diff_mask = np.zeros_like(accumulated_ci_squared, dtype=bool)
+
+    for outer_idx in range(len(spectral_terms)):
+        for inner_idx in range(outer_idx + 1, len(spectral_terms)):
+            outer_term = spectral_terms[outer_idx]
+            inner_term = spectral_terms[inner_idx]
+            outer_ref_rel = ref_energy_list[outer_idx] - ref_zero
+            inner_ref_rel = ref_energy_list[inner_idx] - ref_zero
+
+            if outer_ref_rel >= inner_ref_rel:
+                high_term, low_term = outer_term, inner_term
+                ref_gap_high_minus_low = outer_ref_rel - inner_ref_rel
+            else:
+                high_term, low_term = inner_term, outer_term
+                ref_gap_high_minus_low = inner_ref_rel - outer_ref_rel
+
+            if ref_gap_high_minus_low == 0.0:
+                continue
+
+            high_ci_row = term_to_ci_row[high_term]
+            low_ci_row = term_to_ci_row[low_term]
+            high_calc_rel = term_to_calc_energy[high_term] - calc_zero_energy
+            low_calc_rel = term_to_calc_energy[low_term] - calc_zero_energy
+            calc_gap_high_minus_low = high_calc_rel - low_calc_rel
+
+            if calc_gap_high_minus_low > ref_gap_high_minus_low:
+                ci_diff_for_high = (
+                    accumulated_ci_squared[high_ci_row]
+                    - accumulated_ci_squared[low_ci_row]
+                )
+                diff_mask[high_ci_row] |= ci_diff_for_high >= diff_ci_cutoff
+            elif calc_gap_high_minus_low < ref_gap_high_minus_low:
+                ci_diff_for_low = (
+                    accumulated_ci_squared[low_ci_row]
+                    - accumulated_ci_squared[high_ci_row]
+                )
+                diff_mask[low_ci_row] |= ci_diff_for_low >= diff_ci_cutoff
+
+    return diff_mask
+
+
+def _build_important_csfs_mask(
+    accumulated_ci_squared: NDArray[np.float64],
+    cutoff_value: float,
+    config: MLCalConfig | None = None,
+    selected_energy_data: pl.DataFrame | None = None,
+) -> NDArray[np.bool_]:
+    important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
+    if config is None:
+        return important_csfs_mask
+    return important_csfs_mask | _build_diff_ci_positive_mask(
+        accumulated_ci_squared,
+        config,
+        selected_energy_data,
+    ).T
+
+
 def check_reference_energy_agreement(
     selected_energy_data: pl.DataFrame,
     spectral_term: list[str],
@@ -966,13 +1054,37 @@ def build_labeled_training_array_from_lazy_descriptors(
     accumulated_ci_squared: NDArray[np.float64],
     cutoff_value: float,
     batch_size: int = 100_000,
+    *,
+    config: MLCalConfig | None = None,
+    selected_energy_data: pl.DataFrame | None = None,
+    logger: logging.Logger | None = None,
 ) -> np.ndarray:
     """Build labeled training rows from a lazy descriptor source.
 
     Only rows referenced by ``accumulated_idxs`` are materialized. Missing or
     out-of-range index validation is delegated to ``iter_indexed_descriptor_batches``.
     """
-    important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
+    important_csfs_mask = _build_important_csfs_mask(
+        accumulated_ci_squared,
+        cutoff_value,
+        config=config,
+        selected_energy_data=selected_energy_data,
+    )
+    if logger is not None and config is not None:
+        diff_count = int(
+            np.sum(
+                _build_diff_ci_positive_mask(
+                    accumulated_ci_squared,
+                    config,
+                    selected_energy_data,
+                )
+            )
+        )
+        if diff_count > 0:
+            logger.info(
+                f"差动CI加权新增正样本: {diff_count} "
+                f"(diff_ci_cutoff={config.cal_settings.diff_ci_cutoff})"
+            )
 
     if len(accumulated_idxs) == 0:
         feature_count = len(raw_csfs_descriptors.collect_schema().names())
@@ -1040,7 +1152,12 @@ def generate_train_csfs_descriptors(
 
     sampled_csfs_descriptors = raw_csfs_descriptors[accumulated_idxs]
     # 转置以匹配描述符的行维度: (n_current_csfs, n_correct_levels)
-    important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
+    important_csfs_mask = _build_important_csfs_mask(
+        accumulated_ci_squared,
+        cutoff_value,
+        config=config,
+        selected_energy_data=selected_energy_data,
+    )
 
     # === 差动 CI 加权正样本（可选）===
     # 物理依据：差动关联（ci²在不同谱项间差异大的CSF）主要影响能级间距。
@@ -1050,69 +1167,16 @@ def generate_train_csfs_descriptors(
         and config.cal_settings.diff_ci_cutoff > 0
         and len(config.cal_settings.reference_energy_levels) > 1
     ):
-        diff_ci_cutoff = config.cal_settings.diff_ci_cutoff
-        spectral_terms = config.cal_settings.spectral_term
-        ref_energy_list = config.cal_settings.reference_energy_levels
-        ref_zero = min(ref_energy_list)
-        ref_zero_idx = ref_energy_list.index(ref_zero)
-
-        # 建立 谱项名 -> CI矩阵行索引 和 谱项名 -> 计算能级值(cm⁻¹) 的映射
-        # CI矩阵行顺序与 selected_energy_data 的行顺序一致（按能量升序排列）
-        term_to_ci_row: dict[str, int] = {}
-        term_to_calc_energy: dict[str, float] = {}
-        for ci_row_idx, energy_row in enumerate(selected_energy_data.iter_rows(named=True)):
-            term_name = energy_row["configuration_raw"]
-            if term_name in spectral_terms:
-                term_to_ci_row[term_name] = ci_row_idx
-                term_to_calc_energy[term_name] = float(energy_row["EnergyLevel"])
-
-        if len(term_to_ci_row) == len(spectral_terms):
-            # 计算零点对应谱项的计算能级值（用于计算相对能级差）
-            calc_zero_energy = term_to_calc_energy[spectral_terms[ref_zero_idx]]
-            # diff_mask shape: (n_levels, n_csfs)，与 accumulated_ci_squared 同形
-            diff_mask = np.zeros_like(accumulated_ci_squared, dtype=bool)
-
-            # 遍历所有谱项对，以参考能级确定高/低能态，按间距偏差方向追加正样本
-            for outer_idx in range(len(spectral_terms)):
-                for inner_idx in range(outer_idx + 1, len(spectral_terms)):
-                    outer_term = spectral_terms[outer_idx]
-                    inner_term = spectral_terms[inner_idx]
-                    outer_ref_rel = ref_energy_list[outer_idx] - ref_zero
-                    inner_ref_rel = ref_energy_list[inner_idx] - ref_zero
-
-                    # 以参考能级确定哪个谱项是高能态（high_term）、哪个是低能态（low_term）
-                    if outer_ref_rel >= inner_ref_rel:
-                        high_term, low_term = outer_term, inner_term
-                        ref_gap_high_minus_low = outer_ref_rel - inner_ref_rel
-                    else:
-                        high_term, low_term = inner_term, outer_term
-                        ref_gap_high_minus_low = inner_ref_rel - outer_ref_rel
-
-                    # 简并态（参考能级相同）无间距信息，跳过差动加权
-                    if ref_gap_high_minus_low == 0.0:
-                        continue
-
-                    high_ci_row = term_to_ci_row[high_term]
-                    low_ci_row = term_to_ci_row[low_term]
-                    high_calc_rel = term_to_calc_energy[high_term] - calc_zero_energy
-                    low_calc_rel = term_to_calc_energy[low_term] - calc_zero_energy
-                    calc_gap_high_minus_low = high_calc_rel - low_calc_rel
-
-                    if calc_gap_high_minus_low > ref_gap_high_minus_low:
-                        # 计算间距偏大：需降低高能态 → 追加对高能态 CI² 贡献显著的 CSF
-                        # 筛选：ci²[高能态行, CSF列] - ci²[低能态行, CSF列] >= diff_ci_cutoff
-                        ci_diff_for_high = accumulated_ci_squared[high_ci_row] - accumulated_ci_squared[low_ci_row]
-                        diff_mask[high_ci_row] |= (ci_diff_for_high >= diff_ci_cutoff)
-                    elif calc_gap_high_minus_low < ref_gap_high_minus_low:
-                        # 计算间距偏小：需降低低能态 → 追加对低能态 CI² 贡献显著的 CSF
-                        # 筛选：ci²[低能态行, CSF列] - ci²[高能态行, CSF列] >= diff_ci_cutoff
-                        ci_diff_for_low = accumulated_ci_squared[low_ci_row] - accumulated_ci_squared[high_ci_row]
-                        diff_mask[low_ci_row] |= (ci_diff_for_low >= diff_ci_cutoff)
-
-            diff_count = int(np.sum(diff_mask))
-            # diff_mask.T shape: (n_csfs, n_levels)，与 important_csfs_mask 同形，取 OR 合并
-            important_csfs_mask = important_csfs_mask | diff_mask.T
-            logger.info(f"差动CI加权新增正样本: {diff_count} (diff_ci_cutoff={diff_ci_cutoff})")
+        diff_mask = _build_diff_ci_positive_mask(
+            accumulated_ci_squared,
+            config,
+            selected_energy_data,
+        )
+        diff_count = int(np.sum(diff_mask))
+        logger.info(
+            f"差动CI加权新增正样本: {diff_count} "
+            f"(diff_ci_cutoff={config.cal_settings.diff_ci_cutoff})"
+        )
 
     positive_count = int(np.sum(important_csfs_mask))
     total_elements = important_csfs_mask.size
