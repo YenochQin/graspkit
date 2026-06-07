@@ -16,6 +16,20 @@ from graspkit.ml_module.streaming_descriptors import (
 )
 
 
+class ForbidFullCollectLazyFrame:
+    def __init__(self, lazy_frame: pl.LazyFrame) -> None:
+        self._lazy_frame = lazy_frame
+
+    def collect(self) -> pl.DataFrame:
+        raise AssertionError("full collect forbidden")
+
+    def collect_schema(self) -> pl.Schema:
+        return self._lazy_frame.collect_schema()
+
+    def with_row_index(self, *args: object, **kwargs: object) -> pl.LazyFrame:
+        return self._lazy_frame.with_row_index(*args, **kwargs)
+
+
 def test_validate_cnn_descriptor_shape_accepts_three_channel_descriptor() -> None:
     shape = validate_cnn_descriptor_shape(n_features=168, channels=3)
 
@@ -116,3 +130,100 @@ def test_iter_indexed_descriptor_batches_rejects_non_positive_batch_size() -> No
                 batch_size=0,
             )
         )
+
+
+def test_build_labeled_training_array_from_lazy_descriptors_materializes_only_accumulated_rows() -> None:
+    from graspkit.ml_module.ml_initializer import (
+        build_labeled_training_array_from_lazy_descriptors,
+    )
+
+    frame = pl.DataFrame(
+        {
+            "col_0": np.arange(6, dtype=np.float32),
+            "col_1": np.arange(6, dtype=np.float32) + 10,
+            "col_2": np.arange(6, dtype=np.float32) + 20,
+        }
+    ).lazy()
+    accumulated_idxs = np.array([4, 1, 5], dtype=np.int64)
+    accumulated_ci_squared = np.array(
+        [
+            [0.2, 0.01, 0.7],
+            [0.0, 0.3, 0.01],
+        ],
+        dtype=np.float64,
+    )
+
+    result = build_labeled_training_array_from_lazy_descriptors(
+        frame,
+        accumulated_idxs=accumulated_idxs,
+        accumulated_ci_squared=accumulated_ci_squared,
+        cutoff_value=0.1,
+        batch_size=2,
+    )
+
+    expected = np.array(
+        [
+            [4, 14, 24, 1, 0],
+            [1, 11, 21, 0, 1],
+            [5, 15, 25, 1, 0],
+        ],
+        dtype=np.float32,
+    )
+    assert result.dtype == np.float32
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_build_labeled_training_array_from_lazy_descriptors_returns_empty_2d_array() -> None:
+    from graspkit.ml_module.ml_initializer import (
+        build_labeled_training_array_from_lazy_descriptors,
+    )
+
+    frame = pl.DataFrame(
+        {
+            "col_0": np.arange(6, dtype=np.float32),
+            "col_1": np.arange(6, dtype=np.float32) + 10,
+            "col_2": np.arange(6, dtype=np.float32) + 20,
+        }
+    ).lazy()
+
+    result = build_labeled_training_array_from_lazy_descriptors(
+        frame,
+        accumulated_idxs=np.array([], dtype=np.int64),
+        accumulated_ci_squared=np.empty((2, 0), dtype=np.float64),
+        cutoff_value=0.1,
+    )
+
+    assert result.shape == (0, 5)
+    assert result.dtype == np.float32
+
+
+def test_build_labeled_training_array_from_lazy_descriptors_does_not_full_collect_raw_descriptors() -> None:
+    from graspkit.ml_module.ml_initializer import (
+        build_labeled_training_array_from_lazy_descriptors,
+    )
+
+    frame = ForbidFullCollectLazyFrame(
+        pl.DataFrame(
+            {
+                "col_0": np.arange(6, dtype=np.float32),
+                "col_1": np.arange(6, dtype=np.float32) + 10,
+                "col_2": np.arange(6, dtype=np.float32) + 20,
+            }
+        ).lazy()
+    )
+
+    result = build_labeled_training_array_from_lazy_descriptors(
+        frame,  # type: ignore[arg-type]
+        accumulated_idxs=np.array([4, 1, 5], dtype=np.int64),
+        accumulated_ci_squared=np.array(
+            [
+                [0.2, 0.01, 0.7],
+                [0.0, 0.3, 0.01],
+            ],
+            dtype=np.float64,
+        ),
+        cutoff_value=0.1,
+        batch_size=2,
+    )
+
+    assert result.shape == (3, 5)
