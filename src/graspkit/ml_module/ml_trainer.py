@@ -1,5 +1,8 @@
 # -*- encoding: utf-8 -*-
 # 标准库导入
+from collections import deque
+from collections.abc import Iterator
+import heapq
 import logging
 import math
 import os
@@ -8,6 +11,7 @@ import time
 
 # 第三方库导入
 import numpy as np
+from numpy.typing import NDArray
 import polars as pl
 import torch
 
@@ -27,6 +31,7 @@ from .ml_initializer import (
     compute_pairwise_gap_error_matrix,
     score_correction_candidates_from_ci,
 )
+from .streaming_descriptors import iter_indexed_descriptor_batches
 
 # 本地模块导入
 from .neural_network import CSFClassifier
@@ -735,6 +740,293 @@ def predict_model(
         config=config,
         logger=logger,
     )
+
+    return (
+        ml_sampled_idxs,
+        verified_important_idxs,
+        y_current_cal_probability,
+        train_data_counts,
+    )
+
+
+def _push_top_scored_candidate(
+    candidates: list[tuple[float, int, int]],
+    score: float,
+    global_idx: int,
+    limit: int,
+) -> None:
+    if limit <= 0:
+        return
+
+    entry = (float(score), int(global_idx), int(global_idx))
+    if len(candidates) < limit:
+        heapq.heappush(candidates, entry)
+    elif entry > candidates[0]:
+        heapq.heapreplace(candidates, entry)
+
+
+def _top_candidates_to_indices(candidates: list[tuple[float, int, int]]) -> np.ndarray:
+    sorted_candidates = sorted(candidates, reverse=True)
+    return np.array([global_idx for _, _, global_idx in sorted_candidates], dtype=np.int64)
+
+
+def _iter_model_probability_batches(
+    model: CSFClassifier, descriptor_batches: Iterator[NDArray[np.float32]]
+) -> Iterator[NDArray[np.float64]]:
+    if hasattr(model, "iter_predict_proba_batches"):
+        yield from model.iter_predict_proba_batches(descriptor_batches)
+        return
+
+    for descriptor_batch in descriptor_batches:
+        yield model.predict_proba(descriptor_batch)
+
+
+def _predict_probability_batches_for_indices(
+    model: CSFClassifier,
+    raw_csfs_descriptors: pl.LazyFrame,
+    indices: NDArray[np.int64],
+    batch_size: int,
+) -> Iterator[tuple[NDArray[np.int64], NDArray[np.float64]]]:
+    pending_indices: deque[NDArray[np.int64]] = deque()
+
+    def descriptor_batches() -> Iterator[NDArray[np.float32]]:
+        for batch_indices, descriptor_batch in iter_indexed_descriptor_batches(
+            raw_csfs_descriptors,
+            indices=indices,
+            batch_size=batch_size,
+        ):
+            pending_indices.append(batch_indices)
+            yield descriptor_batch
+
+    for probabilities in _iter_model_probability_batches(model, descriptor_batches()):
+        if not pending_indices:
+            raise ValueError("Model probability batch iterator yielded too many batches.")
+        yield pending_indices.popleft(), np.asarray(probabilities)
+
+    if pending_indices:
+        raise ValueError("Model probability batch iterator yielded too few batches.")
+
+
+def _iter_unselected_index_chunks(
+    total_count: int,
+    current_calc_idxs: NDArray[np.int64],
+    chunk_size: int,
+) -> Iterator[NDArray[np.int64]]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    sorted_current_idxs = np.sort(current_calc_idxs.astype(np.int64, copy=False))
+    sorted_current_idxs = sorted_current_idxs[
+        (sorted_current_idxs >= 0) & (sorted_current_idxs < total_count)
+    ]
+
+    for start in range(0, total_count, chunk_size):
+        stop = min(start + chunk_size, total_count)
+        candidate_idxs = np.arange(start, stop, dtype=np.int64)
+
+        left = np.searchsorted(sorted_current_idxs, start, side="left")
+        right = np.searchsorted(sorted_current_idxs, stop, side="left")
+        calculated_in_chunk = sorted_current_idxs[left:right]
+        if calculated_in_chunk.size == 0:
+            yield candidate_idxs
+            continue
+
+        keep_mask = np.ones(candidate_idxs.shape, dtype=bool)
+        keep_mask[calculated_in_chunk - start] = False
+        unselected_idxs = candidate_idxs[keep_mask]
+        if unselected_idxs.size > 0:
+            yield unselected_idxs
+
+
+def predict_model_streaming(
+    model: CSFClassifier,
+    raw_csfs_descriptors: pl.LazyFrame,
+    caled_csfs_idxs_array: np.ndarray,
+    correct_levels_ci_squared: np.ndarray,
+    config: MLCalConfig,
+    train_data_counts: MLDataCounts,
+    logger: logging.Logger,
+    selected_energy_data: pl.DataFrame | None = None,
+    batch_size: int = 100_000,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, MLDataCounts]:
+    """Streaming variant of ``predict_model`` for lazy descriptor sources."""
+    if _is_hybrid_reference_ranking_enabled(config, selected_energy_data):
+        raise NotImplementedError(
+            "Hybrid reference ranking is not supported by predict_model_streaming yet."
+        )
+
+    total_csfs_count = int(raw_csfs_descriptors.select(pl.len()).collect().item())
+    current_calc_idxs = caled_csfs_idxs_array.astype(np.int64, copy=False)
+
+    cutoff_value = config.cal_settings.cutoff_value
+    csfs_above_threshold_idxs = np.where(
+        np.any(correct_levels_ci_squared >= np.float64(cutoff_value), axis=0)
+    )[0]
+    verified_important_idxs = caled_csfs_idxs_array[csfs_above_threshold_idxs]
+    logger.info(f"已验证重要组态数: {len(verified_important_idxs)}")
+
+    verified_important_ci_coefficients = correct_levels_ci_squared[
+        :, csfs_above_threshold_idxs
+    ]
+    logger.info(
+        f"已提取 {verified_important_ci_coefficients.shape[1]} 个重要组态的CI系数，维度: {verified_important_ci_coefficients.shape}"
+    )
+
+    current_important_count = len(verified_important_idxs)
+    min_important_count = min(50, int(total_csfs_count * 0.01))
+    if current_important_count <= min_important_count:
+        current_important_count = min_important_count
+        logger.info(f"重要组态数目小于等于最小值，调整为{min_important_count}")
+
+    expansion_ratio = config.cal_settings.expansion_ratio
+    new_sampling_CSFs_num = math.ceil(expansion_ratio * current_important_count)
+    sampling_ratio = config.cal_settings.sampling_ratio
+    max_sampling_CSFs_num = math.ceil(total_csfs_count * sampling_ratio)
+    if new_sampling_CSFs_num + current_important_count > max_sampling_CSFs_num:
+        new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
+        logger.info(f"目标新增组态数超过最大选择数，调整为{new_sampling_CSFs_num}")
+
+    y_current_cal_probability_batches = [
+        probabilities
+        for _, probabilities in _predict_probability_batches_for_indices(
+            model,
+            raw_csfs_descriptors,
+            indices=current_calc_idxs,
+            batch_size=batch_size,
+        )
+    ]
+    if y_current_cal_probability_batches:
+        y_current_cal_probability = np.vstack(y_current_cal_probability_batches)
+    else:
+        output_size = int(getattr(model, "output_size", 1))
+        y_current_cal_probability = np.empty((0, output_size), dtype=float)
+    logger.info(
+        f"当前计算CSF数量: {len(current_calc_idxs)}, 预测概率shape: {y_current_cal_probability.shape}"
+    )
+
+    positive_candidates: list[tuple[float, int, int]] = []
+    positive_chunks: list[NDArray[np.int64]] = []
+    fallback_candidates: list[tuple[float, int, int]] = []
+    ml_predicted_count = 0
+    unselected_count = 0
+    predicted_score_sum = 0.0
+    predicted_min_score: float | None = None
+    predicted_max_score: float | None = None
+    selection_limit = max(new_sampling_CSFs_num, 0)
+
+    for unselected_idx_chunk in _iter_unselected_index_chunks(
+        total_count=total_csfs_count,
+        current_calc_idxs=current_calc_idxs,
+        chunk_size=batch_size,
+    ):
+        for global_indices, probabilities in _predict_probability_batches_for_indices(
+            model,
+            raw_csfs_descriptors,
+            indices=unselected_idx_chunk,
+            batch_size=batch_size,
+        ):
+            if probabilities.ndim == 1:
+                probabilities = probabilities.reshape(-1, 1)
+
+            scores = np.max(probabilities, axis=1)
+            ml_predicted_mask = scores > 0.5
+            batch_predicted_count = int(np.count_nonzero(ml_predicted_mask))
+            ml_predicted_count += batch_predicted_count
+            unselected_count += len(global_indices)
+            predicted_score_sum += float(np.sum(scores))
+            if scores.size > 0:
+                batch_min = float(np.min(scores))
+                batch_max = float(np.max(scores))
+                predicted_min_score = (
+                    batch_min
+                    if predicted_min_score is None
+                    else min(predicted_min_score, batch_min)
+                )
+                predicted_max_score = (
+                    batch_max
+                    if predicted_max_score is None
+                    else max(predicted_max_score, batch_max)
+                )
+
+            if (
+                selection_limit > 0
+                and batch_predicted_count > 0
+                and ml_predicted_count <= selection_limit
+            ):
+                positive_chunks.append(global_indices[ml_predicted_mask])
+            elif ml_predicted_count > selection_limit:
+                positive_chunks.clear()
+
+            for global_idx, score in zip(global_indices, scores, strict=True):
+                if score > 0.5 and selection_limit > 0:
+                    _push_top_scored_candidate(
+                        positive_candidates,
+                        float(score),
+                        int(global_idx),
+                        selection_limit,
+                    )
+                if selection_limit > 0:
+                    _push_top_scored_candidate(
+                        fallback_candidates,
+                        float(score),
+                        int(global_idx),
+                        selection_limit,
+                    )
+
+    logger.info(f"推理了 {unselected_count} 个未选择CSF组态")
+    mean_score = predicted_score_sum / unselected_count if unselected_count else 0.0
+    logger.info(
+        "未选择CSF重要性分数统计 - 最小值: %.4f, 最大值: %.4f, 平均值: %.4f",
+        predicted_min_score if predicted_min_score is not None else 0.0,
+        predicted_max_score if predicted_max_score is not None else 0.0,
+        mean_score,
+    )
+
+    logger.info("      组态采样")
+    logger.info("更新重要组态索引")
+    logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
+    logger.info(f"ML预测的重要组态数（在未选择中）：({ml_predicted_count},)")
+    logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
+
+    if new_sampling_CSFs_num <= 0:
+        logger.info("目标新增组态数为0，本轮不新增ML采样组态")
+        ml_sampled_idxs = np.array([], dtype=np.int64)
+        train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
+        train_data_counts.ml_predicted_count = ml_predicted_count
+        train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
+        return (
+            ml_sampled_idxs,
+            verified_important_idxs,
+            y_current_cal_probability,
+            train_data_counts,
+        )
+
+    if ml_predicted_count >= new_sampling_CSFs_num:
+        logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
+        ml_sampled_idxs = _top_candidates_to_indices(positive_candidates)
+        logger.info(
+            f"从{ml_predicted_count}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个"
+        )
+    elif ml_predicted_count > 0:
+        logger.info(f"ML预测组态不足，全部采用{ml_predicted_count}个")
+        ml_sampled_idxs = np.concatenate(positive_chunks).astype(np.int64, copy=False)
+    else:
+        logger.warning(
+            "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
+            new_sampling_CSFs_num,
+        )
+        ml_sampled_idxs = _top_candidates_to_indices(fallback_candidates)
+        selected_scores = [score for score, _, _ in sorted(fallback_candidates, reverse=True)]
+        logger.info(
+            "回退采样完成：选取了 %s 个组合分数最高的未选择组态，最高分=%.4f，最低入选分=%.4f",
+            len(ml_sampled_idxs),
+            selected_scores[0] if selected_scores else 0.0,
+            selected_scores[-1] if selected_scores else 0.0,
+        )
+
+    train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
+    train_data_counts.ml_predicted_count = ml_predicted_count
+    train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
 
     return (
         ml_sampled_idxs,
