@@ -81,6 +81,22 @@ def test_ann_classifier_cnn_fit_and_batch_predict() -> None:
     assert np.all(np.isfinite(proba))
 
 
+def test_ann_classifier_iter_predict_proba_batches_matches_batch_prediction() -> None:
+    rng = np.random.default_rng(17)
+    x = rng.normal(size=(13, 18)).astype(np.float32)
+    classifier = ANNClassifier(
+        input_size=18,
+        output_size=2,
+        model_architecture="cnn",
+        random_seed=17,
+    )
+
+    expected = classifier.predict_proba_batch(x, batch_size=5)
+    actual = np.vstack(list(classifier.iter_predict_proba_batches([x[:5], x[5:9], x[9:]])))
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-6, atol=1e-6)
+
+
 def test_ann_classifier_cnn_save_and_load(tmp_path) -> None:
     rng = np.random.default_rng(13)
     x = rng.normal(size=(10, 18)).astype(np.float32)

@@ -7,6 +7,7 @@
 """
 
 import logging
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Literal
 
@@ -728,6 +729,22 @@ class CSFClassifier:
                 all_proba.append(outputs.cpu().numpy())
 
         return np.vstack(all_proba) if len(all_proba) > 1 else all_proba[0]
+
+    def iter_predict_proba_batches(
+        self, batches: Iterable[np.ndarray]
+    ) -> Iterator[np.ndarray]:
+        """Yield probability predictions for pre-materialized NumPy batches."""
+        self.model.eval()
+
+        with torch.no_grad():
+            for batch_X in batches:
+                X_tensor = torch.tensor(batch_X, dtype=torch.float32).to(self.device)
+                model_outputs = self.model(X_tensor)
+                if self.multi_label:
+                    outputs = torch.sigmoid(model_outputs)
+                else:
+                    outputs = torch.softmax(model_outputs, dim=1)
+                yield outputs.cpu().numpy()
 
     def predict_batch(
         self, X: np.ndarray, batch_size: int = 1024, threshold: float = 0.5
