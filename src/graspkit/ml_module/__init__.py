@@ -12,6 +12,7 @@ from .ml_initializer import (
     check_energy_convergence,
     evaluate_calculation_convergence,
     generate_train_csfs_descriptors,
+    build_labeled_training_array_from_lazy_descriptors,
     generate_regression_descriptors_from_config,
     get_stay_descriptors,
 )
@@ -22,6 +23,7 @@ from .ml_trainer import (
     evaluate_model,
     handle_calculation_error,
     predict_model,
+    predict_model_streaming,
 )
 
 from .ml_results_analyzer import (
@@ -31,6 +33,7 @@ from .ml_results_analyzer import (
     save_and_plot_results,
     ml_results_statistics
 )
+from .streaming_descriptors import validate_csf_desc_coverage_streaming
 
 from .ml_regression_model import ANNRegressor
 from .ml_regression_trainer import (
@@ -56,15 +59,18 @@ __all__ = [
     "check_energy_convergence",
     "evaluate_calculation_convergence",
     "generate_train_csfs_descriptors",
+    "build_labeled_training_array_from_lazy_descriptors",
     "generate_regression_descriptors_from_config",
     "get_stay_descriptors",
     # ml_trainer
     "train_model",
     "evaluate_model",
     "predict_model",
+    "predict_model_streaming",
     "handle_calculation_error",
     # ml_results_analyzer
     "validate_csf_desc_coverage",
+    "validate_csf_desc_coverage_streaming",
     "select_csfs_for_coverage",
     "save_iteration_results",
     "save_and_plot_results",
