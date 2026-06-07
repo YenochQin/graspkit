@@ -19,6 +19,7 @@ from graspkit.ml_module.streaming_descriptors import (
 class ForbidFullCollectLazyFrame:
     def __init__(self, lazy_frame: pl.LazyFrame) -> None:
         self._lazy_frame = lazy_frame
+        self.with_row_index_calls = 0
 
     def collect(self) -> pl.DataFrame:
         raise AssertionError("full collect forbidden")
@@ -27,6 +28,7 @@ class ForbidFullCollectLazyFrame:
         return self._lazy_frame.collect_schema()
 
     def with_row_index(self, *args: object, **kwargs: object) -> pl.LazyFrame:
+        self.with_row_index_calls += 1
         return self._lazy_frame.with_row_index(*args, **kwargs)
 
 
@@ -227,3 +229,110 @@ def test_build_labeled_training_array_from_lazy_descriptors_does_not_full_collec
     )
 
     assert result.shape == (3, 5)
+
+
+def test_validate_csf_desc_coverage_streaming_adds_first_rows_covering_missing_orbitals() -> None:
+    from graspkit.ml_module.streaming_descriptors import (
+        validate_csf_desc_coverage_streaming,
+    )
+
+    frame = pl.DataFrame(
+        {
+            "col_0": [1, 0, 0, 0],
+            "col_1": [0, 0, 0, 0],
+            "col_2": [0, 0, 0, 0],
+            "col_3": [0, 1, 0, 0],
+            "col_4": [0, 0, 0, 0],
+            "col_5": [0, 0, 0, 0],
+            "col_6": [0, 0, 2, 0],
+            "col_7": [0, 0, 0, 0],
+            "col_8": [0, 0, 0, 0],
+        }
+    ).lazy()
+
+    final = validate_csf_desc_coverage_streaming(
+        final_sampled_idxs=np.array([0], dtype=np.int64),
+        raw_csfs_descriptors=frame,
+        total_csfs_count=4,
+        batch_size=2,
+    )
+
+    np.testing.assert_array_equal(final, np.array([0, 1, 2], dtype=np.int64))
+
+
+def test_validate_csf_desc_coverage_streaming_returns_original_selection_when_selected_covered() -> None:
+    from graspkit.ml_module.streaming_descriptors import (
+        validate_csf_desc_coverage_streaming,
+    )
+
+    frame = ForbidFullCollectLazyFrame(
+        pl.DataFrame(
+            {
+                "col_0": [1, 0, 0, 0, 0],
+                "col_1": [0, 0, 0, 0, 0],
+                "col_2": [0, 0, 0, 0, 0],
+                "col_3": [0, 1, 0, 0, 0],
+                "col_4": [0, 0, 0, 0, 0],
+                "col_5": [0, 0, 0, 0, 0],
+            }
+        ).lazy()
+    )
+
+    final = validate_csf_desc_coverage_streaming(
+        final_sampled_idxs=np.array([1, 0], dtype=np.int64),
+        raw_csfs_descriptors=frame,  # type: ignore[arg-type]
+        total_csfs_count=5,
+        batch_size=2,
+    )
+
+    np.testing.assert_array_equal(final, np.array([1, 0], dtype=np.int64))
+    assert frame.with_row_index_calls == 1
+
+
+def test_validate_csf_desc_coverage_streaming_rejects_empty_selection() -> None:
+    from graspkit.ml_module.streaming_descriptors import (
+        validate_csf_desc_coverage_streaming,
+    )
+
+    frame = pl.DataFrame(
+        {
+            "col_0": [1],
+            "col_1": [0],
+            "col_2": [0],
+        }
+    ).lazy()
+
+    with pytest.raises(RuntimeError, match="final_sampled_idxs"):
+        validate_csf_desc_coverage_streaming(
+            final_sampled_idxs=np.array([], dtype=np.int64),
+            raw_csfs_descriptors=frame,
+            total_csfs_count=1,
+        )
+
+
+def test_validate_csf_desc_coverage_streaming_scans_candidates_across_bounded_chunks() -> None:
+    from graspkit.ml_module.streaming_descriptors import (
+        validate_csf_desc_coverage_streaming,
+    )
+
+    frame = ForbidFullCollectLazyFrame(
+        pl.DataFrame(
+            {
+                "col_0": [1, 0, 0, 0, 0, 0, 0, 0],
+                "col_1": [0, 0, 0, 0, 0, 0, 0, 0],
+                "col_2": [0, 0, 0, 0, 0, 0, 0, 0],
+                "col_3": [0, 0, 0, 0, 0, 1, 1, 0],
+                "col_4": [0, 0, 0, 0, 0, 0, 0, 0],
+                "col_5": [0, 0, 0, 0, 0, 0, 0, 0],
+            }
+        ).lazy()
+    )
+
+    final = validate_csf_desc_coverage_streaming(
+        final_sampled_idxs=np.array([0], dtype=np.int64),
+        raw_csfs_descriptors=frame,  # type: ignore[arg-type]
+        total_csfs_count=8,
+        batch_size=2,
+    )
+
+    np.testing.assert_array_equal(final, np.array([0, 5], dtype=np.int64))
