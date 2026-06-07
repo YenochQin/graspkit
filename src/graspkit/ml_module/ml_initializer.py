@@ -24,6 +24,7 @@ from ..utils import (
     MixCoefficientData,
     get_environment_config,
 )
+from .streaming_descriptors import iter_indexed_descriptor_batches
 
 
 def setup_directories(root_path: Path) -> None:
@@ -957,6 +958,43 @@ def ci_idx_data_processor(
     )
 
     return correct_levels_ci_squared
+
+
+def build_labeled_training_array_from_lazy_descriptors(
+    raw_csfs_descriptors: pl.LazyFrame,
+    accumulated_idxs: NDArray[np.int64],
+    accumulated_ci_squared: NDArray[np.float64],
+    cutoff_value: float,
+    batch_size: int = 100_000,
+) -> np.ndarray:
+    """Build labeled training rows from a lazy descriptor source.
+
+    Only rows referenced by ``accumulated_idxs`` are materialized. Missing or
+    out-of-range index validation is delegated to ``iter_indexed_descriptor_batches``.
+    """
+    important_csfs_mask = (accumulated_ci_squared >= cutoff_value).T
+
+    if len(accumulated_idxs) == 0:
+        feature_count = len(raw_csfs_descriptors.collect_schema().names())
+        label_count = accumulated_ci_squared.shape[0]
+        return np.empty((0, feature_count + label_count), dtype=np.float32)
+
+    labeled_batches: list[np.ndarray] = []
+    row_offset = 0
+    for _, descriptor_batch in iter_indexed_descriptor_batches(
+        raw_csfs_descriptors,
+        indices=accumulated_idxs,
+        batch_size=batch_size,
+    ):
+        next_offset = row_offset + descriptor_batch.shape[0]
+        label_batch = important_csfs_mask[row_offset:next_offset].astype(
+            descriptor_batch.dtype,
+            copy=False,
+        )
+        labeled_batches.append(np.column_stack([descriptor_batch, label_batch]))
+        row_offset = next_offset
+
+    return np.vstack(labeled_batches)
 
 
 def generate_train_csfs_descriptors(
