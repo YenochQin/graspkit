@@ -15,11 +15,14 @@ from .transition_data_processor import (
 from .rmix_data_processor import (
     RmixAsfSelection,
     RmixBlockSelection,
+    RmixCiSquaredData,
+    RmixCsfIndexSelection,
     aggregate_ci_squared,
     analyze_rmix_file,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
+    load_rmix_ci_squared,
     select_block_ci_scores,
     sort_ci_scores,
 )
@@ -39,11 +42,14 @@ __all__ = [
     # rmix_data_processor
     "RmixAsfSelection",
     "RmixBlockSelection",
+    "RmixCiSquaredData",
+    "RmixCsfIndexSelection",
     "aggregate_ci_squared",
     "analyze_rmix_file",
     "ci_squared",
     "filter_ci_scores_by_threshold",
     "filter_sorted_ci_scores_by_cumulative",
+    "load_rmix_ci_squared",
     "select_block_ci_scores",
     "sort_ci_scores",
 ]
