@@ -206,6 +206,8 @@ def aggregate_ci_squared(
     NDArray[np.float64]
         每个 CSF 对应的聚合后 CI 系数平方。
     """
+    # TODO: 该跨 ASF 聚合函数仅为旧 CSFs_processor 兼容逻辑保留；
+    # 后续应迁移到基于 RmixCiSquaredData 的新接口后移除。
     ci_array = _as_1d_or_2d_float_array(ci_squared_values, "ci_squared_values")
     if ci_array.ndim == 1:
         return ci_array.astype(np.float64, copy=False)
