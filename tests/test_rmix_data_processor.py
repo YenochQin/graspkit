@@ -265,3 +265,25 @@ def test_analyze_rmix_file_loads_data_and_selects_each_block(
     np.testing.assert_array_equal(result[0].selected_csf_indices, np.array([0]))
     assert result[1].block_index == 1
     np.testing.assert_array_equal(result[1].selected_csf_indices, np.array([1]))
+
+
+def test_rmix_processor_api_is_exported_from_grasp_data_extractor_package() -> None:
+    from graspkit.grasp_data_extractor import (
+        RmixBlockSelection,
+        aggregate_ci_squared,
+        analyze_rmix_file,
+        ci_squared,
+        filter_ci_scores_by_threshold,
+        filter_sorted_ci_scores_by_cumulative,
+        select_block_ci_scores,
+        sort_ci_scores,
+    )
+
+    assert RmixBlockSelection.__name__ == "RmixBlockSelection"
+    assert callable(aggregate_ci_squared)
+    assert callable(analyze_rmix_file)
+    assert callable(ci_squared)
+    assert callable(filter_ci_scores_by_threshold)
+    assert callable(filter_sorted_ci_scores_by_cumulative)
+    assert callable(select_block_ci_scores)
+    assert callable(sort_ci_scores)
