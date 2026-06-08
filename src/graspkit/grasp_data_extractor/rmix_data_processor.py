@@ -1,4 +1,5 @@
 # -*- encoding: utf-8 -*-
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -12,15 +13,24 @@ AggregationMethod = Literal["sum", "max", "mean"]
 
 
 @dataclass(frozen=True)
-class RmixBlockSelection:
-    """CI-square selection result for one rmix symmetry block."""
+class RmixAsfSelection:
+    """CI-square selection result for one ASF in an rmix symmetry block."""
 
-    block_index: int
+    asf_index: int
     selected_csf_indices: NDArray[np.int64]
     scores: NDArray[np.float64]
     selected_scores: NDArray[np.float64]
     cumulative_scores: NDArray[np.float64]
     selected_cumulative_scores: NDArray[np.float64]
+
+
+@dataclass(frozen=True)
+class RmixBlockSelection:
+    """CI-square selection result for selected ASFs in one rmix block."""
+
+    block_index: int
+    selected_asf_indices: NDArray[np.int64]
+    asf_selections: list[RmixAsfSelection]
     ci_squared: NDArray[np.float64]
 
 
@@ -128,20 +138,40 @@ def _normalized_cumulative(sorted_scores: NDArray[np.float64]) -> NDArray[np.flo
     return np.cumsum(sorted_scores) / total
 
 
-def select_block_ci_scores(
+def _normalize_asf_indices(
     coefficients: NDArray[np.float64],
-    block_index: int = 0,
-    aggregation: AggregationMethod = "sum",
+    select_asfs: Sequence[int] | NDArray[np.integer] | None,
+) -> NDArray[np.int64]:
+    if select_asfs is None or len(select_asfs) == 0:
+        requested_asfs = np.array([], dtype=np.int64)
+    else:
+        requested_asfs = np.asarray(select_asfs, dtype=np.int64)
+
+    if coefficients.ndim == 1:
+        if requested_asfs.size != 0 and (
+            requested_asfs.size != 1 or int(requested_asfs[0]) != 0
+        ):
+            raise ValueError("1D coefficient arrays only support ASF index 0")
+        return np.array([0], dtype=np.int64)
+
+    if requested_asfs.size == 0:
+        return np.arange(coefficients.shape[0], dtype=np.int64)
+
+    if requested_asfs.ndim != 1:
+        raise ValueError("select_asfs must be a 1D sequence of ASF indices")
+    if np.any(requested_asfs < 0) or np.any(requested_asfs >= coefficients.shape[0]):
+        raise ValueError("select_asfs contains an ASF index outside this block")
+    return requested_asfs
+
+
+def _select_single_asf_ci_scores(
+    scores: NDArray[np.float64],
+    asf_index: int,
     score_threshold: float | None = None,
     cumulative_threshold: float | None = None,
     top_k: int | None = None,
     top_ratio: float | None = None,
-) -> RmixBlockSelection:
-    """Analyze and select CSFs from one rmix coefficient block."""
-    _validate_top_limits(top_k, top_ratio)
-
-    block_ci_squared = ci_squared(coefficients)
-    scores = aggregate_ci_squared(block_ci_squared, method=aggregation)
+) -> RmixAsfSelection:
     sorted_indices, sorted_scores = sort_ci_scores(scores)
     cumulative_scores = _normalized_cumulative(sorted_scores)
 
@@ -184,20 +214,63 @@ def select_block_ci_scores(
     selected_scores = sorted_scores[keep_positions]
     selected_cumulative_scores = cumulative_scores[keep_positions]
 
-    return RmixBlockSelection(
-        block_index=block_index,
+    return RmixAsfSelection(
+        asf_index=asf_index,
         selected_csf_indices=selected_indices,
         scores=sorted_scores,
         selected_scores=selected_scores,
         cumulative_scores=cumulative_scores,
         selected_cumulative_scores=selected_cumulative_scores,
+    )
+
+
+def select_block_ci_scores(
+    coefficients: NDArray[np.float64],
+    block_index: int = 0,
+    select_asfs: Sequence[int] | NDArray[np.integer] | None = None,
+    score_threshold: float | None = None,
+    cumulative_threshold: float | None = None,
+    top_k: int | None = None,
+    top_ratio: float | None = None,
+) -> RmixBlockSelection:
+    """Analyze and select CSFs for each selected ASF in one rmix block."""
+    _validate_top_limits(top_k, top_ratio)
+
+    coefficient_array = _as_1d_or_2d_float_array(coefficients, "coefficients")
+    selected_asf_indices = _normalize_asf_indices(coefficient_array, select_asfs)
+    if coefficient_array.ndim == 1:
+        selected_coefficients = coefficient_array[np.newaxis, :]
+    else:
+        selected_coefficients = coefficient_array[selected_asf_indices]
+    block_ci_squared = ci_squared(selected_coefficients)
+
+    asf_selections = [
+        _select_single_asf_ci_scores(
+            scores=asf_scores,
+            asf_index=int(asf_index),
+            score_threshold=score_threshold,
+            cumulative_threshold=cumulative_threshold,
+            top_k=top_k,
+            top_ratio=top_ratio,
+        )
+        for asf_index, asf_scores in zip(
+            selected_asf_indices,
+            block_ci_squared,
+            strict=True,
+        )
+    ]
+
+    return RmixBlockSelection(
+        block_index=block_index,
+        selected_asf_indices=selected_asf_indices,
+        asf_selections=asf_selections,
         ci_squared=block_ci_squared,
     )
 
 
 def analyze_rmix_file(
     rmix_path: str | Path,
-    aggregation: AggregationMethod = "sum",
+    select_asfs: Sequence[Sequence[int] | NDArray[np.integer]] | None = None,
     score_threshold: float | None = None,
     cumulative_threshold: float | None = None,
     top_k: int | None = None,
@@ -205,11 +278,17 @@ def analyze_rmix_file(
 ) -> list[RmixBlockSelection]:
     """Load an rmix file and analyze CI-square scores for every block."""
     mix_data = MixCoefLoader(Path(rmix_path)).load()
+    if select_asfs is not None and len(select_asfs) not in (0, mix_data.block_num):
+        raise ValueError("select_asfs length must match the number of rmix blocks")
     return [
         select_block_ci_scores(
             coefficients=block_coefficients,
             block_index=block_index,
-            aggregation=aggregation,
+            select_asfs=(
+                select_asfs[block_index]
+                if select_asfs is not None and len(select_asfs) > 0
+                else None
+            ),
             score_threshold=score_threshold,
             cumulative_threshold=cumulative_threshold,
             top_k=top_k,
