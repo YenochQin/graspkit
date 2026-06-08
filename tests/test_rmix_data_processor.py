@@ -14,6 +14,11 @@ from graspkit.grasp_data_extractor.rmix_data_processor import (
     select_block_ci_scores,
     sort_ci_scores,
 )
+from graspkit.CSFs_processor.CSFs_choosing import (
+    CSFs_sort_by_mix_coefficient,
+    batch_asfs_mix_square_above_threshold,
+    single_asf_mix_square_above_threshold,
+)
 from graspkit.utils.data_modules import MixCoefficientData
 
 
@@ -287,3 +292,52 @@ def test_rmix_processor_api_is_exported_from_grasp_data_extractor_package() -> N
     assert callable(filter_sorted_ci_scores_by_cumulative)
     assert callable(select_block_ci_scores)
     assert callable(sort_ci_scores)
+
+
+def test_legacy_single_asf_threshold_keeps_existing_tuple_index_shape() -> None:
+    coefficients = np.array([0.5, -0.2, 0.1])
+
+    result = single_asf_mix_square_above_threshold(coefficients, threshold=0.04)
+
+    assert result == [(0,), (1,)]
+
+
+def test_legacy_batch_threshold_returns_unique_indices_per_block() -> None:
+    mix_data = MixCoefficientData(
+        block_num=1,
+        block_idx_list=[0],
+        block_CSFs_nums=[3],
+        block_energy_count_list=[2],
+        level_J_value_list=["0"],
+        parity_list=[1],
+        block_levels_idx_list=[np.array([0, 1])],
+        block_energy_list=[0.0],
+        block_level_energy_list=[np.array([0.0, 0.1])],
+        mix_coefficient_list=[
+            np.array(
+                [
+                    [0.5, 0.1, 0.0],
+                    [0.0, 0.3, 0.1],
+                ]
+            )
+        ],
+        level_list=[0.0, 0.1],
+    )
+
+    result = batch_asfs_mix_square_above_threshold(mix_data, threshold=0.04)
+
+    np.testing.assert_array_equal(result[0], np.array([0, 1]))
+
+
+def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> None:
+    csfs_block = [["csf0"], ["csf1"], ["csf2"]]
+    coefficients = np.array(
+        [
+            [0.5, 0.1, 0.2],
+            [0.0, 0.4, 0.1],
+        ]
+    )
+
+    result = CSFs_sort_by_mix_coefficient(csfs_block, coefficients, threshold=0.2)
+
+    assert result == [["csf0"], ["csf1"], ["csf2"]]
