@@ -480,6 +480,8 @@ def CSFs_sort_by_mix_coefficient(
     if len(CSFs_block) != next(iter(coeff_lengths)):
         raise ValueError("mix_coefficients长度必须与CSFs_block匹配")
 
+    # TODO: 该旧排序逻辑仍依赖跨 ASF 聚合；后续应改为使用
+    # RmixCiSquaredData/load_rmix_ci_squared 风格的新接口提供 CSF 索引。
     combined_coeff = aggregate_ci_squared(ci_squared(np.asarray(mix_coefficients)))
     sorted_idxs, _ = sort_ci_scores(combined_coeff)
 
