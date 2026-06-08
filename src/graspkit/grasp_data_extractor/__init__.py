@@ -13,6 +13,7 @@ from .transition_data_processor import (
     transition_data_level_location,
 )
 from .rmix_data_processor import (
+    RmixAsfSelection,
     RmixBlockSelection,
     aggregate_ci_squared,
     analyze_rmix_file,
@@ -36,6 +37,7 @@ __all__ = [
     "transition_data_level_location",
     "level_transition_data_processing",
     # rmix_data_processor
+    "RmixAsfSelection",
     "RmixBlockSelection",
     "aggregate_ci_squared",
     "analyze_rmix_file",

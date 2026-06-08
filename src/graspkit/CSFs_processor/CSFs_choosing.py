@@ -13,9 +13,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..grasp_data_extractor.rmix_data_processor import (
+    aggregate_ci_squared,
     ci_squared,
     filter_ci_scores_by_threshold,
-    select_block_ci_scores,
+    sort_ci_scores,
 )
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
@@ -479,11 +480,14 @@ def CSFs_sort_by_mix_coefficient(
     if len(CSFs_block) != next(iter(coeff_lengths)):
         raise ValueError("mix_coefficients长度必须与CSFs_block匹配")
 
-    selection = select_block_ci_scores(
-        coefficients=np.asarray(mix_coefficients),
-        score_threshold=threshold**2 if threshold is not None else None,
-    )
-    return [CSFs_block[int(idx)] for idx in selection.selected_csf_indices]
+    combined_coeff = aggregate_ci_squared(ci_squared(np.asarray(mix_coefficients)))
+    sorted_idxs, _ = sort_ci_scores(combined_coeff)
+
+    if threshold is not None:
+        threshold_idxs = filter_ci_scores_by_threshold(combined_coeff, threshold**2)
+        sorted_idxs = sorted_idxs[np.isin(sorted_idxs, threshold_idxs)]
+
+    return [CSFs_block[int(idx)] for idx in sorted_idxs]
 
 
 #######################################################################
