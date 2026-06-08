@@ -2,10 +2,12 @@ import numpy as np
 import pytest
 
 from graspkit.grasp_data_extractor.rmix_data_processor import (
+    RmixBlockSelection,
     aggregate_ci_squared,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
+    select_block_ci_scores,
     sort_ci_scores,
 )
 
@@ -135,3 +137,87 @@ def test_filter_sorted_ci_scores_by_cumulative_returns_empty_for_zero_total() ->
     )
 
     np.testing.assert_array_equal(result, np.array([], dtype=np.int64))
+
+
+def test_select_block_ci_scores_returns_sorted_sum_scores_by_default() -> None:
+    coefficients = np.array(
+        [
+            [0.5, 0.1, 0.2],
+            [0.0, 0.4, 0.1],
+        ]
+    )
+
+    result = select_block_ci_scores(coefficients, block_index=2)
+
+    assert isinstance(result, RmixBlockSelection)
+    assert result.block_index == 2
+    np.testing.assert_array_equal(result.selected_csf_indices, np.array([0, 1, 2]))
+    np.testing.assert_allclose(result.scores, np.array([0.25, 0.17, 0.05]))
+    np.testing.assert_allclose(result.selected_scores, np.array([0.25, 0.17, 0.05]))
+    np.testing.assert_allclose(
+        result.selected_cumulative_scores,
+        np.array([0.25 / 0.47, 0.42 / 0.47, 1.0]),
+    )
+    np.testing.assert_allclose(
+        result.ci_squared,
+        np.array([[0.25, 0.01, 0.04], [0.0, 0.16, 0.01]]),
+    )
+
+
+def test_select_block_ci_scores_supports_max_aggregation() -> None:
+    coefficients = np.array(
+        [
+            [0.5, 0.1, 0.2],
+            [0.0, 0.4, 0.1],
+        ]
+    )
+
+    result = select_block_ci_scores(coefficients, aggregation="max")
+
+    np.testing.assert_array_equal(result.selected_csf_indices, np.array([0, 1, 2]))
+    np.testing.assert_allclose(result.selected_scores, np.array([0.25, 0.16, 0.04]))
+
+
+def test_select_block_ci_scores_combines_threshold_and_cumulative_limits() -> None:
+    coefficients = np.array(
+        [
+            [0.5, 0.1, 0.2],
+            [0.0, 0.4, 0.1],
+        ]
+    )
+
+    result = select_block_ci_scores(
+        coefficients,
+        score_threshold=0.1,
+        cumulative_threshold=0.9,
+    )
+
+    np.testing.assert_array_equal(result.selected_csf_indices, np.array([0, 1]))
+    np.testing.assert_allclose(result.selected_scores, np.array([0.25, 0.17]))
+
+
+def test_select_block_ci_scores_supports_top_k() -> None:
+    coefficients = np.array([[0.5, 0.1, 0.2]])
+
+    result = select_block_ci_scores(coefficients, top_k=2)
+
+    np.testing.assert_array_equal(result.selected_csf_indices, np.array([0, 2]))
+    np.testing.assert_allclose(result.selected_scores, np.array([0.25, 0.04]))
+
+
+def test_select_block_ci_scores_supports_top_ratio_with_ceiling() -> None:
+    coefficients = np.array([[0.5, 0.1, 0.2]])
+
+    result = select_block_ci_scores(coefficients, top_ratio=0.34)
+
+    np.testing.assert_array_equal(result.selected_csf_indices, np.array([0, 2]))
+
+
+def test_select_block_ci_scores_rejects_invalid_top_k() -> None:
+    with pytest.raises(ValueError, match="top_k must be positive"):
+        select_block_ci_scores(np.array([[0.5]]), top_k=0)
+
+
+def test_select_block_ci_scores_rejects_invalid_top_ratio() -> None:
+    with pytest.raises(ValueError, match="top_ratio must be"):
+        select_block_ci_scores(np.array([[0.5]]), top_ratio=1.2)
