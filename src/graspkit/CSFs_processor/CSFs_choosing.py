@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 import numpy as np
 from numpy.typing import NDArray
 
+from ..grasp_data_extractor.rmix_data_processor import (
+    ci_squared,
+    filter_ci_scores_by_threshold,
+    select_block_ci_scores,
+)
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
 
@@ -72,21 +77,21 @@ def single_asf_mix_square_above_threshold(
     if asf_mix_data_array.ndim != 1:
         raise ValueError("输入数组必须是一维的")
 
-    # 找出平方值超过阈值的索引
-    idxs = np.where(np.square(asf_mix_data_array) > threshold)[0]
+    squared_scores = ci_squared(asf_mix_data_array)
+    idxs = filter_ci_scores_by_threshold(squared_scores, threshold)
 
     # 如果没有满足条件的元素，返回空列表
     if len(idxs) == 0:
         return []
 
     # 获取对应的值
-    values = asf_mix_data_array[idxs]
+    values = np.asarray(asf_mix_data_array)[idxs]
 
     # 按绝对值降序排序索引
     sorted_idxs = idxs[np.argsort(-np.abs(values))]
 
     # 返回索引元组列表
-    return [(idx,) for idx in sorted_idxs]
+    return [(int(idx),) for idx in sorted_idxs]
 
 
 # 测试使用新的流程
@@ -138,11 +143,15 @@ def batch_asfs_mix_square_above_threshold(
         # 获取当前块的数据（假设mix_coefficient_list[block]是2D数组：层级×系数）
         block_data = asfs_mix_data.mix_coefficient_list[block][asfs_position[block]]
 
-        # 计算平方并比较阈值
-        squared_above_threshold = block_data ** 2 > threshold
+        squared_scores = ci_squared(block_data)
+        score_matrix = (
+            squared_scores
+            if squared_scores.ndim == 2
+            else np.atleast_2d(squared_scores)
+        )
 
         # 按列求逻辑或：只要任意层级超过阈值，就保留该系数索引
-        above_threshold_mask = np.any(squared_above_threshold, axis=0)
+        above_threshold_mask = np.any(score_matrix > threshold, axis=0)
 
         # 获取超过阈值的系数索引
         result[block] = np.where(above_threshold_mask)[0]
@@ -470,23 +479,11 @@ def CSFs_sort_by_mix_coefficient(
     if len(CSFs_block) != next(iter(coeff_lengths)):
         raise ValueError("mix_coefficients长度必须与CSFs_block匹配")
 
-    # 计算所有系数数组的对应元素和
-    combined_coeff = np.sum([np.square(coeff) for coeff in mix_coefficients], axis=0)
-
-    # 使用numpy的argsort进行排序（降序）
-    sorted_idxs = np.argsort(-combined_coeff)
-
-    # 根据threshold参数决定返回值
-    if threshold is not None:
-        # 找出组合系数大于阈值的原始索引
-        threshold_idxs = sorted_idxs[combined_coeff[sorted_idxs] > threshold**2]
-    else:
-        threshold_idxs = sorted_idxs
-
-    # 构建排序后的CSF块
-    sorted_csf_block: list[list[str]] = [CSFs_block[idx] for idx in threshold_idxs]
-
-    return sorted_csf_block
+    selection = select_block_ci_scores(
+        coefficients=np.asarray(mix_coefficients),
+        score_threshold=threshold**2 if threshold is not None else None,
+    )
+    return [CSFs_block[int(idx)] for idx in selection.selected_csf_indices]
 
 
 #######################################################################
