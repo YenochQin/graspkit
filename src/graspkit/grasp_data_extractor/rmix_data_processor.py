@@ -34,6 +34,83 @@ class RmixBlockSelection:
     ci_squared: NDArray[np.float64]
 
 
+@dataclass(frozen=True)
+class RmixCsfIndexSelection:
+    """Selected CSF indices grouped by rmix block and selected ASF."""
+
+    block_indices: list[int]
+    selected_asfs: list[list[int]]
+    csf_indices_list: list[list[list[int]]]
+
+
+@dataclass(frozen=True)
+class RmixCiSquaredData:
+    """Squared CI coefficients for selected ASFs grouped by rmix block."""
+
+    block_indices: list[int]
+    selected_asfs: list[list[int]]
+    ci_squared_list: list[NDArray[np.float64]]
+
+    def sort_ci_scores(self, descending: bool = True) -> RmixCsfIndexSelection:
+        """Return CSF indices sorted by CI-square score for each selected ASF."""
+        return RmixCsfIndexSelection(
+            block_indices=self.block_indices,
+            selected_asfs=self.selected_asfs,
+            csf_indices_list=[
+                [
+                    sort_ci_scores(asf_scores, descending=descending)[0].tolist()
+                    for asf_scores in block_ci_squared
+                ]
+                for block_ci_squared in self.ci_squared_list
+            ],
+        )
+
+    def filter_ci_scores_by_threshold(
+        self,
+        threshold: float,
+        inclusive: bool = False,
+    ) -> RmixCsfIndexSelection:
+        """Return CSF indices whose CI-square scores pass a direct cutoff."""
+        return RmixCsfIndexSelection(
+            block_indices=self.block_indices,
+            selected_asfs=self.selected_asfs,
+            csf_indices_list=[
+                [
+                    filter_ci_scores_by_threshold(
+                        asf_scores,
+                        threshold=threshold,
+                        inclusive=inclusive,
+                    ).tolist()
+                    for asf_scores in block_ci_squared
+                ]
+                for block_ci_squared in self.ci_squared_list
+            ],
+        )
+
+    def filter_sorted_ci_scores_by_cumulative(
+        self,
+        cumulative_threshold: float,
+    ) -> RmixCsfIndexSelection:
+        """Return sorted CSF index prefixes reaching cumulative contribution."""
+        block_csf_indices: list[list[list[int]]] = []
+        for block_ci_squared in self.ci_squared_list:
+            block_indices: list[list[int]] = []
+            for asf_scores in block_ci_squared:
+                sorted_indices, sorted_scores = sort_ci_scores(asf_scores)
+                cumulative_positions = filter_sorted_ci_scores_by_cumulative(
+                    sorted_scores,
+                    cumulative_threshold=cumulative_threshold,
+                )
+                block_indices.append(sorted_indices[cumulative_positions].tolist())
+            block_csf_indices.append(block_indices)
+
+        return RmixCsfIndexSelection(
+            block_indices=self.block_indices,
+            selected_asfs=self.selected_asfs,
+            csf_indices_list=block_csf_indices,
+        )
+
+
 def _as_1d_or_2d_float_array(
     values: NDArray[np.float64],
     name: str,
@@ -268,31 +345,46 @@ def select_block_ci_scores(
     )
 
 
-def analyze_rmix_file(
+def load_rmix_ci_squared(
     rmix_path: str | Path,
-    select_asfs: Sequence[Sequence[int] | NDArray[np.integer]] | None = None,
-    score_threshold: float | None = None,
-    cumulative_threshold: float | None = None,
-    top_k: int | None = None,
-    top_ratio: float | None = None,
-) -> list[RmixBlockSelection]:
-    """Load an rmix file and analyze CI-square scores for every block."""
+    select_asfs: list[list[int]] | None = None,
+) -> RmixCiSquaredData:
+    """Load an rmix file and return squared CI coefficients for selected ASFs."""
     mix_data = MixCoefLoader(Path(rmix_path)).load()
     if select_asfs is not None and len(select_asfs) not in (0, mix_data.block_num):
         raise ValueError("select_asfs length must match the number of rmix blocks")
-    return [
-        select_block_ci_scores(
-            coefficients=block_coefficients,
-            block_index=block_index,
-            select_asfs=(
-                select_asfs[block_index]
-                if select_asfs is not None and len(select_asfs) > 0
-                else None
-            ),
-            score_threshold=score_threshold,
-            cumulative_threshold=cumulative_threshold,
-            top_k=top_k,
-            top_ratio=top_ratio,
+
+    selected_asfs: list[list[int]] = []
+    ci_squared_list: list[NDArray[np.float64]] = []
+    for block_index, block_coefficients in enumerate(mix_data.mix_coefficient_list):
+        coefficient_array = _as_1d_or_2d_float_array(block_coefficients, "coefficients")
+        block_select_asfs = (
+            select_asfs[block_index]
+            if select_asfs is not None and len(select_asfs) > 0
+            else None
         )
-        for block_index, block_coefficients in enumerate(mix_data.mix_coefficient_list)
-    ]
+        selected_asf_indices = _normalize_asf_indices(
+            coefficient_array,
+            block_select_asfs,
+        )
+        selected_coefficients = (
+            coefficient_array[np.newaxis, :]
+            if coefficient_array.ndim == 1
+            else coefficient_array[selected_asf_indices]
+        )
+        selected_asfs.append(selected_asf_indices.tolist())
+        ci_squared_list.append(ci_squared(selected_coefficients))
+
+    return RmixCiSquaredData(
+        block_indices=list(mix_data.block_idx_list),
+        selected_asfs=selected_asfs,
+        ci_squared_list=ci_squared_list,
+    )
+
+
+def analyze_rmix_file(
+    rmix_path: str | Path,
+    select_asfs: list[list[int]] | None = None,
+) -> RmixCiSquaredData:
+    """Load an rmix file and return squared CI coefficients for selected ASFs."""
+    return load_rmix_ci_squared(rmix_path, select_asfs=select_asfs)
