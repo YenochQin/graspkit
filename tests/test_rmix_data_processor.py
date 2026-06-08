@@ -1,15 +1,20 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+from graspkit.grasp_data_extractor import rmix_data_processor
 from graspkit.grasp_data_extractor.rmix_data_processor import (
     RmixBlockSelection,
     aggregate_ci_squared,
+    analyze_rmix_file,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
     select_block_ci_scores,
     sort_ci_scores,
 )
+from graspkit.utils.data_modules import MixCoefficientData
 
 
 def test_ci_squared_returns_float64_square_for_1d_coefficients() -> None:
@@ -221,3 +226,42 @@ def test_select_block_ci_scores_rejects_invalid_top_k() -> None:
 def test_select_block_ci_scores_rejects_invalid_top_ratio() -> None:
     with pytest.raises(ValueError, match="top_ratio must be"):
         select_block_ci_scores(np.array([[0.5]]), top_ratio=1.2)
+
+
+def test_analyze_rmix_file_loads_data_and_selects_each_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded_paths: list[Path] = []
+
+    class DummyLoader:
+        def __init__(self, file_path: str | Path) -> None:
+            loaded_paths.append(Path(file_path))
+
+        def load(self) -> MixCoefficientData:
+            return MixCoefficientData(
+                block_num=2,
+                block_idx_list=[0, 1],
+                block_CSFs_nums=[3, 2],
+                block_energy_count_list=[1, 1],
+                level_J_value_list=["0", "1"],
+                parity_list=[1, 1],
+                block_levels_idx_list=[np.array([0]), np.array([0])],
+                block_energy_list=[0.0, 0.0],
+                block_level_energy_list=[np.array([0.0]), np.array([0.0])],
+                mix_coefficient_list=[
+                    np.array([[0.5, 0.1, 0.2]]),
+                    np.array([[0.3, 0.4]]),
+                ],
+                level_list=[0.0, 0.1],
+            )
+
+    monkeypatch.setattr(rmix_data_processor, "MixCoefLoader", DummyLoader)
+
+    result = analyze_rmix_file("/tmp/example.m", top_k=1)
+
+    assert loaded_paths == [Path("/tmp/example.m")]
+    assert len(result) == 2
+    assert result[0].block_index == 0
+    np.testing.assert_array_equal(result[0].selected_csf_indices, np.array([0]))
+    assert result[1].block_index == 1
+    np.testing.assert_array_equal(result[1].selected_csf_indices, np.array([1]))

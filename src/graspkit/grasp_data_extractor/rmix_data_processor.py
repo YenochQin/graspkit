@@ -1,9 +1,12 @@
 # -*- encoding: utf-8 -*-
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
+
+from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
 
 AggregationMethod = Literal["sum", "max", "mean"]
 
@@ -190,3 +193,27 @@ def select_block_ci_scores(
         selected_cumulative_scores=selected_cumulative_scores,
         ci_squared=block_ci_squared,
     )
+
+
+def analyze_rmix_file(
+    rmix_path: str | Path,
+    aggregation: AggregationMethod = "sum",
+    score_threshold: float | None = None,
+    cumulative_threshold: float | None = None,
+    top_k: int | None = None,
+    top_ratio: float | None = None,
+) -> list[RmixBlockSelection]:
+    """Load an rmix file and analyze CI-square scores for every block."""
+    mix_data = MixCoefLoader(Path(rmix_path)).load()
+    return [
+        select_block_ci_scores(
+            coefficients=block_coefficients,
+            block_index=block_index,
+            aggregation=aggregation,
+            score_threshold=score_threshold,
+            cumulative_threshold=cumulative_threshold,
+            top_k=top_k,
+            top_ratio=top_ratio,
+        )
+        for block_index, block_coefficients in enumerate(mix_data.mix_coefficient_list)
+    ]
