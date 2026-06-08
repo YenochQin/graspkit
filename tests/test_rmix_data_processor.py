@@ -7,15 +7,11 @@ from graspkit.grasp_data_extractor import rmix_data_processor
 from graspkit.grasp_data_extractor.rmix_data_processor import (
     RmixCiSquaredData,
     RmixCsfIndexSelection,
-    RmixAsfSelection,
-    RmixBlockSelection,
     aggregate_ci_squared,
-    analyze_rmix_file,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
     load_rmix_ci_squared,
-    select_block_ci_scores,
     sort_ci_scores,
 )
 from graspkit.CSFs_processor.CSFs_choosing import (
@@ -153,133 +149,6 @@ def test_filter_sorted_ci_scores_by_cumulative_returns_empty_for_zero_total() ->
     np.testing.assert_array_equal(result, np.array([], dtype=np.int64))
 
 
-def test_select_block_ci_scores_returns_per_asf_scores_without_aggregation() -> None:
-    coefficients = np.array(
-        [
-            [0.5, 0.1, 0.2],
-            [0.0, 0.4, 0.1],
-        ]
-    )
-
-    result = select_block_ci_scores(coefficients, block_index=2)
-
-    assert isinstance(result, RmixBlockSelection)
-    assert result.block_index == 2
-    np.testing.assert_array_equal(result.selected_asf_indices, np.array([0, 1]))
-    np.testing.assert_allclose(
-        result.ci_squared,
-        np.array([[0.25, 0.01, 0.04], [0.0, 0.16, 0.01]]),
-    )
-
-    assert len(result.asf_selections) == 2
-    assert isinstance(result.asf_selections[0], RmixAsfSelection)
-    assert result.asf_selections[0].asf_index == 0
-    np.testing.assert_array_equal(
-        result.asf_selections[0].selected_csf_indices,
-        np.array([0, 2, 1]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[0].scores,
-        np.array([0.25, 0.04, 0.01]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[0].selected_cumulative_scores,
-        np.array([0.25 / 0.3, 0.29 / 0.3, 1.0]),
-    )
-
-
-def test_select_block_ci_scores_supports_select_asfs() -> None:
-    coefficients = np.array(
-        [
-            [0.5, 0.1, 0.2],
-            [0.0, 0.4, 0.1],
-        ]
-    )
-
-    result = select_block_ci_scores(coefficients, select_asfs=[1])
-
-    np.testing.assert_array_equal(result.selected_asf_indices, np.array([1]))
-    np.testing.assert_allclose(result.ci_squared, np.array([[0.0, 0.16, 0.01]]))
-    assert result.asf_selections[0].asf_index == 1
-    np.testing.assert_array_equal(
-        result.asf_selections[0].selected_csf_indices,
-        np.array([1, 2, 0]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[0].scores,
-        np.array([0.16, 0.01, 0.0]),
-    )
-
-
-def test_select_block_ci_scores_combines_threshold_and_cumulative_limits() -> None:
-    coefficients = np.array(
-        [
-            [0.5, 0.1, 0.2],
-            [0.0, 0.4, 0.1],
-        ]
-    )
-
-    result = select_block_ci_scores(
-        coefficients,
-        score_threshold=0.1,
-        cumulative_threshold=0.9,
-    )
-
-    assert len(result.asf_selections) == 2
-    np.testing.assert_array_equal(
-        result.asf_selections[0].selected_csf_indices,
-        np.array([0]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[0].selected_scores,
-        np.array([0.25]),
-    )
-    np.testing.assert_array_equal(
-        result.asf_selections[1].selected_csf_indices,
-        np.array([1]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[1].selected_scores,
-        np.array([0.16]),
-    )
-
-
-def test_select_block_ci_scores_supports_top_k() -> None:
-    coefficients = np.array([[0.5, 0.1, 0.2]])
-
-    result = select_block_ci_scores(coefficients, top_k=2)
-
-    np.testing.assert_array_equal(
-        result.asf_selections[0].selected_csf_indices,
-        np.array([0, 2]),
-    )
-    np.testing.assert_allclose(
-        result.asf_selections[0].selected_scores,
-        np.array([0.25, 0.04]),
-    )
-
-
-def test_select_block_ci_scores_supports_top_ratio_with_ceiling() -> None:
-    coefficients = np.array([[0.5, 0.1, 0.2]])
-
-    result = select_block_ci_scores(coefficients, top_ratio=0.34)
-
-    np.testing.assert_array_equal(
-        result.asf_selections[0].selected_csf_indices,
-        np.array([0, 2]),
-    )
-
-
-def test_select_block_ci_scores_rejects_invalid_top_k() -> None:
-    with pytest.raises(ValueError, match="top_k must be positive"):
-        select_block_ci_scores(np.array([[0.5]]), top_k=0)
-
-
-def test_select_block_ci_scores_rejects_invalid_top_ratio() -> None:
-    with pytest.raises(ValueError, match="top_ratio must be"):
-        select_block_ci_scores(np.array([[0.5]]), top_ratio=1.2)
-
-
 def test_load_rmix_ci_squared_returns_selected_asf_square_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -349,68 +218,35 @@ def test_rmix_ci_squared_data_methods_return_csf_index_selections() -> None:
     assert cumulative_result.csf_indices_list == [[[0, 2], [1]]]
 
 
-def test_analyze_rmix_file_is_lightweight_alias_for_ci_squared_data(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class DummyLoader:
-        def __init__(self, file_path: str | Path) -> None:
-            self.file_path = file_path
-
-        def load(self) -> MixCoefficientData:
-            return MixCoefficientData(
-                block_num=1,
-                block_idx_list=[0],
-                block_CSFs_nums=[2],
-                block_energy_count_list=[1],
-                level_J_value_list=["0"],
-                parity_list=[1],
-                block_levels_idx_list=[np.array([0])],
-                block_energy_list=[0.0],
-                block_level_energy_list=[np.array([0.0])],
-                mix_coefficient_list=[np.array([[0.5, 0.1]])],
-                level_list=[0.0],
-            )
-
-    monkeypatch.setattr(rmix_data_processor, "MixCoefLoader", DummyLoader)
-
-    result = analyze_rmix_file("/tmp/example.m")
-
-    assert isinstance(result, RmixCiSquaredData)
-    assert result.selected_asfs == [[0]]
-    np.testing.assert_allclose(
-        result.ci_squared_list[0],
-        np.array([[0.25, 0.01]]),
-    )
-
-
 def test_rmix_processor_api_is_exported_from_grasp_data_extractor_package() -> None:
     from graspkit.grasp_data_extractor import (
-        RmixAsfSelection,
-        RmixBlockSelection,
         RmixCiSquaredData,
         RmixCsfIndexSelection,
         aggregate_ci_squared,
-        analyze_rmix_file,
         ci_squared,
         filter_ci_scores_by_threshold,
         filter_sorted_ci_scores_by_cumulative,
         load_rmix_ci_squared,
-        select_block_ci_scores,
         sort_ci_scores,
     )
 
-    assert RmixAsfSelection.__name__ == "RmixAsfSelection"
-    assert RmixBlockSelection.__name__ == "RmixBlockSelection"
     assert RmixCiSquaredData.__name__ == "RmixCiSquaredData"
     assert RmixCsfIndexSelection.__name__ == "RmixCsfIndexSelection"
     assert callable(aggregate_ci_squared)
-    assert callable(analyze_rmix_file)
     assert callable(ci_squared)
     assert callable(filter_ci_scores_by_threshold)
     assert callable(filter_sorted_ci_scores_by_cumulative)
     assert callable(load_rmix_ci_squared)
-    assert callable(select_block_ci_scores)
     assert callable(sort_ci_scores)
+
+
+def test_removed_rmix_analysis_api_is_not_exported() -> None:
+    import graspkit.grasp_data_extractor as extractor
+
+    assert not hasattr(extractor, "RmixAsfSelection")
+    assert not hasattr(extractor, "RmixBlockSelection")
+    assert not hasattr(extractor, "analyze_rmix_file")
+    assert not hasattr(extractor, "select_block_ci_scores")
 
 
 def test_legacy_single_asf_threshold_keeps_existing_tuple_index_shape() -> None:

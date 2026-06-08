@@ -13,28 +13,6 @@ AggregationMethod = Literal["sum", "max", "mean"]
 
 
 @dataclass(frozen=True)
-class RmixAsfSelection:
-    """CI-square selection result for one ASF in an rmix symmetry block."""
-
-    asf_index: int
-    selected_csf_indices: NDArray[np.int64]
-    scores: NDArray[np.float64]
-    selected_scores: NDArray[np.float64]
-    cumulative_scores: NDArray[np.float64]
-    selected_cumulative_scores: NDArray[np.float64]
-
-
-@dataclass(frozen=True)
-class RmixBlockSelection:
-    """CI-square selection result for selected ASFs in one rmix block."""
-
-    block_index: int
-    selected_asf_indices: NDArray[np.int64]
-    asf_selections: list[RmixAsfSelection]
-    ci_squared: NDArray[np.float64]
-
-
-@dataclass(frozen=True)
 class RmixCsfIndexSelection:
     """Selected CSF indices grouped by rmix block and selected ASF."""
 
@@ -201,20 +179,6 @@ def filter_sorted_ci_scores_by_cumulative(
     return np.arange(count, dtype=np.int64)
 
 
-def _validate_top_limits(top_k: int | None, top_ratio: float | None) -> None:
-    if top_k is not None and top_k <= 0:
-        raise ValueError("top_k must be positive")
-    if top_ratio is not None and not 0 < top_ratio <= 1:
-        raise ValueError("top_ratio must be > 0 and <= 1")
-
-
-def _normalized_cumulative(sorted_scores: NDArray[np.float64]) -> NDArray[np.float64]:
-    total = float(np.sum(sorted_scores))
-    if total <= 0:
-        return np.zeros_like(sorted_scores, dtype=np.float64)
-    return np.cumsum(sorted_scores) / total
-
-
 def _normalize_asf_indices(
     coefficients: NDArray[np.float64],
     select_asfs: Sequence[int] | NDArray[np.integer] | None,
@@ -239,110 +203,6 @@ def _normalize_asf_indices(
     if np.any(requested_asfs < 0) or np.any(requested_asfs >= coefficients.shape[0]):
         raise ValueError("select_asfs contains an ASF index outside this block")
     return requested_asfs
-
-
-def _select_single_asf_ci_scores(
-    scores: NDArray[np.float64],
-    asf_index: int,
-    score_threshold: float | None = None,
-    cumulative_threshold: float | None = None,
-    top_k: int | None = None,
-    top_ratio: float | None = None,
-) -> RmixAsfSelection:
-    sorted_indices, sorted_scores = sort_ci_scores(scores)
-    cumulative_scores = _normalized_cumulative(sorted_scores)
-
-    keep_positions = np.arange(sorted_indices.size, dtype=np.int64)
-
-    if score_threshold is not None:
-        threshold_indices = filter_ci_scores_by_threshold(scores, score_threshold)
-        threshold_mask = np.isin(sorted_indices, threshold_indices)
-        keep_positions = keep_positions[threshold_mask[keep_positions]]
-
-    if cumulative_threshold is not None:
-        cumulative_positions = filter_sorted_ci_scores_by_cumulative(
-            sorted_scores,
-            cumulative_threshold,
-        )
-        keep_positions = np.intersect1d(
-            keep_positions,
-            cumulative_positions,
-            assume_unique=True,
-        )
-
-    if top_k is not None:
-        top_k_positions = np.arange(min(top_k, sorted_indices.size), dtype=np.int64)
-        keep_positions = np.intersect1d(
-            keep_positions,
-            top_k_positions,
-            assume_unique=True,
-        )
-
-    if top_ratio is not None:
-        ratio_count = int(np.ceil(sorted_indices.size * top_ratio))
-        top_ratio_positions = np.arange(ratio_count, dtype=np.int64)
-        keep_positions = np.intersect1d(
-            keep_positions,
-            top_ratio_positions,
-            assume_unique=True,
-        )
-
-    selected_indices = sorted_indices[keep_positions]
-    selected_scores = sorted_scores[keep_positions]
-    selected_cumulative_scores = cumulative_scores[keep_positions]
-
-    return RmixAsfSelection(
-        asf_index=asf_index,
-        selected_csf_indices=selected_indices,
-        scores=sorted_scores,
-        selected_scores=selected_scores,
-        cumulative_scores=cumulative_scores,
-        selected_cumulative_scores=selected_cumulative_scores,
-    )
-
-
-def select_block_ci_scores(
-    coefficients: NDArray[np.float64],
-    block_index: int = 0,
-    select_asfs: Sequence[int] | NDArray[np.integer] | None = None,
-    score_threshold: float | None = None,
-    cumulative_threshold: float | None = None,
-    top_k: int | None = None,
-    top_ratio: float | None = None,
-) -> RmixBlockSelection:
-    """Analyze and select CSFs for each selected ASF in one rmix block."""
-    _validate_top_limits(top_k, top_ratio)
-
-    coefficient_array = _as_1d_or_2d_float_array(coefficients, "coefficients")
-    selected_asf_indices = _normalize_asf_indices(coefficient_array, select_asfs)
-    if coefficient_array.ndim == 1:
-        selected_coefficients = coefficient_array[np.newaxis, :]
-    else:
-        selected_coefficients = coefficient_array[selected_asf_indices]
-    block_ci_squared = ci_squared(selected_coefficients)
-
-    asf_selections = [
-        _select_single_asf_ci_scores(
-            scores=asf_scores,
-            asf_index=int(asf_index),
-            score_threshold=score_threshold,
-            cumulative_threshold=cumulative_threshold,
-            top_k=top_k,
-            top_ratio=top_ratio,
-        )
-        for asf_index, asf_scores in zip(
-            selected_asf_indices,
-            block_ci_squared,
-            strict=True,
-        )
-    ]
-
-    return RmixBlockSelection(
-        block_index=block_index,
-        selected_asf_indices=selected_asf_indices,
-        asf_selections=asf_selections,
-        ci_squared=block_ci_squared,
-    )
 
 
 def load_rmix_ci_squared(
@@ -380,11 +240,3 @@ def load_rmix_ci_squared(
         selected_asfs=selected_asfs,
         ci_squared_list=ci_squared_list,
     )
-
-
-def analyze_rmix_file(
-    rmix_path: str | Path,
-    select_asfs: list[list[int]] | None = None,
-) -> RmixCiSquaredData:
-    """Load an rmix file and return squared CI coefficients for selected ASFs."""
-    return load_rmix_ci_squared(rmix_path, select_asfs=select_asfs)
