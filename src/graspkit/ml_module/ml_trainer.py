@@ -26,6 +26,11 @@ from ..data_IO import (
 from ..utils.data_modules import MLDataCounts
 from .ml_types import EvaluationResults, PredictionOutputs
 from .ml_results_analyzer import save_training_results
+from .ml_selection import (
+    ContributionSource,
+    log_reference_level_order_diagnostics,
+    select_ml_candidate_indices,
+)
 from .ml_initializer import (
     combine_importance_and_reference_scores,
     compute_pairwise_gap_error_matrix,
@@ -160,7 +165,7 @@ def train_model(
     Args:
         config: ML calculation configuration.
         caled_csfs_descriptors: Descriptor matrix with label columns appended.
-        correct_levels_ci: CI-square values for the selected target levels.
+        correct_levels_ci: CI coefficients for the selected target levels.
         logger: Logger used for training diagnostics.
 
     Returns:
@@ -665,69 +670,37 @@ def predict_model(
         new_sampling_CSFs_num = max_sampling_CSFs_num - current_important_count
         logger.info(f"目标新增组态数超过最大选择数，调整为{new_sampling_CSFs_num}")
 
-    if new_sampling_CSFs_num <= 0:
-        logger.info("目标新增组态数为0，本轮不新增ML采样组态")
-        ml_sampled_idxs = np.array([], dtype=np.int64)
-        train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
-        train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
-        train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
-        return (
-            ml_sampled_idxs,
-            verified_important_idxs,
-            y_current_cal_probability,
-            train_data_counts,
-        )
-
-    if len(ml_predicted_important_local_idxs) >= new_sampling_CSFs_num:
-        # 情况1：ML预测的重要组态数量充足，按概率排序选择top-k
-        logger.info(f"ML预测组态充足，按概率排序选择前{new_sampling_CSFs_num}个")
-
-        # 获取ML预测重要组态的最大概率（在所有能级中取最大值）
-        ml_predicted_important_probabilities = final_score[
-            ml_predicted_important_local_idxs
-        ]
-
-        # 按概率降序排序
-        probability_sorted_idxs = np.argsort(ml_predicted_important_probabilities)[::-1]
-
-        # 选择前new_sampling_CSFs_num个
-        top_k_local_idxs = ml_predicted_important_local_idxs[
-            probability_sorted_idxs[:new_sampling_CSFs_num]
-        ]
-
-        ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
-        logger.info(
-            f"从{len(ml_predicted_important_local_idxs)}个ML预测重要组态中选择了{len(ml_sampled_idxs)}个"
+    if getattr(config.cal_settings, "selection_mode", "fixed_ratio") == "fixed_ratio":
+        ml_sampled_idxs, ml_predicted_count = _select_fixed_ratio_candidates_from_scores(
+            unselected_idxs=unselected_idxs,
+            final_score=final_score,
+            predicted_mask=ml_predicted_important_mask,
+            target_count=new_sampling_CSFs_num,
+            logger=logger,
         )
     else:
-        # 情况2：ML预测的重要组态数量不足，全部采用
-        if len(ml_predicted_important_global_idxs) > 0:
-            logger.info(
-                f"ML预测组态不足，全部采用{len(ml_predicted_important_global_idxs)}个"
-            )
-            ml_sampled_idxs = ml_predicted_important_global_idxs
-        else:
-            logger.warning(
-                "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
-                new_sampling_CSFs_num,
-            )
-            probability_sorted_idxs = np.argsort(final_score)[::-1]
-            top_k_local_idxs = probability_sorted_idxs[:new_sampling_CSFs_num]
-            ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
-            logger.info(
-                "回退采样完成：选取了 %s 个组合分数最高的未选择组态，最高分=%.4f，最低入选分=%.4f",
-                len(ml_sampled_idxs),
-                float(final_score[top_k_local_idxs[0]])
-                if len(top_k_local_idxs) > 0
-                else 0.0,
-                float(final_score[top_k_local_idxs[-1]])
-                if len(top_k_local_idxs) > 0
-                else 0.0,
-            )
+        ml_sampled_idxs = select_ml_candidate_indices(
+            unselected_idxs,
+            per_level_scores=y_unselected_probability,
+            final_score=final_score,
+            target_count=new_sampling_CSFs_num,
+            config=config,
+            logger=logger,
+            source=ContributionSource.CLASSIFIER_PROBABILITY,
+            physical_contributions=None,
+        )
+        ml_predicted_count = int(ml_predicted_important_global_idxs.shape[0])
 
     train_data_counts.important_csfs_count = verified_important_idxs.shape[0]
-    train_data_counts.ml_predicted_count = ml_predicted_important_global_idxs.shape[0]
+    train_data_counts.ml_predicted_count = ml_predicted_count
     train_data_counts.ml_sampled_count = ml_sampled_idxs.shape[0]
+
+    log_reference_level_order_diagnostics(
+        selected_energy_data=selected_energy_data,
+        spectral_terms=config.cal_settings.spectral_term,
+        reference_energy_levels=config.cal_settings.reference_energy_levels,
+        logger=logger,
+    )
 
     _write_candidate_hybrid_scores(
         unselected_idxs=unselected_idxs,
@@ -768,6 +741,50 @@ def _push_top_scored_candidate(
 def _top_candidates_to_indices(candidates: list[tuple[float, int, int]]) -> np.ndarray:
     sorted_candidates = sorted(candidates, reverse=True)
     return np.array([global_idx for _, _, global_idx in sorted_candidates], dtype=np.int64)
+
+
+def _select_fixed_ratio_candidates_from_scores(
+    *,
+    unselected_idxs: NDArray[np.int64],
+    final_score: NDArray[np.float64],
+    predicted_mask: NDArray[np.bool],
+    target_count: int,
+    logger: logging.Logger,
+) -> tuple[NDArray[np.int64], int]:
+    predicted_local_idxs = np.where(predicted_mask)[0]
+    predicted_global_idxs = unselected_idxs[predicted_local_idxs]
+    predicted_count = int(predicted_global_idxs.shape[0])
+
+    if target_count <= 0:
+        logger.info("目标新增组态数为0，本轮不新增ML采样组态")
+        return np.array([], dtype=np.int64), predicted_count
+
+    if len(predicted_local_idxs) >= target_count:
+        logger.info(f"ML预测组态充足，按概率排序选择前{target_count}个")
+        predicted_scores = final_score[predicted_local_idxs]
+        sorted_idxs = np.argsort(predicted_scores)[::-1]
+        top_k_local_idxs = predicted_local_idxs[sorted_idxs[:target_count]]
+        selected = unselected_idxs[top_k_local_idxs]
+        logger.info(f"从{len(predicted_local_idxs)}个ML预测重要组态中选择了{len(selected)}个")
+        return selected.astype(np.int64, copy=False), predicted_count
+
+    if predicted_count > 0:
+        logger.info(f"ML预测组态不足，全部采用{predicted_count}个")
+        return predicted_global_idxs.astype(np.int64, copy=False), predicted_count
+
+    logger.warning(
+        "固定阈值 0.5 下未预测到任何重要组态，回退为按概率排序选择 top-%s",
+        target_count,
+    )
+    top_k_local_idxs = np.argsort(final_score)[::-1][:target_count]
+    selected = unselected_idxs[top_k_local_idxs]
+    logger.info(
+        "回退采样完成：选取了 %s 个组合分数最高的未选择组态，最高分=%.4f，最低入选分=%.4f",
+        len(selected),
+        float(final_score[top_k_local_idxs[0]]) if len(top_k_local_idxs) > 0 else 0.0,
+        float(final_score[top_k_local_idxs[-1]]) if len(top_k_local_idxs) > 0 else 0.0,
+    )
+    return selected.astype(np.int64, copy=False), predicted_count
 
 
 def _iter_model_probability_batches(
@@ -1142,6 +1159,11 @@ def _predict_model_streaming_hybrid(
     logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
     logger.info(f"ML预测的重要组态数（在未选择中）：({ml_predicted_count},)")
     logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
+    if getattr(config.cal_settings, "selection_mode", "fixed_ratio") == "cumulative_contribution":
+        logger.warning(
+            "classification probability is not a physical cumulative contribution; "
+            "falling back to fixed_ratio/top-k selection"
+        )
 
     if new_sampling_CSFs_num <= 0:
         logger.info("目标新增组态数为0，本轮不新增ML采样组态")
@@ -1343,6 +1365,11 @@ def predict_model_streaming(
     logger.info(f"开始选择组态，当前重要组态数为：{len(verified_important_idxs)}")
     logger.info(f"ML预测的重要组态数（在未选择中）：({ml_predicted_count},)")
     logger.info(f"目标新增组态数：{new_sampling_CSFs_num}")
+    if getattr(config.cal_settings, "selection_mode", "fixed_ratio") == "cumulative_contribution":
+        logger.warning(
+            "classification probability is not a physical cumulative contribution; "
+            "falling back to fixed_ratio/top-k selection"
+        )
 
     if new_sampling_CSFs_num <= 0:
         logger.info("目标新增组态数为0，本轮不新增ML采样组态")

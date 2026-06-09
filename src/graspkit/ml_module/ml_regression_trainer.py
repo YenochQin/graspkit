@@ -28,6 +28,11 @@ from .ml_initializer import (
     score_correction_candidates_from_ci,
 )
 from .ml_regression_model import ANNRegressor
+from .ml_selection import (
+    ContributionSource,
+    log_reference_level_order_diagnostics,
+    select_ml_candidate_indices,
+)
 
 
 def _is_hybrid_reference_ranking_enabled(
@@ -375,20 +380,24 @@ def predict_regression_model(
     expansion_ratio = config.cal_settings.expansion_ratio
     new_target = math.ceil(expansion_ratio * current_important_count)
 
-    # 设置上限
-    sampling_ratio = config.cal_settings.sampling_ratio
-    max_sampling_num = math.ceil(total_csfs_count * sampling_ratio)
-    if new_target + current_important_count > max_sampling_num:
-        new_target = max_sampling_num - current_important_count
-        logger.info(f"目标新增组态数超过最大选择数，调整为 {new_target}")
+    if getattr(config.cal_settings, "selection_mode", "fixed_ratio") == "fixed_ratio":
+        sampling_ratio = config.cal_settings.sampling_ratio
+        max_sampling_num = math.ceil(total_csfs_count * sampling_ratio)
+        if new_target + current_important_count > max_sampling_num:
+            new_target = max_sampling_num - current_important_count
+            logger.info(f"目标新增组态数超过最大选择数，调整为 {new_target}")
 
-    # 按各能级预测 log₁₀(CI²) 的最大值降序排序
-    # max 代表：只要在某个能级上预测值大，该 CSF 就值得被选入
-    ranked_local_idxs = np.argsort(final_score)[::-1]  # 降序
-
-    n_select = min(new_target, len(ranked_local_idxs))
-    top_k_local_idxs = ranked_local_idxs[:n_select]
-    ml_sampled_idxs = unselected_idxs[top_k_local_idxs]
+    physical_contributions = np.power(10.0, y_predicted_log_ci)
+    ml_sampled_idxs = select_ml_candidate_indices(
+        unselected_idxs,
+        per_level_scores=y_predicted_log_ci,
+        final_score=final_score,
+        target_count=new_target,
+        config=config,
+        logger=logger,
+        source=ContributionSource.REGRESSION_LOG_CI_SQUARED,
+        physical_contributions=physical_contributions,
+    )
 
     logger.info(f"当前已验证重要组态数: {current_important_count}")
     logger.info(f"目标新增 CSF 数: {new_target}")
@@ -401,6 +410,13 @@ def predict_regression_model(
     train_data_counts.important_csfs_count = current_important_count
     train_data_counts.ml_predicted_count = len(unselected_idxs)
     train_data_counts.ml_sampled_count = len(ml_sampled_idxs)
+
+    log_reference_level_order_diagnostics(
+        selected_energy_data=selected_energy_data,
+        spectral_terms=config.cal_settings.spectral_term,
+        reference_energy_levels=config.cal_settings.reference_energy_levels,
+        logger=logger,
+    )
 
     return (
         ml_sampled_idxs,
