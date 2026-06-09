@@ -153,7 +153,8 @@ def training_data_loader(
     rmix_file_data = rmix_file_load.load()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
-    csfs_count_from_rmix = rmix_file_data.block_CSFs_nums[0]
+    first_mix_block = rmix_file_data.blocks[0]
+    csfs_count_from_rmix = first_mix_block.csf_count
 
     # 加载本轮选择的CSFs的索引文件
     caled_csfs_idxs_file_path = (
@@ -164,7 +165,7 @@ def training_data_loader(
 
     if caled_csfs_idxs_array.shape[0] != csfs_count_from_rmix:
         logger.error(
-            f"rmix_file_data.block_CSFs_nums[0]={csfs_count_from_rmix}, {caled_csfs_idxs_array.shape[0]=}"
+            f"rmix_file_data.blocks[0].csf_count={csfs_count_from_rmix}, {caled_csfs_idxs_array.shape[0]=}"
         )
         raise ValueError("本轮计算的CSFs数量数据不一致，请检查数据文件")
     cal_csfs_count = csfs_count_from_rmix
@@ -245,7 +246,7 @@ def check_configuration_coupling(
     )
 
     selected_energy_data = energy_level_data[spectral_term_positions]
-    correct_levels_ci = rmix_file_data.mix_coefficient_list[0][spectral_term_positions]
+    correct_levels_ci = rmix_file_data.blocks[0].mix_coefficients[spectral_term_positions]
     correct_levels_csv_path = (
         paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_correct_levels.csv"
     )
