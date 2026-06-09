@@ -327,8 +327,8 @@ mix_loader = MixCoefLoader("path/to/file.m")
 mix_data = mix_loader.load()
 
 # 使用有意义的属性名
-print(f"Blocks: {mix_data.block_num}")
-print(f"First block mix coef shape: {mix_data.mix_coefficient_list[0].shape}")
+print(f"Blocks: {len(mix_data.blocks)}")
+print(f"First block mix coef shape: {mix_data.blocks[0].mix_coefficients.shape}")
 
 # 使用专用方法
 block_data = mix_loader.get_block_data(block_idx=0)
