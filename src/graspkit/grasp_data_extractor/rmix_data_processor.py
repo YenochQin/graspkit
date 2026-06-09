@@ -212,12 +212,14 @@ def aggregate_ci_squared(
     if ci_array.ndim == 1:
         return ci_array.astype(np.float64, copy=False)
     if method == "sum":
-        return np.sum(ci_array, axis=0, dtype=np.float64)
-    if method == "max":
-        return np.max(ci_array, axis=0)
-    if method == "mean":
-        return np.mean(ci_array, axis=0, dtype=np.float64)
-    raise ValueError(f"Unsupported aggregation method: {method}")
+        aggregated = np.sum(ci_array, axis=0, dtype=np.float64)
+    elif method == "max":
+        aggregated = np.max(ci_array, axis=0)
+    elif method == "mean":
+        aggregated = np.mean(ci_array, axis=0, dtype=np.float64)
+    else:
+        raise ValueError(f"Unsupported aggregation method: {method}")
+    return _as_1d_score_array(np.asarray(aggregated, dtype=np.float64), "aggregated")
 
 
 def _as_1d_score_array(
