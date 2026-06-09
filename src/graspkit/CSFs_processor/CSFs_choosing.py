@@ -1,6 +1,5 @@
 # -*- encoding: utf-8 -*-
 
-from numpy import intp
 import logging
 import random
 import math
