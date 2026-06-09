@@ -19,42 +19,11 @@ from ..grasp_data_extractor.rmix_data_processor import (
 from ..utils.tool_function import *
 from ..utils.data_modules import MixCoefficientData
 
-"""
-    csfs data dictionary:
-    {
-        'CSFs_block_data': 
-        list[
-            blocks[
-                    block_csfs[CSF_item[csf_1], CSF_item[csf_2], ...]]
-                    ]
-            ],
-        'CSFs_block_j_value',
-        'CSFs_block_length': list[length of each block],
-        'parity',
-        'subshell_info_raw'
-    }
-
-    rmix data dictionary:
-    {
-        'block_num': list[length of each block],
-        'block_energy_count_list': list[levels of each block],
-        'block_energy_list': list[energy of each block],
-        'block_idx_list': list[idx of each block],
-        'block_level_energy_list': list[
-                                        block[level energy]
-                                    ],
-        'block_levels_idx_list': list[
-                                        block[level idx]
-                                    ],
-        'j_value_location_list': list[location of j value],
-        'mix_coefficient_list': list[
-                                    block numpy.ndarray[
-                                                        level numpy.ndarray[mix coefficient]
-                                    ]
-                                ],
-        'parity_list': list[parity of each block],
-    }
-"""
+# This module consumes the current data_IO containers:
+# - CSF records are grouped as CSFs.CSFs_block_data:
+#   list[block][csf][line], where each CSF is its original three text lines.
+# - Mixing coefficients are provided as MixCoefficientData.blocks, with one
+#   MixCoefficientBlock per symmetry block.
 
 
 #######################################################################
