@@ -2,14 +2,11 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
-
-AggregationMethod = Literal["sum", "max", "mean"]
 
 
 @dataclass(frozen=True)
@@ -186,40 +183,6 @@ def ci_squared(coefficients: NDArray[np.float64]) -> NDArray[np.float64]:
     """
     coefficient_array = _as_1d_or_2d_float_array(coefficients, "coefficients")
     return np.square(coefficient_array, dtype=np.float64)
-
-
-def aggregate_ci_squared(
-    ci_squared_values: NDArray[np.float64],
-    method: AggregationMethod = "sum",
-) -> NDArray[np.float64]:
-    """按 CSF 聚合多个 ASF 的 CI 系数平方。
-
-    Parameters
-    ----------
-    ci_squared_values : NDArray[np.float64]
-        一维 ``(n_csf,)`` 或二维 ``(n_asf, n_csf)`` 的 CI 系数平方数组。
-    method : AggregationMethod
-        二维输入的聚合方式，可选 ``"sum"``、``"max"`` 或 ``"mean"``。
-
-    Returns
-    -------
-    NDArray[np.float64]
-        每个 CSF 对应的聚合后 CI 系数平方。
-    """
-    # TODO: 该跨 ASF 聚合函数仅为旧 CSFs_processor 兼容逻辑保留；
-    # 后续应迁移到基于 RmixCiSquaredData 的新接口后移除。
-    ci_array = _as_1d_or_2d_float_array(ci_squared_values, "ci_squared_values")
-    if ci_array.ndim == 1:
-        return ci_array.astype(np.float64, copy=False)
-    if method == "sum":
-        aggregated = np.sum(ci_array, axis=0, dtype=np.float64)
-    elif method == "max":
-        aggregated = np.max(ci_array, axis=0)
-    elif method == "mean":
-        aggregated = np.mean(ci_array, axis=0, dtype=np.float64)
-    else:
-        raise ValueError(f"Unsupported aggregation method: {method}")
-    return _as_1d_score_array(np.asarray(aggregated, dtype=np.float64), "aggregated")
 
 
 def _as_1d_score_array(

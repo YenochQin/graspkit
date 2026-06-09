@@ -15,7 +15,6 @@ from .transition_data_processor import (
 from .rmix_data_processor import (
     RmixCiSquaredData,
     RmixCsfIndexSelection,
-    aggregate_ci_squared,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
@@ -38,7 +37,6 @@ __all__ = [
     # rmix_data_processor
     "RmixCiSquaredData",
     "RmixCsfIndexSelection",
-    "aggregate_ci_squared",
     "ci_squared",
     "filter_ci_scores_by_threshold",
     "filter_sorted_ci_scores_by_cumulative",
