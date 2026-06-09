@@ -7,34 +7,72 @@ from numpy.typing import NDArray
 
 
 @dataclass(frozen=True)
+class MixCoefficientBlock:
+    """Parsed mixing coefficients and metadata for one rmix block."""
+
+    block_index: int
+    csf_count: int
+    level_count: int
+    j_value_location: int
+    j_value: str
+    parity: int
+    level_indices: NDArray[np.int64]
+    base_energy: float
+    level_energies: NDArray[np.float64]
+    mix_coefficients: NDArray[np.float64]
+
+
+@dataclass(frozen=True)
 class MixCoefficientData:
     """Container for parsed ASF mixing coefficients grouped by block.
 
     Attributes:
-        block_num: Number of symmetry blocks.
-        block_idx_list: Block indices present in the source data.
-        block_CSFs_nums: Number of CSFs in each block.
-        block_energy_count_list: Number of levels in each block.
-        level_J_value_list: J values for parsed levels.
-        parity_list: Parity values for parsed blocks.
-        block_levels_idx_list: Level indices grouped by block.
-        block_energy_list: Block-level energy values.
-        block_level_energy_list: Level energies grouped by block.
-        mix_coefficient_list: CI coefficient matrices grouped by block.
+        blocks: Parsed block-level rmix data.
         level_list: Flat list of level identifiers.
     """
 
-    block_num: int
-    block_idx_list: list[int]
-    block_CSFs_nums: list[int]
-    block_energy_count_list: list[int]
-    level_J_value_list: list[str]
-    parity_list: list[int]
-    block_levels_idx_list: list[NDArray[np.int64]]
-    block_energy_list: list[float]
-    block_level_energy_list: list[NDArray[np.float64]]
-    mix_coefficient_list: list[NDArray[np.float64]]
+    blocks: list[MixCoefficientBlock]
     level_list: list[float]
+
+    @property
+    def block_num(self) -> int:
+        return len(self.blocks)
+
+    @property
+    def block_idx_list(self) -> list[int]:
+        return [block.block_index for block in self.blocks]
+
+    @property
+    def block_CSFs_nums(self) -> list[int]:
+        return [block.csf_count for block in self.blocks]
+
+    @property
+    def block_energy_count_list(self) -> list[int]:
+        return [block.level_count for block in self.blocks]
+
+    @property
+    def level_J_value_list(self) -> list[str]:
+        return [block.j_value for block in self.blocks]
+
+    @property
+    def parity_list(self) -> list[int]:
+        return [block.parity for block in self.blocks]
+
+    @property
+    def block_levels_idx_list(self) -> list[NDArray[np.int64]]:
+        return [block.level_indices for block in self.blocks]
+
+    @property
+    def block_energy_list(self) -> list[float]:
+        return [block.base_energy for block in self.blocks]
+
+    @property
+    def block_level_energy_list(self) -> list[NDArray[np.float64]]:
+        return [block.level_energies for block in self.blocks]
+
+    @property
+    def mix_coefficient_list(self) -> list[NDArray[np.float64]]:
+        return [block.mix_coefficients for block in self.blocks]
 
 
 class CSFsDict(TypedDict, total=False):
