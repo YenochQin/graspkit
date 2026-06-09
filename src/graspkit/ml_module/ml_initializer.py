@@ -154,6 +154,8 @@ def training_data_loader(
     rmix_file_data = rmix_file_load.load()
     logger.info(f"加载 mix coefficient 文件数据: {rmix_file_path}")
 
+    # The ML selection workflow is intentionally single-block: descriptors and
+    # sampled CSF indices are aligned with the first rmix symmetry block.
     first_mix_block = rmix_file_data.blocks[0]
     csfs_count_from_rmix = first_mix_block.csf_count
 
@@ -247,6 +249,7 @@ def check_configuration_coupling(
     )
 
     selected_energy_data = energy_level_data[spectral_term_positions]
+    # See training_data_loader: ML selection is intentionally single-block.
     correct_levels_ci = rmix_file_data.blocks[0].mix_coefficients[spectral_term_positions]
     correct_levels_csv_path = (
         paths_cfg.cal_loop_path / f"{paths_cfg.loop_file_name}_correct_levels.csv"

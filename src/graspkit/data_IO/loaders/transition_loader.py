@@ -783,13 +783,6 @@ class TransitionLoader(BaseLoader[list[str]]):
             .str.strip_chars()
             .cast(pl.Float64)
         )
-        if self.load_ct_lsj:
-            df = df.with_columns(
-                pl.col(["upper_energy","lower_energy"])
-                .str.strip_chars()
-                .cast(pl.Float64)
-            )
-
         # 将 B 规范列的空字符串替换为 null
         df = df.with_columns(
             pl.col(b_cols).replace("", None)

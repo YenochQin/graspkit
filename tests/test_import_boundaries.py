@@ -5,10 +5,26 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
 sys.path.insert(0, str(SRC))
+
+
+@pytest.fixture(autouse=True)
+def preserve_graspkit_modules() -> None:
+    saved_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == "graspkit" or name.startswith("graspkit.")
+    }
+    yield
+    for module_name in list(sys.modules):
+        if module_name == "graspkit" or module_name.startswith("graspkit."):
+            sys.modules.pop(module_name, None)
+    sys.modules.update(saved_modules)
 
 
 def _run_python(code: str) -> dict[str, object]:
