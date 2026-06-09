@@ -7,7 +7,6 @@ from graspkit.grasp_data_extractor import rmix_data_processor
 from graspkit.grasp_data_extractor.rmix_data_processor import (
     RmixCiSquaredData,
     RmixCsfIndexSelection,
-    aggregate_ci_squared,
     ci_squared,
     filter_ci_scores_by_threshold,
     filter_sorted_ci_scores_by_cumulative,
@@ -72,37 +71,6 @@ def test_ci_squared_rejects_empty_coefficients() -> None:
 def test_ci_squared_rejects_more_than_two_dimensions() -> None:
     with pytest.raises(ValueError, match="1D or 2D"):
         ci_squared(np.zeros((1, 1, 1)))
-
-
-def test_aggregate_ci_squared_sum_max_and_mean_for_2d_input() -> None:
-    values = np.array([[0.25, 0.0625, 0.0], [0.01, 0.04, 0.09]])
-
-    np.testing.assert_allclose(
-        aggregate_ci_squared(values, method="sum"),
-        np.array([0.26, 0.1025, 0.09]),
-    )
-    np.testing.assert_allclose(
-        aggregate_ci_squared(values, method="max"),
-        np.array([0.25, 0.0625, 0.09]),
-    )
-    np.testing.assert_allclose(
-        aggregate_ci_squared(values, method="mean"),
-        np.array([0.13, 0.05125, 0.045]),
-    )
-
-
-def test_aggregate_ci_squared_returns_1d_input_unchanged_as_float64() -> None:
-    values = np.array([0.25, 0.0625, 0.0])
-
-    result = aggregate_ci_squared(values)
-
-    np.testing.assert_allclose(result, np.array([0.25, 0.0625, 0.0]))
-    assert result.dtype == np.float64
-
-
-def test_aggregate_ci_squared_rejects_unknown_method() -> None:
-    with pytest.raises(ValueError, match="Unsupported aggregation method"):
-        aggregate_ci_squared(np.array([[0.25]]), method="median")  # type: ignore[arg-type]
 
 
 def test_sort_ci_scores_descending_returns_original_indices_and_scores() -> None:
@@ -246,7 +214,6 @@ def test_rmix_processor_api_is_exported_from_grasp_data_extractor_package() -> N
     from graspkit.grasp_data_extractor import (
         RmixCiSquaredData,
         RmixCsfIndexSelection,
-        aggregate_ci_squared,
         ci_squared,
         filter_ci_scores_by_threshold,
         filter_sorted_ci_scores_by_cumulative,
@@ -256,7 +223,6 @@ def test_rmix_processor_api_is_exported_from_grasp_data_extractor_package() -> N
 
     assert RmixCiSquaredData.__name__ == "RmixCiSquaredData"
     assert RmixCsfIndexSelection.__name__ == "RmixCsfIndexSelection"
-    assert callable(aggregate_ci_squared)
     assert callable(ci_squared)
     assert callable(filter_ci_scores_by_threshold)
     assert callable(filter_sorted_ci_scores_by_cumulative)
@@ -270,6 +236,7 @@ def test_removed_rmix_analysis_api_is_not_exported() -> None:
     assert not hasattr(extractor, "RmixAsfSelection")
     assert not hasattr(extractor, "RmixBlockSelection")
     assert not hasattr(extractor, "analyze_rmix_file")
+    assert not hasattr(extractor, "aggregate_ci_squared")
     assert not hasattr(extractor, "select_block_ci_scores")
 
 
