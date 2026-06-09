@@ -396,8 +396,8 @@ def load_rmix_ci_squared(
 
     selected_asfs: list[list[int]] = []
     ci_squared_list: list[NDArray[np.float64]] = []
-    for block_index, block_coefficients in enumerate(mix_data.mix_coefficient_list):
-        coefficient_array = _as_1d_or_2d_float_array(block_coefficients, "coefficients")
+    for block_index, block in enumerate(mix_data.blocks):
+        coefficient_array = _as_1d_or_2d_float_array(block.mix_coefficients, "coefficients")
         block_select_asfs = (
             select_asfs[block_index]
             if select_asfs is not None and len(select_asfs) > 0
@@ -416,7 +416,7 @@ def load_rmix_ci_squared(
         ci_squared_list.append(ci_squared(selected_coefficients))
 
     return RmixCiSquaredData(
-        block_indices=list(mix_data.block_idx_list),
+        block_indices=[block.block_index for block in mix_data.blocks],
         selected_asfs=selected_asfs,
         ci_squared_list=ci_squared_list,
     )

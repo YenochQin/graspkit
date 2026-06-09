@@ -229,20 +229,18 @@ def print_mix_coef_levels_rich(
     table.add_column("Energy (a.u.)", justify="right", width=18)
     table.add_column("Levels (cm⁻¹)", justify="right", width=14)
 
-    # 重建能级数据（复现 load() 中第 249-273 行的逻辑）
+    # 重建能级数据（复现 load() 中的 block-level 能量整理逻辑）
     temp_pos: list[int] = []
     temp_J: list[str] = []
     temp_parity_idx: list[int] = []
     temp_energy: list[float] = []
 
-    for jblock in range(data.block_num):
-        for pos in data.block_levels_idx_list[jblock].tolist():
+    for block in data.blocks:
+        for pos in block.level_indices.tolist():
             temp_pos.append(pos)
-            temp_J.append(data.level_J_value_list[jblock])
-            temp_parity_idx.append(data.parity_list[jblock])
-            temp_energy.append(
-                float(data.block_energy_list[jblock] + data.block_level_energy_list[jblock][pos])
-            )
+            temp_J.append(block.j_value)
+            temp_parity_idx.append(block.parity)
+            temp_energy.append(float(block.base_energy + block.level_energies[pos]))
 
     # 按能量排序
     level_idx = np.argsort(temp_energy)

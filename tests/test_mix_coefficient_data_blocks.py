@@ -120,3 +120,60 @@ def test_mix_coef_loader_builds_blocks(
         np.array([[0.5, 0.1, 0.2], [0.0, 0.4, 0.1]]),
     )
     assert printed == [result]
+
+
+def test_print_mix_coef_levels_uses_block_j_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows: list[tuple[str, ...]] = []
+
+    class DummyTable:
+        def add_column(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        def add_row(self, *values: str) -> None:
+            rows.append(values)
+
+    class DummyConsole:
+        def print(self, *args: object, **kwargs: object) -> None:
+            return None
+
+    monkeypatch.setattr("graspkit.data_IO.loaders.mix_coef_loader.Table", DummyTable)
+    monkeypatch.setattr("graspkit.data_IO.loaders.mix_coef_loader.Console", DummyConsole)
+
+    data = MixCoefficientData(
+        blocks=[
+            MixCoefficientBlock(
+                block_index=0,
+                csf_count=1,
+                level_count=1,
+                j_value_location=1,
+                j_value="0",
+                parity=1,
+                level_indices=np.array([0], dtype=np.int64),
+                base_energy=0.0,
+                level_energies=np.array([0.0], dtype=np.float64),
+                mix_coefficients=np.array([[1.0]], dtype=np.float64),
+            ),
+            MixCoefficientBlock(
+                block_index=1,
+                csf_count=1,
+                level_count=1,
+                j_value_location=2,
+                j_value="1/2",
+                parity=2,
+                level_indices=np.array([0], dtype=np.int64),
+                base_energy=0.1,
+                level_energies=np.array([0.0], dtype=np.float64),
+                mix_coefficients=np.array([[1.0]], dtype=np.float64),
+            ),
+        ],
+        level_list=[0.0, 0.1],
+    )
+
+    from graspkit.data_IO.loaders.mix_coef_loader import print_mix_coef_levels_rich
+
+    print_mix_coef_levels_rich(data)
+
+    assert rows[0][2] == "0"
+    assert rows[1][2] == "1/2"
