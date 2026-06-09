@@ -105,9 +105,9 @@ def batch_asfs_mix_square_above_threshold(
     批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
 
     Args:
-        asfs_mix_data: 包含以下属性的对象:
-            - block_num: 块的总数
-            - mix_coefficient_list: 按块组织的系数列表(每个块包含多个层级的一维数组)
+        asfs_mix_data: Parsed block-based ASF mixing-coefficient data.
+        asfs_position: Optional selected ASF row indices for each block. Defaults
+            to each block's ``level_indices``.
         threshold: 阈值(平方值比较)，默认0.1
 
     Returns:
@@ -368,7 +368,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         blocks_CSFs_list: CSF blocks aligned with ``asfs_mix_data``.
         asfs_mix_data: Parsed ASF mixing-coefficient data.
         asfs_position: Optional selected ASF indices for each block. Defaults
-            to ``asfs_mix_data.block_levels_idx_list``.
+            to each block's ``level_indices``.
         coupling_level: Number of trailing coupling tokens used to define each
             coupling pattern.
 
