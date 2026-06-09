@@ -8,7 +8,7 @@ from rich.align import Align
 from rich.console import Console, Group
 from rich.table import Table
 
-from ...utils.data_modules import MixCoefficientData
+from ...utils.data_modules import MixCoefficientBlock, MixCoefficientData
 from .binary_file_loader import BinaryFileLoader
 
 # 能级显示相关的常量
@@ -111,15 +111,7 @@ class MixCoefLoader(BinaryFileLoader):
                 )
             )
 
-            idx_block_list: list[int] = []
-            ncfblk_list: list[int] = []
-            block_energy_count_list: list[int] = []
-            j_value_location_list: list[int] = []
-            parity_list: list[int] = []
-            ivec_list: list[NDArray[np.int32]] = []
-            block_energy_list: list[float] = []
-            block_level_energy_list: list[NDArray[np.float64]] = []
-            mix_coefficient_list: list[NDArray[np.float64]] = []
+            blocks: list[MixCoefficientBlock] = []
 
             # 使用进度条处理数据块
             for jblock in range(1, nblock + 1):
@@ -131,13 +123,7 @@ class MixCoefLoader(BinaryFileLoader):
                     )
                 )
 
-                idx_block_list.append(
-                    nb - 1
-                )  # use python idx method not fortran idx method
-                ncfblk_list.append(ncfblk)
-                block_energy_count_list.append(nevblk)
-                j_value_location_list.append(iatjp)
-                parity_list.append(iaspa)
+                block_index = nb - 1
 
                 if jblock != nb:
                     raise ValueError(f"jblock ({jblock}) != nb ({nb})")
@@ -149,16 +135,11 @@ class MixCoefLoader(BinaryFileLoader):
                     np.array(ivec) - 1
                 )  # use python idx method not fortran idx method
 
-                ivec_list.append(ivec_array)
-
                 # READ (nfmix) eav, (eval(i+ncountState), i = 1, nevblk)
                 eva_evals: NDArray[np.float64] = self.read_fortran_record(file=binary_file, dtype="float64", count=nevblk + 1)
 
                 eav: float = cast(np.float64, eva_evals[0]).item()
                 evals: NDArray[np.float64] = eva_evals[1:]
-
-                block_energy_list.append(eav)
-                block_level_energy_list.append(evals)
 
                 # READ (nfmix) (evec, i = 1, ncfblk*nevblk)
                 evecsblock: NDArray[np.float64] = self.read_fortran_record(file=binary_file, dtype="float64", count=nevblk * ncfblk)
@@ -170,7 +151,20 @@ class MixCoefLoader(BinaryFileLoader):
                         f"{ncfblk=}: number of configuration functions in block should equal {evecs.shape[1]=}"
                     )
 
-                mix_coefficient_list.append(evecs)
+                blocks.append(
+                    MixCoefficientBlock(
+                        block_index=block_index,
+                        csf_count=ncfblk,
+                        level_count=nevblk,
+                        j_value_location=iatjp,
+                        j_value=_J_VALUE_LIST[iatjp - 1],
+                        parity=iaspa,
+                        level_indices=ivec_array.astype(np.int64, copy=False),
+                        base_energy=eav,
+                        level_energies=evals,
+                        mix_coefficients=evecs,
+                    )
+                )
 
             # 收集能级数据用于打印
             temp_pos: list[int] = []
@@ -178,14 +172,12 @@ class MixCoefLoader(BinaryFileLoader):
             temp_parity_idx: list[int] = []
             temp_energy: list[float] = []
 
-            for jblock in range(nblock):
-                for pos in ivec_list[jblock].tolist():
+            for block in blocks:
+                for pos in block.level_indices.tolist():
                     temp_pos.append(pos)
-                    temp_J.append(_J_VALUE_LIST[j_value_location_list[jblock] - 1])
-                    temp_parity_idx.append(parity_list[jblock])
-                    temp_energy.append(
-                        float(block_energy_list[jblock] + block_level_energy_list[jblock][pos])
-                    )
+                    temp_J.append(block.j_value)
+                    temp_parity_idx.append(block.parity)
+                    temp_energy.append(float(block.base_energy + block.level_energies[pos]))
 
             # 按能量排序
             level_idx: NDArray[np.int_] = np.argsort(temp_energy)
@@ -193,16 +185,7 @@ class MixCoefLoader(BinaryFileLoader):
 
             # 创建 MixCoefficientData 对象
             data = MixCoefficientData(
-                block_num=nblock,
-                block_idx_list=idx_block_list,
-                block_CSFs_nums=ncfblk_list,
-                block_energy_count_list=block_energy_count_list,
-                level_J_value_list=temp_J,
-                parity_list=parity_list,
-                block_levels_idx_list=ivec_list,
-                block_energy_list=block_energy_list,
-                block_level_energy_list=block_level_energy_list,
-                mix_coefficient_list=mix_coefficient_list,
+                blocks=blocks,
                 level_list=level_energy_list,
             )
 
@@ -294,4 +277,3 @@ def print_mix_coef_levels_rich(
         table
     )
     console.print(Align.left(renderable=group))
-
