@@ -19,7 +19,29 @@ from graspkit.CSFs_processor.CSFs_choosing import (
     batch_asfs_mix_square_above_threshold,
     single_asf_mix_square_above_threshold,
 )
-from graspkit.utils.data_modules import MixCoefficientData
+from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
+
+
+def _mix_block(
+    block_index: int,
+    coefficients: np.ndarray,
+    *,
+    j_value: str = "0",
+    parity: int = 1,
+) -> MixCoefficientBlock:
+    coefficient_array = np.asarray(coefficients, dtype=np.float64)
+    return MixCoefficientBlock(
+        block_index=block_index,
+        csf_count=coefficient_array.shape[1],
+        level_count=coefficient_array.shape[0],
+        j_value_location=block_index + 1,
+        j_value=j_value,
+        parity=parity,
+        level_indices=np.arange(coefficient_array.shape[0], dtype=np.int64),
+        base_energy=float(block_index),
+        level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64) * 0.1,
+        mix_coefficients=coefficient_array,
+    )
 
 
 def test_ci_squared_returns_float64_square_for_1d_coefficients() -> None:
@@ -160,18 +182,19 @@ def test_load_rmix_ci_squared_returns_selected_asf_square_data(
 
         def load(self) -> MixCoefficientData:
             return MixCoefficientData(
-                block_num=2,
-                block_idx_list=[0, 1],
-                block_CSFs_nums=[3, 2],
-                block_energy_count_list=[1, 1],
-                level_J_value_list=["0", "1"],
-                parity_list=[1, 1],
-                block_levels_idx_list=[np.array([0]), np.array([0])],
-                block_energy_list=[0.0, 0.0],
-                block_level_energy_list=[np.array([0.0]), np.array([0.0])],
-                mix_coefficient_list=[
-                    np.array([[0.5, 0.1, 0.2], [0.0, 0.4, 0.1]]),
-                    np.array([[0.3, 0.4], [0.5, 0.1]]),
+                blocks=[
+                    _mix_block(
+                        0,
+                        np.array([[0.5, 0.1, 0.2], [0.0, 0.4, 0.1]]),
+                        j_value="0",
+                        parity=1,
+                    ),
+                    _mix_block(
+                        1,
+                        np.array([[0.3, 0.4], [0.5, 0.1]]),
+                        j_value="1",
+                        parity=1,
+                    ),
                 ],
                 level_list=[0.0, 0.1],
             )
@@ -259,21 +282,15 @@ def test_legacy_single_asf_threshold_keeps_existing_tuple_index_shape() -> None:
 
 def test_legacy_batch_threshold_returns_unique_indices_per_block() -> None:
     mix_data = MixCoefficientData(
-        block_num=1,
-        block_idx_list=[0],
-        block_CSFs_nums=[3],
-        block_energy_count_list=[2],
-        level_J_value_list=["0"],
-        parity_list=[1],
-        block_levels_idx_list=[np.array([0, 1])],
-        block_energy_list=[0.0],
-        block_level_energy_list=[np.array([0.0, 0.1])],
-        mix_coefficient_list=[
-            np.array(
-                [
-                    [0.5, 0.1, 0.0],
-                    [0.0, 0.3, 0.1],
-                ]
+        blocks=[
+            _mix_block(
+                0,
+                np.array(
+                    [
+                        [0.5, 0.1, 0.0],
+                        [0.0, 0.3, 0.1],
+                    ]
+                ),
             )
         ],
         level_list=[0.0, 0.1],
