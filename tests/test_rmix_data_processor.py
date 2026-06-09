@@ -17,6 +17,7 @@ from graspkit.grasp_data_extractor.rmix_data_processor import (
 from graspkit.CSFs_processor.CSFs_choosing import (
     CSFs_sort_by_mix_coefficient,
     batch_asfs_mix_square_above_threshold,
+    batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
     single_asf_mix_square_above_threshold,
 )
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
@@ -299,6 +300,77 @@ def test_legacy_batch_threshold_returns_unique_indices_per_block() -> None:
     result = batch_asfs_mix_square_above_threshold(mix_data, threshold=0.04)
 
     np.testing.assert_array_equal(result[0], np.array([0, 1]))
+
+
+def test_batch_threshold_uses_blocks_and_nested_list_positions() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                10,
+                np.array(
+                    [
+                        [0.5, 0.1, 0.0],
+                        [0.0, 0.3, 0.1],
+                    ]
+                ),
+            ),
+            _mix_block(
+                20,
+                np.array(
+                    [
+                        [0.1, 0.6],
+                        [0.4, 0.0],
+                    ]
+                ),
+            ),
+        ],
+        level_list=[0.0, 0.1, 1.0, 1.1],
+    )
+
+    result = batch_asfs_mix_square_above_threshold(
+        mix_data,
+        asfs_position=[[1], [0]],
+        threshold=0.04,
+    )
+
+    assert set(result) == {10, 20}
+    np.testing.assert_array_equal(result[10], np.array([1]))
+    np.testing.assert_array_equal(result[20], np.array([1]))
+
+
+def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                10,
+                np.array(
+                    [
+                        [0.5, 0.1, 0.0],
+                        [0.0, 0.3, 0.1],
+                    ]
+                ),
+            )
+        ],
+        level_list=[0.0, 0.1],
+    )
+    blocks_csfs = [
+        [
+            ["line1", "line2", "a b J0"],
+            ["line1", "line2", "a b J1"],
+            ["line1", "line2", "a b J1"],
+        ]
+    ]
+
+    result = batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
+        blocks_CSFs_list=blocks_csfs,
+        asfs_mix_data=mix_data,
+        asfs_position=[[1]],
+        coupling_level=1,
+    )
+
+    assert set(result) == {10}
+    assert result[10][("J0",)]["sum_ci"] == [0.0]
+    assert result[10][("J1",)]["sum_ci"] == [0.10]
 
 
 def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> None:
