@@ -51,6 +51,9 @@ class CalSettings(BaseModel):
     diff_ci_cutoff: float = 0.0
     use_regression_model: bool = False
     regression_min_clip: float = 1e-15
+    selection_mode: str = "fixed_ratio"
+    cumulative_contribution_threshold: float = 0.995
+    exploration_ratio: float = 0.02
 
     @field_validator("root_path", mode="before")
     @classmethod
@@ -72,6 +75,31 @@ class CalSettings(BaseModel):
     def validate_regression_min_clip(cls, v: float) -> float:
         if v <= 0:
             raise ValueError("regression_min_clip 必须大于 0")
+        return v
+
+    @field_validator("selection_mode")
+    @classmethod
+    def validate_selection_mode(cls, v: str) -> str:
+        allowed_modes = {"fixed_ratio", "cumulative_contribution"}
+        if v not in allowed_modes:
+            raise ValueError(
+                "selection_mode 必须是以下值之一: "
+                f"{sorted(allowed_modes)}，当前值: {v}"
+            )
+        return v
+
+    @field_validator("cumulative_contribution_threshold")
+    @classmethod
+    def validate_cumulative_contribution_threshold(cls, v: float) -> float:
+        if not (0 < v <= 1):
+            raise ValueError("cumulative_contribution_threshold 必须在 (0, 1] 范围内")
+        return v
+
+    @field_validator("exploration_ratio")
+    @classmethod
+    def validate_exploration_ratio(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("exploration_ratio 必须大于等于 0")
         return v
 
     @field_validator("sampling_ratio")

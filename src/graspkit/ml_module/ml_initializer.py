@@ -20,6 +20,7 @@ from ..data_IO import (
     save_descriptors,
     scan_descriptors_polars,
 )
+from ..grasp_data_extractor.rmix_data_processor import ci_squared
 from ..utils import (
     MixCoefficientData,
     get_environment_config,
@@ -1005,11 +1006,8 @@ def ci_idx_data_processor(
         np.ndarray: CI系数平方数组
     """
 
-    # 保存正确能级位置的CI系数平方对应CSF总池索引（用于历史数据累积）
-    correct_levels_ci_2d: NDArray[np.float64] = np.atleast_2d(correct_levels_ci)
-    correct_levels_ci_squared: NDArray[np.float64] = (
-        correct_levels_ci_2d**2
-    )  # shape: (n_correct_levels, n_current_csfs)
+    # 保存正确能级位置的 CI 系数平方对应 CSF 总池索引（用于历史数据累积）
+    correct_levels_ci_squared = ci_squared(np.atleast_2d(correct_levels_ci))
 
     accumulated_idxs_ci_path = config.cal_path.accumulated_idxs_ci_path
     accumulated_idxs: NDArray[np.int64]
