@@ -385,3 +385,32 @@ def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> No
     result = CSFs_sort_by_mix_coefficient(csfs_block, coefficients, threshold=0.2)
 
     assert result == [["csf0"], ["csf1"], ["csf2"]]
+
+
+def test_legacy_csf_sort_by_mix_coefficient_uses_direct_block_scores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import graspkit.CSFs_processor.CSFs_choosing as csfs_choosing
+
+    def fail_aggregate(*args: object, **kwargs: object) -> None:
+        raise AssertionError(
+            "CSFs_sort_by_mix_coefficient should not aggregate via legacy helper"
+        )
+
+    monkeypatch.setattr(
+        csfs_choosing,
+        "aggregate_ci_squared",
+        fail_aggregate,
+        raising=False,
+    )
+    csfs_block = [["csf0"], ["csf1"], ["csf2"]]
+    coefficients = np.array(
+        [
+            [0.5, 0.1, 0.2],
+            [0.0, 0.4, 0.1],
+        ]
+    )
+
+    result = CSFs_sort_by_mix_coefficient(csfs_block, coefficients, threshold=0.2)
+
+    assert result == [["csf0"], ["csf1"], ["csf2"]]

@@ -12,7 +12,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..grasp_data_extractor.rmix_data_processor import (
-    aggregate_ci_squared,
     ci_squared,
     filter_ci_scores_by_threshold,
     sort_ci_scores,
@@ -487,9 +486,16 @@ def CSFs_sort_by_mix_coefficient(
     if len(CSFs_block) != next(iter(coeff_lengths)):
         raise ValueError("mix_coefficients长度必须与CSFs_block匹配")
 
-    # TODO: 该旧排序逻辑仍依赖跨 ASF 聚合；后续应改为使用
-    # RmixCiSquaredData/load_rmix_ci_squared 风格的新接口提供 CSF 索引。
-    combined_coeff = aggregate_ci_squared(ci_squared(np.asarray(mix_coefficients)))
+    squared_coefficients = ci_squared(np.asarray(mix_coefficients))
+    score_matrix = (
+        squared_coefficients
+        if squared_coefficients.ndim == 2
+        else np.atleast_2d(squared_coefficients)
+    )
+    combined_coeff: NDArray[np.float64] = np.asarray(
+        np.sum(score_matrix, axis=0, dtype=np.float64),
+        dtype=np.float64,
+    )
     sorted_idxs, _ = sort_ci_scores(combined_coeff)
 
     if threshold is not None:
