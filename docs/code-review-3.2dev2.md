@@ -105,7 +105,7 @@ def __getattr__(name: str) -> Any:
 
 ### 8. Core `pyproject.toml` still bundles ML/plot dependencies
 
-`scikit-learn`, `imbalanced-learn`, `seaborn`, `matplotlib` are in core `dependencies`, undermining the logical split at install time. Acknowledged as future Phase 3 work in the spec document.
+`scikit-learn`, `seaborn`, `matplotlib` are in core `dependencies`, undermining the logical split at install time. Acknowledged as future Phase 3 work in the spec document.
 
 ---
 

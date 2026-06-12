@@ -20,7 +20,6 @@ dependencies = [
     "tqdm>=4.67.3",
     # 机器学习库
     "scikit-learn>=1.8.0",
-    "imbalanced-learn>=0.14.1",
     # 注意：PyTorch依赖已移至optional-dependencies
     # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
     # 数据可视化
