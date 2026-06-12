@@ -15,8 +15,6 @@ from numpy.typing import NDArray
 import polars as pl
 import torch
 
-# from imblearn.over_sampling import SMOTE
-# from imblearn.under_sampling import RandomUnderSampler
 # from sklearn.ensemble import RandomForestClassifier
 
 from ..data_IO import (
