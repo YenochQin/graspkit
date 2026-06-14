@@ -15,6 +15,9 @@ A Python package for data collection and processing of results from GRASP (Gener
   - **grasp_data_extractor/** - Data extraction from GRASP2018 calculations (ASF and transition data)
   - **ml_module/** - Machine learning infrastructure (neural networks, training, analysis)
   - **utils/** - Utility functions (environment config, progress management, tool functions)
+- **graspkit_config/** - Pydantic configuration models (in `src/`)
+- **graspkit_ml/** - ML utilities (in `src/`)
+- **graspkit_plot/** - Plotting utilities (in `src/`)
 
 ### Key Components
 
@@ -84,17 +87,15 @@ mypy src/
 
 #### Testing
 ```bash
-# Run test files in tests/ directory
-python tests/test_coverage_simple.py
-python tests/test_coverage_function.py
+# Run tests in tests/ directory
+pytest tests/
 
-# Run example scripts
-python tests/ANN.py                    # ML classifier example
-python tests/rwfn_plotter.py          # Wavefunction plotting
-python tests/Nightingale_rose.py      # Visualization example
-
-# Run notebook examples
-jupyter notebook tests/test.ipynb
+# Example test files:
+# tests/test_asfs_data_processor.py
+# tests/test_bilous_cnn_model.py
+# tests/test_ml_selection.py
+# tests/test_streaming_descriptors.py
+# (16 test files total)
 ```
 
 #### Package Verification
@@ -109,11 +110,12 @@ python -c "import graspkit; print(graspkit.__version__)"
 ### Key Development Patterns
 
 #### Centralized Import Structure
-The package exposes all functionality through `src/graspkit/__init__.py` with comprehensive imports:
-- Data I/O operations (GraspFileLoad, descriptor loading/saving)
-- Utility functions (CSFs, energy calculations, transition data)
-- Machine learning modules (ANNClassifier, training functions)
-- Data processing tools (ASF composition, transition analysis)
+The package exposes core functionality through `src/graspkit/__init__.py` with lazy imports:
+- `MLCalConfig` - ML calculation configuration
+- `CalPath` - Calculation path management
+- `load_config` - Configuration loading
+
+Subpackage imports are available for deeper access (e.g., `graspkit.ml_module`, `graspkit.CSFs_processor`).
 
 #### Module Interdependencies
 - **data_IO** serves as foundation, providing file loading and persistence
@@ -124,35 +126,32 @@ The package exposes all functionality through `src/graspkit/__init__.py` with co
 
 #### Environment-Aware Logging
 The codebase includes environment detection for HPC/SLURM environments:
-- `utils/environment_config.py` - Detects SLURM jobs and debug mode
-- `utils/progress_manager.py` - Hides progress bars in SLURM, shows in debug mode
+- `utils/environment_config.py` - Detects SLURM jobs, debug mode, and manages progress display configuration
 - Use `log_stage_start()` / `log_stage_end()` functions for structured logging
 
 #### Type Safety
 - Data structures use `@dataclass` (e.g., `MixCoefficientData`, `CSFs` in `utils/data_modules.py`)
-- Type-safe helper methods on `GraspFileLoad` class
 - PyTorch models use type annotations
 
 ### Configuration Management
 
 #### Main Package Configuration
 - **pyproject.toml** - Modern Python packaging configuration using Hatchling
-- **uv.lock** - UV lock file for reproducible dependency management
 - **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
-- **Ruff Configuration** - NumPy 2.0 compatibility rules in pyproject.toml
+- **Ruff Configuration** - NumPy 2.0 compatibility rules (`NPY201`) in pyproject.toml
 
 #### Dependencies Management
-- **CPU Environment** - PyTorch CPU version for general compatibility
+- **CPU Environment** - PyTorch CPU version (`torch==2.10.0`) for general compatibility
 - **GPU Environment** - PyTorch CUDA version (cu128) for NVIDIA GPUs
 - **Development Tools** - pytest, ruff, mypy, black, jupyter ecosystem
-- **Data Processing** - pandas, numpy, matplotlib, h5py, polars, pyarrow
+- **Data Processing** - pandas, numpy, matplotlib, polars, pyarrow
 
 ### Current Repository Status
-- **Version**: 2.9dev2 (from `src/graspkit/version.py`)
-- **Python Version**: Requires 3.13+ (<3.14)
+- **Version**: 3.2.dev2 (from `src/graspkit/version.py`)
+- **Python Version**: Requires ≥ 3.14
 - **Package Manager**: Hatchling with UV support
 - **Build System**: Modern packaging with optional dependencies
-- **Testing**: Example files in tests/ directory (ANN.py, rwfn_plotter.py, Nightingale_rose.py, test.ipynb)
+- **Testing**: 16 test files in tests/ directory covering ML, data processing, and integration tests
 
 ## Common Development Workflows
 
@@ -161,16 +160,15 @@ The codebase includes environment detection for HPC/SLURM environments:
 # Typical workflow for processing GRASP data
 import graspkit as gk
 
-# Load GRASP calculation results
-data_loader = gk.GraspFileLoad("path/to/grasp/output")
-energy_data = gk.iterative_levels_collection(data_loader)
+# Load configuration
+config = gk.load_config("path/to/config.toml")
 
-# Process CSFs with ML-driven selection
-selected_csfs = gk.radom_choose_csfs(csf_processor, n_select=1000)
+# Access ML calculation config
+ml_config = gk.MLCalConfig(...)
 
-# Train ML model for optimization
-model = gk.ANNClassifier(...)
-gk.train_model(model, training_data)
+# Subpackage access for specific operations
+from graspkit.CSFs_processor import ...
+from graspkit.ml_module import ANNClassifier
 ```
 
 ### Environment-Specific Commands
