@@ -29,6 +29,7 @@ from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colorbar import Colorbar
 from matplotlib.figure import Figure
+from matplotlib.ticker import ScalarFormatter
 
 
 def configure_matplotlib_for_publication() -> bool:
@@ -363,6 +364,103 @@ def set_figure_size(size_name: str = "default") -> tuple[float, float]:
     else:
         warnings.warn(f"Unknown figure size: {size_name}, using default")
         return FIGURE_SIZES["default"]
+
+
+def get_cycled_plot_colors(
+    colors: list[str] | None,
+    n_items: int,
+    color_scheme: str = "default",
+) -> list[str]:
+    """Return enough colors for plotted series, using a named scheme by default."""
+    if colors is None:
+        scheme_colors = JOURNAL_COLOR_SCHEMES.get(
+            color_scheme,
+            JOURNAL_COLOR_SCHEMES["default"],
+        )
+        return (scheme_colors * (n_items // len(scheme_colors) + 1))[:n_items]
+
+    if len(colors) < n_items:
+        return (colors * (n_items // len(colors) + 1))[:n_items]
+    return colors
+
+
+def get_cycled_linestyles(
+    linestyles: list[Any] | None,
+    n_items: int,
+) -> list[Any]:
+    """Return enough line styles for plotted series."""
+    if linestyles is None:
+        default_linestyles: list[Any] = [
+            "-",
+            "--",
+            "-.",
+            ":",
+            (0, (3, 1, 1, 1)),
+            (0, (5, 1, 1, 1)),
+            (0, (3, 1, 3, 1, 1, 1)),
+            (0, (1, 1)),
+            (0, (2, 2)),
+            (0, (5, 5)),
+        ]
+        return (default_linestyles * (n_items // len(default_linestyles) + 1))[:n_items]
+
+    if len(linestyles) < n_items:
+        return (linestyles * (n_items // len(linestyles) + 1))[:n_items]
+    return linestyles
+
+
+def resolve_transformed_xscale(xscale: str | None, x_transform: str) -> str:
+    """Resolve the Matplotlib x-axis scale for transformed x values."""
+    if xscale is not None:
+        return xscale
+    if x_transform in {"linear", "raw"}:
+        return "linear"
+    return "symlog"
+
+
+def use_plain_linear_x_axis(ax: Axes, x_transform: str, xscale: str) -> None:
+    """Use non-scientific tick labels for untransformed linear x axes."""
+    if x_transform not in {"linear", "raw"} or xscale != "linear":
+        return
+
+    formatter = ScalarFormatter(useOffset=False)
+    formatter.set_scientific(False)
+    ax.xaxis.set_major_formatter(formatter)
+
+
+def apply_transformed_x_axis_settings(
+    ax: Axes,
+    max_x: float,
+    effective_xscale: str,
+    linthresh: int,
+    x_transform: str,
+    *,
+    show_legend: bool,
+) -> None:
+    """Apply shared x-axis settings for transformed line plots."""
+    ax.set_xlim(0, max_x)
+    if effective_xscale == "symlog":
+        ax.set_xscale("symlog", linthresh=linthresh)
+    elif effective_xscale == "log":
+        ax.set_xscale("log")
+    use_plain_linear_x_axis(ax, x_transform, effective_xscale)
+    if show_legend:
+        ax.legend()
+
+
+def finalize_figure_layout(
+    fig: Figure,
+    *,
+    has_axis_labels: bool,
+    top: float = 0.88,
+    bottom: float = 0.05,
+    left: float = 0.03,
+) -> None:
+    """Apply shared final subplot spacing."""
+    if has_axis_labels:
+        fig.subplots_adjust(top=top, bottom=bottom, left=left)
+    else:
+        fig.subplots_adjust(top=top)
 
 
 def configure_for_latex() -> bool:
