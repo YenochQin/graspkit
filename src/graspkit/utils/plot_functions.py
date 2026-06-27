@@ -1,22 +1,261 @@
 # -*- encoding: utf-8 -*-
 import warnings
-import re
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import matplotlib.pyplot as plt
+import polars as pl
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from .fig_settings import (
+        apply_transformed_x_axis_settings,
         configure_matplotlib_for_publication,
-        set_figure_size,
-        set_color_scheme,
-        optimize_for_plot_type,
         create_multi_subplot_figure,
-        add_reference_lines_to_subplots,
-        configure_subplot_grid
+        finalize_figure_layout,
+        get_cycled_linestyles,
+        get_cycled_plot_colors,
+        optimize_for_plot_type,
+        resolve_transformed_xscale,
+        set_color_scheme,
+        set_figure_size,
     )
+
+
+PlotMode = Literal["density", "P", "Q", "components"]
+SingleSeriesMode = Literal["density", "P", "Q"]
+XTransform = Literal["sqrt", "linear", "raw", "log1p"]
+
+
+def _validate_plot_mode(plot_mode: str) -> None:
+    if plot_mode not in {"density", "P", "Q", "components"}:
+        raise ValueError("plot_mode must be one of 'density', 'P', 'Q', or 'components'")
+
+
+def _component_column(orbital: str, component: Literal["P", "Q"]) -> str:
+    return f"{component}({orbital})"
+
+
+def _validate_rwfn_columns(data: pl.DataFrame, orbitals: list[str], x_col: str) -> None:
+    missing_columns: list[str] = []
+    if x_col not in data.columns:
+        missing_columns.append(x_col)
+
+    for orbital in orbitals:
+        for component in ("P", "Q"):
+            col_name = _component_column(orbital, component)
+            if col_name not in data.columns:
+                missing_columns.append(col_name)
+
+    if missing_columns:
+        raise ValueError(
+            f"Wavefunction DataFrame is missing required columns: {missing_columns}"
+        )
+
+
+def _x_expr(x_col: str, x_transform: XTransform) -> pl.Expr:
+    expr = pl.col(x_col)
+    if x_transform == "sqrt":
+        return expr.sqrt()
+    if x_transform in {"linear", "raw"}:
+        return expr
+    if x_transform == "log1p":
+        return (expr + 1).log()
+    raise ValueError(
+        "x_transform must be one of 'sqrt', 'linear', 'raw', or 'log1p'"
+    )
+
+
+def _x_series(data: pl.DataFrame, x_col: str, x_transform: XTransform) -> pl.Series:
+    series = data.select(_x_expr(x_col, x_transform).alias(x_col)).to_series()
+    if bool(series.is_nan().any()) or bool(series.is_infinite().any()):
+        raise ValueError(f"x_transform={x_transform} produced non-finite x values")
+    return series
+
+
+def _rwfn_y_series(
+        data: pl.DataFrame,
+        orbital: str,
+        plot_mode: SingleSeriesMode,
+    ) -> pl.Series:
+    p_col = _component_column(orbital, "P")
+    q_col = _component_column(orbital, "Q")
+
+    if plot_mode == "density":
+        return data.select(
+            (pl.col(p_col) ** 2 + pl.col(q_col) ** 2).alias(orbital)
+        ).to_series()
+    if plot_mode == "P":
+        return data[p_col]
+    if plot_mode == "Q":
+        return data[q_col]
+    raise ValueError("plot_mode must be one of 'density', 'P', or 'Q'")
+
+
+def _auto_rwfn_layout(n_items: int) -> str:
+    ncols = int(np.ceil(np.sqrt(n_items)))
+    nrows = int(np.ceil(n_items / ncols))
+    return f"{nrows}x{ncols}"
+
+
+def _parse_layout(layout: str) -> tuple[int, int]:
+    try:
+        nrows_text, ncols_text = layout.split("x")
+        nrows = int(nrows_text)
+        ncols = int(ncols_text)
+    except ValueError as exc:
+        raise ValueError("layout must use the '<rows>x<columns>' format") from exc
+
+    if nrows <= 0 or ncols <= 0:
+        raise ValueError("layout rows and columns must be greater than 0")
+    return nrows, ncols
+
+
+def _resolve_rwfn_layout(layout: str | None, plot_mode: PlotMode, n_orbitals: int) -> str:
+    if plot_mode == "components":
+        if layout is None:
+            return f"2x{n_orbitals}"
+        group_nrows, group_ncols = _parse_layout(layout)
+        return f"{group_nrows * 2}x{group_ncols}"
+    if layout is not None:
+        return layout
+    return _auto_rwfn_layout(n_orbitals)
+
+
+def _build_plot_items(
+        orbitals: list[str],
+        plot_mode: PlotMode,
+    ) -> list[tuple[SingleSeriesMode, str, str]]:
+    if plot_mode == "components":
+        plot_items: list[tuple[SingleSeriesMode, str, str]] = []
+        for orbital in orbitals:
+            plot_items.append(("P", orbital, _component_column(orbital, "P")))
+            plot_items.append(("Q", orbital, _component_column(orbital, "Q")))
+        return plot_items
+    if plot_mode == "density":
+        return [("density", orbital, orbital) for orbital in orbitals]
+    if plot_mode == "P":
+        return [("P", orbital, _component_column(orbital, "P")) for orbital in orbitals]
+    if plot_mode == "Q":
+        return [("Q", orbital, _component_column(orbital, "Q")) for orbital in orbitals]
+    raise ValueError("plot_mode must be one of 'density', 'P', 'Q', or 'components'")
+
+
+def _rwfn_plot_position(
+        index: int,
+        plot_mode: PlotMode,
+        ncols: int,
+    ) -> tuple[int, int]:
+    if plot_mode == "components":
+        group_index = index // 2
+        component_index = index % 2
+        return (group_index // ncols) * 2 + component_index, group_index % ncols
+    return index // ncols, index % ncols
+
+
+def _rwfn_single_plot_style(
+        series_mode: SingleSeriesMode,
+        orbital: str,
+        orbitals: list[str],
+        orbital_colors: list[str],
+        color: str | None,
+        linestyle: Any,
+        plot_mode: PlotMode,
+    ) -> tuple[str | None, Any]:
+    if color is not None or plot_mode != "components":
+        return color, linestyle
+
+    orbital_color = orbital_colors[orbitals.index(orbital)]
+    return orbital_color, linestyle
+
+
+def _significant_mask_expr(
+        orbitals: list[str],
+        plot_mode: PlotMode,
+        threshold: float,
+    ) -> pl.Expr:
+    masks: list[pl.Expr] = []
+    for orbital in orbitals:
+        p_col = _component_column(orbital, "P")
+        q_col = _component_column(orbital, "Q")
+        if plot_mode == "density":
+            masks.append((pl.col(p_col) ** 2 + pl.col(q_col) ** 2).abs() > threshold)
+        elif plot_mode == "P":
+            masks.append(pl.col(p_col).abs() > threshold)
+        elif plot_mode == "Q":
+            masks.append(pl.col(q_col).abs() > threshold)
+        elif plot_mode == "components":
+            masks.append(pl.col(p_col).abs() > threshold)
+            masks.append(pl.col(q_col).abs() > threshold)
+
+    if not masks:
+        raise ValueError("orbitals must contain at least one orbital")
+
+    combined_mask = masks[0]
+    for mask in masks[1:]:
+        combined_mask = combined_mask | mask
+    return combined_mask
+
+
+def _last_significant_x_from_polars(
+        data: pl.DataFrame,
+        orbitals: list[str],
+        x_col: str,
+        plot_mode: PlotMode,
+        x_transform: XTransform,
+        threshold: float,
+    ) -> float | None:
+    selected = (
+        data.with_columns(_x_expr(x_col, x_transform).alias("__x_plot"))
+        .filter(_significant_mask_expr(orbitals, plot_mode, threshold))
+        .select(pl.col("__x_plot").last())
+    )
+    value = selected.item()
+    return None if value is None else float(value)
+
+
+def _calculate_default_max_x_from_polars(
+        data: pl.DataFrame,
+        x_col: str,
+        x_transform: XTransform,
+    ) -> float:
+    last_x = float(_x_series(data, x_col, x_transform)[-1])
+    return float(int(np.ceil(last_x / 10)) * 10)
+
+
+def _calculate_auto_max_x_from_polars(
+        data_list: list[pl.DataFrame],
+        orbitals: list[str],
+        x_col: str,
+        plot_mode: PlotMode,
+        x_transform: XTransform,
+        threshold: float,
+        padding: float,
+    ) -> float | None:
+    max_x_candidates = [
+        last_x
+        for data in data_list
+        if (
+            last_x := _last_significant_x_from_polars(
+                data,
+                orbitals,
+                x_col,
+                plot_mode,
+                x_transform,
+                threshold,
+            )
+        ) is not None
+    ]
+    if not max_x_candidates:
+        return None
+    return max(max_x_candidates) * padding
+
+
+def _validate_auto_max_x_settings(threshold: float, padding: float) -> None:
+    if threshold < 0:
+        raise ValueError("x_tail_threshold must be greater than or equal to 0")
+    if padding <= 0:
+        raise ValueError("x_tail_padding must be greater than 0")
 
 
 def inter_coupling_channel_bar(
@@ -252,264 +491,265 @@ def inter_coupling_channel_bar(
     return fig, ax1, ax2
 
 
-def auto_plot_wavefunction_comparison(
-        data_list: list[Any],
-        column_names: list[str],
-        x_col: str = 'r(a.u)',
-        labels: list[str] | None = None,
-        layout: str = '2x4',
+def _resolve_rwfn_max_x(
+        data_list: list[pl.DataFrame],
+        orbitals: list[str],
+        x_col: str,
+        plot_mode: PlotMode,
+        x_transform: XTransform,
+        max_x: float | None,
+        auto_max_x: bool,
+        threshold: float,
+        padding: float,
+    ) -> float:
+    if max_x is not None:
+        return max_x
+
+    if auto_max_x:
+        detected_max_x = _calculate_auto_max_x_from_polars(
+            data_list,
+            orbitals,
+            x_col,
+            plot_mode,
+            x_transform,
+            threshold,
+            padding,
+        )
+        if detected_max_x is not None:
+            return detected_max_x
+
+    return _calculate_default_max_x_from_polars(data_list[0], x_col, x_transform)
+
+
+def _finalize_rwfn_plot(
+        fig: Figure,
+        axes: np.ndarray,
+        layout: str,
+        suptitle: str,
+        xlabel: str | None,
+        ylabel: str | None,
+    ) -> None:
+    _parse_layout(layout)
+    for ax in axes.flat:
+        ax.axhline(y=0, color="gray", linestyle="--", alpha=0.7, linewidth=1)
+
+    if suptitle is not None:
+        suptitle_text = fig.suptitle(suptitle, fontsize=16)
+        suptitle_text.set_y(0.995)
+
+    if xlabel is not None:
+        fig.text(0.5, 0.01, xlabel, ha="center", va="center", fontsize=12)
+    if ylabel is not None:
+        fig.text(0.01, 0.5, ylabel, ha="center", va="center", rotation="vertical", fontsize=12)
+
+    finalize_figure_layout(
+        fig,
+        has_axis_labels=xlabel is not None or ylabel is not None,
+    )
+
+
+def rwfn_plot(
+        data: pl.DataFrame,
+        orbitals: list[str],
+        x_col: str = "r(a.u)",
+        plot_mode: PlotMode = "density",
+        layout: str | None = None,
+        base_size: str | tuple[float, float] = "single_column",
+        spacing: str = "normal",
+        color_scheme: str = "nature",
+        legend_size: str = "medium",
         alpha: float = 0.75,
-        max_x: int | None = None,
-        xscale: str = 'symlog',
+        max_x: float | None = None,
+        xscale: str | None = None,
         linthresh: int = 1,
-        suptitle: str = 'Wavefunction Comparison',
+        suptitle: str = "Radial Wavefunction",
+        color: str | None = None,
+        linestyle: Any = "-",
+        xlabel: str | None = None,
+        ylabel: str | None = None,
+        x_transform: XTransform = "sqrt",
+        auto_max_x: bool = True,
+        x_tail_threshold: float = 0.0,
+        x_tail_padding: float = 1.05,
+    ) -> tuple[Figure, np.ndarray]:
+    """Plot radial wavefunctions from one Polars DataFrame."""
+    _validate_plot_mode(plot_mode)
+    _validate_auto_max_x_settings(x_tail_threshold, x_tail_padding)
+    _validate_rwfn_columns(data, orbitals, x_col)
+
+    resolved_layout = _resolve_rwfn_layout(layout, plot_mode, len(orbitals))
+    nrows, ncols = _parse_layout(resolved_layout)
+    plot_items = _build_plot_items(orbitals, plot_mode)
+    effective_xscale = resolve_transformed_xscale(xscale, x_transform)
+    resolved_max_x = _resolve_rwfn_max_x(
+        [data],
+        orbitals,
+        x_col,
+        plot_mode,
+        x_transform,
+        max_x,
+        auto_max_x,
+        x_tail_threshold,
+        x_tail_padding,
+    )
+
+    fig, axes = create_multi_subplot_figure(
+        layout=resolved_layout,
+        base_size=base_size,
+        spacing=spacing,
+        color_scheme=color_scheme,
+        legend_size=legend_size,
+    )
+
+    x_values = _x_series(data, x_col, x_transform)
+    orbital_colors = get_cycled_plot_colors(None, len(orbitals), color_scheme)
+    max_items = nrows * ncols
+    if len(plot_items) > max_items:
+        warnings.warn("More wavefunction plot items were requested than the layout can show")
+
+    for index, (series_mode, orbital, title) in enumerate(plot_items[:max_items]):
+        row, col = _rwfn_plot_position(index, plot_mode, ncols)
+        y_values = _rwfn_y_series(data, orbital, series_mode)
+        line_color, line_style = _rwfn_single_plot_style(
+            series_mode,
+            orbital,
+            orbitals,
+            orbital_colors,
+            color,
+            linestyle,
+            plot_mode,
+        )
+        axes[row, col].plot(
+            x_values,
+            y_values,
+            alpha=alpha,
+            color=line_color,
+            linestyle=line_style,
+        )
+        apply_transformed_x_axis_settings(
+            axes[row, col],
+            resolved_max_x,
+            effective_xscale,
+            linthresh,
+            x_transform,
+            show_legend=False,
+        )
+        axes[row, col].set_title(title)
+
+    _finalize_rwfn_plot(
+        fig,
+        axes,
+        resolved_layout,
+        suptitle,
+        xlabel,
+        ylabel,
+    )
+    return fig, axes
+
+
+def rwfns_compare_plot(
+        data_list: list[pl.DataFrame],
+        orbitals: list[str],
+        x_col: str = "r(a.u)",
+        labels: list[str] | None = None,
+        plot_mode: PlotMode = "density",
+        layout: str | None = None,
+        base_size: str | tuple[float, float] = "single_column",
+        spacing: str = "normal",
+        color_scheme: str = "nature",
+        legend_size: str = "medium",
+        alpha: float = 0.75,
+        max_x: float | None = None,
+        xscale: str | None = None,
+        linthresh: int = 1,
+        suptitle: str = "Radial Wavefunction Comparison",
         colors: list[str] | None = None,
         linestyles: list[Any] | None = None,
         xlabel: str | None = None,
         ylabel: str | None = None,
+        x_transform: XTransform = "sqrt",
+        auto_max_x: bool = True,
+        x_tail_threshold: float = 0.0,
+        x_tail_padding: float = 1.05,
     ) -> tuple[Figure, np.ndarray]:
-    """
-    自动绘制波函数对比图的通用函数，支持多个DataFrame对比
-
-    Args:
-        data_list: 数据集列表，包含多个DataFrame [data1, data2, data3, ...]
-        column_names: 要绘制的列名列表，包含成对的P和Q分量，如 ['P(4p-)', 'Q(4p-)', 'P(4p )', 'Q(4p )']
-        x_col: x轴数据的列名 (默认: 'r(a.u)')
-        labels: 数据集标签列表，如 ['old', 'new', 'modified'] (默认: ['Data 1', 'Data 2', ...])
-        layout: 子图布局 (默认: '2x4')
-        alpha: 透明度 (默认: 0.75)
-        max_x: x轴最大值，如果为None则自动计算
-        xscale: x轴比例类型 (默认: 'symlog')
-        linthresh: symlog的线性阈值 (默认: 1)
-        suptitle: 总标题 (默认: 'Wavefunction Comparison')
-        colors: 线条颜色列表，如 ['blue', 'red', 'green'] (默认: 自动分配)
-        linestyles: 线条样式列表，如 ['-', '--', '-.'] (默认: 全为实线)
-        xlabel: x轴标签，只在最底行显示 (默认: None)
-        ylabel: y轴标签，只在最左列显示 (默认: None)
-
-    Returns:
-        fig, axes: matplotlib的figure和axes对象
-    """
-
-    def extract_orbital_name(col_name: str) -> str:
-        """
-        从列名中提取轨道名称（括号内的字符）
-
-        Args:
-            col_name (str): 列名，如 'P(4p-)', 'Q(4p-)'
-
-        Returns:
-            str: 轨道名称，如 '4p-'
-        """
-        match = re.search(r'\((.*?)\)', col_name)
-        if match:
-            return match.group(1)
-        return col_name
-
-    def group_columns_by_orbital(column_names: list[str]) -> list[dict[str, str]]:
-        """
-        将列名按轨道分组，返回每组对应的P和Q列名以及轨道名称
-
-        Args:
-            column_names: 列名列表，如 ['P(4p-)', 'Q(4p-)', 'P(4p )', 'Q(4p )']
-
-        Returns:
-            list: 包含轨道信息的列表，每个元素为 {'orbital': str, 'p_col': str, 'q_col': str}
-        """
-        # 首先提取所有轨道名称
-        orbital_map: dict[str, dict[str, str | None]] = {}
-        for col_name in column_names:
-            orbital = extract_orbital_name(col_name)
-            if orbital not in orbital_map:
-                orbital_map[orbital] = {'p_col': None, 'q_col': None}
-
-            # 根据列名确定是P还是Q分量
-            if col_name.startswith('P(') or col_name.startswith('P '):
-                orbital_map[orbital]['p_col'] = col_name
-            elif col_name.startswith('Q(') or col_name.startswith('Q '):
-                orbital_map[orbital]['q_col'] = col_name
-
-        # 转换为列表格式，并验证每个轨道都有P和Q分量
-        orbital_groups: list[dict[str, str]] = []
-        for orbital, cols in orbital_map.items():
-            if cols['p_col'] is not None and cols['q_col'] is not None:
-                orbital_groups.append({
-                    'orbital': orbital,
-                    'p_col': cols['p_col'],
-                    'q_col': cols['q_col']
-                })
-            else:
-                warnings.warn(f"Orbital {orbital} is missing P or Q component, skipping...")
-
-        return orbital_groups
-
-    # 创建多子图
-    fig, axes = create_multi_subplot_figure(
-        layout=layout,
-        base_size='single_column',
-        spacing='normal',
-        color_scheme='nature'
-    )
+    """Compare radial wavefunctions from multiple Polars DataFrames."""
+    _validate_plot_mode(plot_mode)
+    _validate_auto_max_x_settings(x_tail_threshold, x_tail_padding)
+    if not data_list:
+        raise ValueError("data_list must contain at least one DataFrame")
+    for data in data_list:
+        _validate_rwfn_columns(data, orbitals, x_col)
 
     n_datasets = len(data_list)
-
-    # 设置默认标签
     if labels is None:
-        labels = [f'Data {i+1}' for i in range(n_datasets)]
+        labels = [f"Data {i + 1}" for i in range(n_datasets)]
     elif len(labels) != n_datasets:
         raise ValueError(f"Number of labels ({len(labels)}) must match number of datasets ({n_datasets})")
 
-    # 设置默认颜色和线条样式
-    if colors is None:
-        # 扩展的颜色列表，包含足够多的颜色来支持大量数据集
-        extended_colors = [
-            # matplotlib默认颜色
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
-            # 更多蓝色系
-            '#17becf', '#0080ff', '#0066cc', '#004499', '#002266', '#001133',
-            # 更多红色系
-            '#e377c2', '#ff1493', '#dc143c', '#b22222', '#8b0000', '#800000',
-            # 更多绿色系
-            '#7fff00', '#32cd32', '#228b22', '#006400', '#004000', '#002000',
-            # 更多橙色/黄色系
-            '#ffd700', '#ffb347', '#ff8c00', '#ff6347', '#ff4500', '#ff0000',
-            # 更多紫色系
-            '#9370db', '#8a2be2', '#800080', '#4b0082', '#6a0dad', '#483d8b',
-            # 更多青色/青绿色系
-            '#40e0d0', '#00ced1', '#008b8b', '#008080', '#20b2aa', '#5f9ea0',
-            # 更多棕色系
-            '#daa520', '#b8860b', '#cd853f', '#8b4513', '#a0522d', '#d2691e',
-            # 更多灰色系
-            '#708090', '#778899', '#696969', '#2f4f4f', '#556b2f', '#8b7355',
-            # 更多粉色系
-            '#ffb6c1', '#ffc0cb', '#ff69b4', '#ff1493', '#c71585', '#db7093',
-            # 更多特殊颜色
-            '#ffdead', '#f0e68c', '#dda0dd', '#ee82ee', '#fa8072', '#ffa07a',
-            '#20b2aa', '#87ceeb', '#87cefa', '#4682b4', '#b0c4de', '#add8e6'
-        ]
-
-        # 如果数据集数量超过扩展颜色列表，则循环使用
-        if n_datasets > len(extended_colors):
-            colors = (extended_colors * (n_datasets // len(extended_colors) + 1))[:n_datasets]
-        else:
-            colors = extended_colors[:n_datasets]
-    elif len(colors) < n_datasets:
-        # 如果提供的颜色不够，循环使用
-        colors = (colors * (n_datasets // len(colors) + 1))[:n_datasets]
-
-    if linestyles is None:
-        # 扩展的线条样式列表，提供更多样化的线条样式
-        extended_linestyles = [
-            '-', '--', '-.', ':',      # 基本线条样式
-            (0, (3, 1, 1, 1)),        # 密集点划线
-            (0, (5, 1, 1, 1)),        # 稀疏点划线
-            (0, (3, 1, 3, 1, 1, 1)),  # 复杂点划线
-            (0, (1, 1)),              # 密点线
-            (0, (2, 2)),              # 中等点线
-            (0, (5, 5)),              # 稀疏点线
-        ]
-
-        # 如果数据集数量超过线条样式列表，则循环使用
-        if n_datasets > len(extended_linestyles):
-            linestyles = (extended_linestyles * (n_datasets // len(extended_linestyles) + 1))[:n_datasets]
-        else:
-            linestyles = extended_linestyles[:n_datasets]
-    elif len(linestyles) < n_datasets:
-        # 如果提供的样式不够，循环使用
-        linestyles = (linestyles * (n_datasets // len(linestyles) + 1))[:n_datasets]
-
-    # 计算x轴范围
-    if max_x is None:
-        last_x = np.sqrt(data_list[0][x_col].iloc[-1])
-        max_x = int(np.ceil(last_x / 10)) * 10
-
-    # 获取布局信息
-    nrows = int(layout.split('x')[0])
-    ncols = int(layout.split('x')[1])
-
-    # 按轨道分组列名
-    orbital_groups = group_columns_by_orbital(column_names)
-    n_orbitals = len(orbital_groups)
-
-    if n_orbitals == 0:
-        raise ValueError("No valid orbital groups found in column_names")
-
-    # 自动绘制所有轨道的 P²+Q² 图
-    for i, orbital_group in enumerate(orbital_groups):
-        if i >= nrows * ncols:  # 超出子图数量则跳过
-            break
-
-        # 计算子图位置
-        row = i // ncols
-        col = i % ncols
-
-        orbital_name = orbital_group['orbital']
-        p_col = orbital_group['p_col']
-        q_col = orbital_group['q_col']
-
-        # 绘制所有数据集的 P²+Q²
-        for j, data in enumerate(data_list):
-            # 验证列是否存在
-            if p_col not in data.columns or q_col not in data.columns:
-                warnings.warn(f"Columns {p_col} or {q_col} not found in dataset {j+1}, skipping...")
-                continue
-
-            # 计算 P²+Q²
-            p_squared_plus_q_squared = data[p_col]**2 + data[q_col]**2
-
-            axes[row, col].plot(
-                np.sqrt(data[x_col]), p_squared_plus_q_squared,
-                alpha=alpha,
-                label=labels[j],
-                color=colors[j],
-                linestyle=linestyles[j]
-                )
-
-        # 设置x轴
-        axes[row, col].set_xlim(0, max_x)
-        if xscale == 'symlog':
-            axes[row, col].set_xscale('symlog', linthresh=linthresh)
-        elif xscale == 'log':
-            axes[row, col].set_xscale('log')
-
-        # 添加图例
-        axes[row, col].legend()
-
-    # 添加参考线
-    add_reference_lines_to_subplots(
-        axes, layout=layout,
-        y_values=[0],
-        y_styles='--',
-        y_colors='gray',
-        y_labels=None
+    resolved_layout = _resolve_rwfn_layout(layout, plot_mode, len(orbitals))
+    nrows, ncols = _parse_layout(resolved_layout)
+    plot_items = _build_plot_items(orbitals, plot_mode)
+    colors = get_cycled_plot_colors(colors, n_datasets, color_scheme)
+    linestyles = get_cycled_linestyles(linestyles, n_datasets)
+    effective_xscale = resolve_transformed_xscale(xscale, x_transform)
+    resolved_max_x = _resolve_rwfn_max_x(
+        data_list,
+        orbitals,
+        x_col,
+        plot_mode,
+        x_transform,
+        max_x,
+        auto_max_x,
+        x_tail_threshold,
+        x_tail_padding,
     )
 
-    # 配置子图网格，使用轨道名称作为标题
-    orbital_titles: list[str | None] = [group['orbital'] for group in orbital_groups[:nrows*ncols]]
-    configure_subplot_grid(
+    fig, axes = create_multi_subplot_figure(
+        layout=resolved_layout,
+        base_size=base_size,
+        spacing=spacing,
+        color_scheme=color_scheme,
+        legend_size=legend_size,
+    )
+
+    x_values_by_dataset = [
+        _x_series(data, x_col, x_transform) for data in data_list
+    ]
+    max_items = nrows * ncols
+    if len(plot_items) > max_items:
+        warnings.warn("More wavefunction plot items were requested than the layout can show")
+
+    for index, (series_mode, orbital, title) in enumerate(plot_items[:max_items]):
+        row, col = _rwfn_plot_position(index, plot_mode, ncols)
+        ax = axes[row, col]
+
+        for dataset_index, data in enumerate(data_list):
+            y_values = _rwfn_y_series(data, orbital, series_mode)
+            ax.plot(
+                x_values_by_dataset[dataset_index],
+                y_values,
+                alpha=alpha,
+                label=labels[dataset_index],
+                color=colors[dataset_index],
+                linestyle=linestyles[dataset_index],
+            )
+
+        apply_transformed_x_axis_settings(
+            ax,
+            resolved_max_x,
+            effective_xscale,
+            linthresh,
+            x_transform,
+            show_legend=True,
+        )
+        ax.set_title(title)
+
+    _finalize_rwfn_plot(
         fig,
         axes,
-        layout=layout,
-        title=orbital_titles,
-        suptitle=suptitle
+        resolved_layout,
+        suptitle,
+        xlabel,
+        ylabel,
     )
-
-    # 智能添加坐标轴标签（只在最外层显示）
-    if xlabel is not None or ylabel is not None:
-        # 添加共享的x轴标签（只在最底行）
-        if xlabel is not None:
-            fig.text(0.5, 0.01, xlabel, ha='center', va='center', fontsize=12)
-
-        # 添加共享的y轴标签（只在最左列）
-        if ylabel is not None:
-            fig.text(0.01, 0.5, ylabel, ha='center', va='center', rotation='vertical', fontsize=12)
-
-    # 调整布局以减少留白
-    if xlabel is not None or ylabel is not None:
-        # 如果有坐标轴标签，预留更少的空间
-        fig.subplots_adjust(top=0.92, bottom=0.05, left=0.03)
-    else:
-        # 如果没有坐标轴标签，使用标准调整
-        fig.subplots_adjust(top=0.92)
-
     return fig, axes
