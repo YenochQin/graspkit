@@ -10,6 +10,12 @@ from .CSFs_choosing import (
     CSFs_sort_by_mix_coefficient,
     generate_unique_random_numbers,
     radom_choose_csfs,
+    CsfsSelectionUnit,
+    SelectedCsfsBlock,
+    extract_csfs_units,
+    extract_from_config,
+    build_arg_parser,
+    run_from_cli,
 )
 
 from .CSFs_compress_extract import (
@@ -34,6 +40,12 @@ __all__ = [
     "CSFs_sort_by_mix_coefficient",
     "generate_unique_random_numbers",
     "radom_choose_csfs",
+    "CsfsSelectionUnit",
+    "SelectedCsfsBlock",
+    "extract_csfs_units",
+    "extract_from_config",
+    "build_arg_parser",
+    "run_from_cli",
     # CSFs_compress_extract
     "csf_J",
     "J_to_doubleJ",

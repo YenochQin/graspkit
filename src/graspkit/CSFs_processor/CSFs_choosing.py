@@ -1,19 +1,27 @@
-# -*- encoding: utf-8 -*-
-
+import math
 import logging
 import random
-import math
-from typing import Literal, TypedDict
+import sys
+from argparse import ArgumentParser, Namespace, RawDescriptionHelpFormatter
 from collections import Counter
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from fractions import Fraction
+from pathlib import Path
+from typing import Any, Literal, TypedDict, cast
 
 logger = logging.getLogger(__name__)
 
 import numpy as np
 from numpy.typing import NDArray
+import polars as pl
+import rtoml
 
 from ..grasp_data_extractor.rmix_data_processor import (
     ci_squared,
     filter_ci_scores_by_threshold,
+    load_rmix_ci_squared,
     sort_ci_scores,
 )
 from ..utils.tool_function import *
@@ -555,3 +563,586 @@ def radom_choose_csfs(
     chosen_csfs:list[list[str]] = [block_csfs_list[idx] for idx in chosen_csfs_idxs]
 
     return chosen_csfs, chosen_csfs_idxs, unselected_idxs
+
+
+CUSTOM_CONFIG_EXAMPLE = """
+Custom multi-J config example:
+
+cumulative_threshold = 0.9
+
+[output]
+csfs_file = "chosen.c"
+
+[[csfs_units]]
+j = "0"
+idx = "j0_idxs.npy"
+csfs = "j0.parquet"
+rmix_file = "j0.cm"
+select_asfs = [0]
+
+[[csfs_units]]
+j = "2"
+idx = "j2_idxs.npy"
+csfs = "j2.c"
+rmix_file = "j2.cm"
+select_asfs = [[0, 1]]
+"""
+
+
+@dataclass(frozen=True)
+class CsfsSelectionUnit:
+    """One independent CSF source and its selected row indexes."""
+
+    idx_file: Path
+    csfs_file: Path
+    label: str | None = None
+    rmix_file: Path | None = None
+    select_asfs: list[list[int]] | None = None
+    cumulative_threshold: float = 0.9
+
+
+@dataclass(frozen=True)
+class SelectedCsfsBlock:
+    """Selected CSF rows plus their source header."""
+
+    header_lines: list[str]
+    csfs_df: pl.DataFrame
+    source_path: Path
+    idx_file: Path
+    label: str | None = None
+
+
+def convert_csfs(
+    input_path: Path,
+    output_path: Path,
+    *,
+    num_workers: int | None = None,
+) -> dict[str, object]:
+    """Convert a GRASP .c CSF file to parquet via optional rcsfs dependency."""
+
+    from rcsfs import convert_csfs as _convert_csfs
+
+    return cast(
+        dict[str, object],
+        _convert_csfs(
+            input_path=input_path,
+            output_path=output_path,
+            num_workers=num_workers,
+        ),
+    )
+
+
+def _header_path_for_parquet(parquet_path: Path) -> Path:
+    return parquet_path.with_name(f"{parquet_path.stem}_header.toml")
+
+
+def _resolve_relative_path(path_value: str | Path, base_dir: Path) -> Path:
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return (base_dir / path).resolve()
+
+
+def _load_selection_idxs(idx_file: Path) -> NDArray[np.int64]:
+    loaded = np.load(idx_file, allow_pickle=False)
+    idxs = cast(NDArray[np.int64], loaded).astype(np.int64, copy=False)
+    if idxs.ndim != 1:
+        raise ValueError(f"idx 文件必须是一维数组: {idx_file}")
+    return idxs
+
+
+def _valid_row_idxs(row_count: int, idxs: NDArray[np.int64]) -> NDArray[np.int64]:
+    return idxs[(idxs >= 0) & (idxs < row_count)]
+
+
+def _unique_preserve_order(idxs: NDArray[np.int64]) -> NDArray[np.int64]:
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for idx in idxs:
+        idx_int = int(idx)
+        if idx_int in seen:
+            continue
+        seen.add(idx_int)
+        ordered.append(idx_int)
+    return np.array(ordered, dtype=np.int64)
+
+
+def _rmix_selected_local_ci_idxs(unit: CsfsSelectionUnit) -> NDArray[np.int64]:
+    if unit.rmix_file is None:
+        raise ValueError("rmix_file 未设置")
+
+    rmix_ci_squared = load_rmix_ci_squared(
+        unit.rmix_file,
+        select_asfs=unit.select_asfs,
+    )
+    selected_by_block = rmix_ci_squared.filter_sorted_ci_scores_by_cumulative(
+        unit.cumulative_threshold
+    )
+
+    mapped_by_block: list[NDArray[np.int64]] = []
+    block_offset = 0
+    for block_ci_indices, block_ci_squared in zip(
+        selected_by_block.csf_indices_list,
+        rmix_ci_squared.ci_squared_list,
+    ):
+        block_selected = [
+            np.asarray(asf_ci_indices, dtype=np.int64)
+            for asf_ci_indices in block_ci_indices
+            if len(asf_ci_indices) > 0
+        ]
+        if block_selected:
+            mapped_by_block.append(
+                _unique_preserve_order(np.concatenate(block_selected)) + block_offset
+            )
+
+        block_offset += int(block_ci_squared.shape[1])
+
+    if not mapped_by_block:
+        raise RuntimeError(f"rmix 累计贡献筛选没有选出 CSFs: {unit.rmix_file}")
+    return _unique_preserve_order(np.concatenate(mapped_by_block))
+
+
+def _load_unit_raw_row_idxs(unit: CsfsSelectionUnit) -> NDArray[np.int64]:
+    raw_idx_map = _load_selection_idxs(unit.idx_file)
+    if unit.rmix_file is None:
+        return raw_idx_map
+
+    local_ci_idxs = _rmix_selected_local_ci_idxs(unit)
+    if np.any(local_ci_idxs < 0) or np.any(local_ci_idxs >= raw_idx_map.shape[0]):
+        raise ValueError(
+            f"rmix 选出的 ci_idx 超出 idx 映射范围: {unit.rmix_file}, {unit.idx_file}"
+        )
+    return raw_idx_map[local_ci_idxs]
+
+
+def _ensure_parquet_from_csfs(
+    csfs_file: Path,
+    *,
+    num_workers: int | None,
+) -> Path:
+    if not csfs_file.is_file():
+        raise FileNotFoundError(f"原始 CSFs 文件不存在: {csfs_file}")
+
+    if csfs_file.suffix == ".parquet":
+        return csfs_file
+
+    if csfs_file.suffix != ".c":
+        raise ValueError(f"-csfs 只支持 .parquet 或 .c 文件: {csfs_file}")
+
+    parquet_path = csfs_file.with_suffix(".parquet")
+    convert_csfs(
+        input_path=csfs_file,
+        output_path=parquet_path,
+        num_workers=num_workers,
+    )
+    return parquet_path
+
+
+def _load_header_lines(header_path: Path) -> list[str]:
+    if not header_path.is_file():
+        raise FileNotFoundError(f"CSFs header TOML 文件不存在: {header_path}")
+
+    header = rtoml.load(header_path)
+    header_info = header.get("header_info")
+    if not isinstance(header_info, dict):
+        raise ValueError(f"header TOML 缺少 [header_info]: {header_path}")
+    header_lines = header_info.get("header_lines")
+    if not isinstance(header_lines, list) or not all(
+        isinstance(line, str) for line in header_lines
+    ):
+        raise ValueError(f"header TOML 缺少 header_info.header_lines: {header_path}")
+    if len(header_lines) != 5:
+        raise ValueError(f"CSFs header 必须是 5 行: {header_path}")
+    return list(header_lines)
+
+
+def _select_unit_csfs(
+    unit: CsfsSelectionUnit,
+    *,
+    convert_workers: int | None,
+) -> SelectedCsfsBlock:
+    if not unit.idx_file.is_file():
+        raise FileNotFoundError(f"idx 文件不存在: {unit.idx_file}")
+
+    parquet_path = _ensure_parquet_from_csfs(
+        unit.csfs_file,
+        num_workers=convert_workers,
+    )
+    header_lines = _load_header_lines(_header_path_for_parquet(parquet_path))
+    raw_csfs_df = pl.read_parquet(parquet_path)
+    idxs = _load_unit_raw_row_idxs(unit)
+    valid_idxs = _valid_row_idxs(raw_csfs_df.height, idxs)
+    if valid_idxs.shape[0] == 0:
+        raise RuntimeError(f"没有可用于提取的 idx: {unit.idx_file}")
+
+    return SelectedCsfsBlock(
+        header_lines=header_lines,
+        csfs_df=raw_csfs_df[valid_idxs],
+        source_path=unit.csfs_file,
+        idx_file=unit.idx_file,
+        label=unit.label,
+    )
+
+
+def _write_csfs_blocks_to_cfile(
+    header_lines: list[str],
+    blocks: Sequence[pl.DataFrame],
+    output_file: Path,
+) -> None:
+    if len(header_lines) != 5:
+        raise ValueError("CSFs file header info error!")
+    if not blocks:
+        raise ValueError("没有可写入的 CSFs block")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("w", encoding="utf-8") as file:
+        for line in header_lines:
+            file.write(f"{line}\n")
+
+        for block_idx, csfs_df in enumerate(blocks):
+            for row in csfs_df.select(["line1", "line2", "line3"]).iter_rows():
+                file.write("\n".join(cast(tuple[str, str, str], row)))
+                file.write("\n")
+            if block_idx != len(blocks) - 1:
+                file.write(" *\n")
+
+
+def extract_csfs_units(
+    units: Sequence[CsfsSelectionUnit],
+    output_file: Path,
+    *,
+    workers: int | None = None,
+) -> list[SelectedCsfsBlock]:
+    """Extract selected CSFs from one or more independent units."""
+
+    if not units:
+        raise ValueError("至少需要一个 CSFs 提取单元")
+
+    if len(units) == 1 or workers is None or workers <= 1:
+        selected_blocks = [
+            _select_unit_csfs(unit, convert_workers=workers) for unit in units
+        ]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            selected_blocks = list(
+                executor.map(
+                    lambda unit: _select_unit_csfs(
+                        unit,
+                        convert_workers=workers,
+                    ),
+                    units,
+                )
+            )
+
+    _write_csfs_blocks_to_cfile(
+        selected_blocks[0].header_lines,
+        [block.csfs_df for block in selected_blocks],
+        output_file,
+    )
+    return selected_blocks
+
+
+def _output_path_from_cli(
+    output_file: str | None,
+    *,
+    default_dir: Path,
+    default_name: str = "chosen.c",
+) -> Path:
+    if output_file is None:
+        return (default_dir / default_name).resolve()
+    path = Path(output_file)
+    if path.suffix == "":
+        path = path.with_suffix(".c")
+    if not path.is_absolute():
+        path = (default_dir / path).resolve()
+    return path
+
+
+def _value_from_unit(
+    unit: dict[str, Any],
+    keys: Sequence[str],
+    *,
+    config_path: Path,
+) -> str:
+    for key in keys:
+        value = unit.get(key)
+        if isinstance(value, str) and value:
+            return value
+    raise ValueError(f"{config_path} 的 csfs_units 单元缺少字段: {keys}")
+
+
+def _j_sort_key(label: str | None, original_index: int) -> tuple[int, Fraction, int]:
+    if label is None:
+        return (1, Fraction(0), original_index)
+    try:
+        return (0, Fraction(label.strip()), original_index)
+    except ValueError as err:
+        raise ValueError(
+            f"csfs_units[{original_index}] 的 j 值无法解析: {label}"
+        ) from err
+
+
+def _parse_select_asfs(
+    value: object, config_path: Path, unit_index: int
+) -> list[list[int]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError(
+            f"{config_path} 的 csfs_units[{unit_index}].select_asfs 必须是列表"
+        )
+    if not value:
+        return []
+    if all(isinstance(item, int) for item in value):
+        return [[int(item) for item in value]]
+    if all(isinstance(item, list) for item in value):
+        nested: list[list[int]] = []
+        for block_idx, block_value in enumerate(value):
+            if not all(isinstance(item, int) for item in block_value):
+                raise ValueError(
+                    f"{config_path} 的 csfs_units[{unit_index}].select_asfs[{block_idx}] 必须是整数列表"
+                )
+            nested.append([int(item) for item in block_value])
+        return nested
+    raise ValueError(
+        f"{config_path} 的 csfs_units[{unit_index}].select_asfs 必须是一维或二维整数列表"
+    )
+
+
+def _parse_cumulative_threshold(raw_config: dict[str, Any]) -> float:
+    threshold_value = raw_config.get(
+        "cumulative_threshold",
+        raw_config.get("cumulative_ratio", 0.9),
+    )
+    threshold = float(threshold_value)
+    if not 0 < threshold <= 1:
+        raise ValueError("cumulative_threshold 必须在 (0, 1] 范围内")
+    return threshold
+
+
+def _units_from_custom_config(
+    raw_config: dict[str, Any], config_path: Path
+) -> list[CsfsSelectionUnit]:
+    raw_units = raw_config.get("csfs_units")
+    if not isinstance(raw_units, list):
+        raise ValueError(f"{config_path} 缺少 [[csfs_units]] 配置")
+
+    cumulative_threshold = _parse_cumulative_threshold(raw_config)
+    indexed_units: list[tuple[int, CsfsSelectionUnit]] = []
+    for idx, raw_unit in enumerate(raw_units):
+        if not isinstance(raw_unit, dict):
+            raise ValueError(f"{config_path} 的 csfs_units[{idx}] 必须是表")
+        idx_value = _value_from_unit(
+            raw_unit,
+            ("idx", "idxs", "idx_file", "idxs_file"),
+            config_path=config_path,
+        )
+        csfs_value = _value_from_unit(
+            raw_unit,
+            ("csfs", "csfs_file", "raw_csfs", "raw_csfs_file"),
+            config_path=config_path,
+        )
+        label = raw_unit.get("j", raw_unit.get("label"))
+        rmix_value = raw_unit.get("rmix_file")
+        unit = CsfsSelectionUnit(
+            idx_file=_resolve_relative_path(idx_value, config_path.parent),
+            csfs_file=_resolve_relative_path(csfs_value, config_path.parent),
+            label=str(label) if label is not None else None,
+            rmix_file=(
+                _resolve_relative_path(rmix_value, config_path.parent)
+                if isinstance(rmix_value, str) and rmix_value
+                else None
+            ),
+            select_asfs=_parse_select_asfs(
+                raw_unit.get("select_asfs"),
+                config_path,
+                idx,
+            ),
+            cumulative_threshold=cumulative_threshold,
+        )
+        indexed_units.append((idx, unit))
+
+    return [
+        unit
+        for _idx, unit in sorted(
+            indexed_units,
+            key=lambda indexed_unit: _j_sort_key(
+                indexed_unit[1].label,
+                indexed_unit[0],
+            ),
+        )
+    ]
+
+
+def _output_from_custom_config(
+    raw_config: dict[str, Any],
+    config_path: Path,
+    cli_output_file: str | None,
+) -> Path:
+    if cli_output_file is not None:
+        return _output_path_from_cli(cli_output_file, default_dir=Path.cwd())
+
+    output = raw_config.get("output")
+    if isinstance(output, dict):
+        output_value = output.get("csfs_file", output.get("file"))
+        if isinstance(output_value, str) and output_value:
+            return _resolve_relative_path(output_value, config_path.parent)
+
+    output_value = raw_config.get("output_file")
+    if isinstance(output_value, str) and output_value:
+        return _resolve_relative_path(output_value, config_path.parent)
+
+    return (config_path.parent / "chosen.c").resolve()
+
+
+def _unit_from_pipeline_config(config: Any) -> CsfsSelectionUnit:
+    if config.cal_settings.cal_loop_num > 1:
+        if config.cal_path.ml_results_path is None:
+            raise ValueError("cal_path.ml_results_path 未设置")
+        idx_file = config.cal_path.ml_results_path.with_suffix(".npy")
+    else:
+        idx_file = (
+            Path(config.cal_settings.root_path)
+            / f"{config.target.conf}_presampled_idxs.npy"
+        )
+
+    parquet_path = config.cal_path.full_CSFs_set_parquet_path
+    csfs_file = (
+        parquet_path
+        if parquet_path.is_file()
+        else config.cal_path.full_CSFs_set_file_path
+    )
+    return CsfsSelectionUnit(
+        idx_file=idx_file,
+        csfs_file=csfs_file,
+        label=config.target.conf,
+    )
+
+
+def _output_from_pipeline_config(
+    config: Any,
+    cli_output_file: str | None,
+) -> Path:
+    if cli_output_file is not None:
+        return _output_path_from_cli(
+            cli_output_file,
+            default_dir=Path(config.cal_settings.root_path),
+        )
+    return Path(config.cal_path.cal_loop_path) / (
+        f"{config.target.conf}_{config.cal_settings.cal_loop_num}.c"
+    )
+
+
+def extract_from_config(
+    config_path: Path,
+    *,
+    output_file: str | None = None,
+    workers: int | None = None,
+) -> list[SelectedCsfsBlock]:
+    """Extract selected CSFs using either custom multi-unit or pipeline TOML."""
+
+    config_path = config_path.resolve()
+    raw_config = rtoml.load(config_path)
+    if "csfs_units" in raw_config:
+        units = _units_from_custom_config(raw_config, config_path)
+        resolved_output = _output_from_custom_config(
+            raw_config,
+            config_path,
+            output_file,
+        )
+    else:
+        from ..data_IO import load_config
+
+        config = load_config(config_path)
+        units = [_unit_from_pipeline_config(config)]
+        resolved_output = _output_from_pipeline_config(config, output_file)
+
+    return extract_csfs_units(units, resolved_output, workers=workers)
+
+
+def build_arg_parser() -> ArgumentParser:
+    parser = ArgumentParser(
+        description="Extract selected CSFs from idxs and raw CSFs data.",
+        formatter_class=RawDescriptionHelpFormatter,
+        epilog=CUSTOM_CONFIG_EXAMPLE,
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        help="TOML config file. Supports pipeline config or [[csfs_units]].",
+    )
+    parser.add_argument(
+        "-idx",
+        "--idx-file",
+        type=Path,
+        help="Direct mode: .npy file containing selected CSF indexes.",
+    )
+    parser.add_argument(
+        "-csfs",
+        "--csfs-file",
+        type=Path,
+        help="Direct mode: raw CSFs .parquet or .c file.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-file",
+        help="Output .c file path. Defaults to chosen.c in direct/custom mode.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Parallel worker count for independent units and rcsfs conversion.",
+    )
+    return parser
+
+
+def _direct_args_requested(args: Namespace) -> bool:
+    return args.idx_file is not None or args.csfs_file is not None
+
+
+def run_from_cli(argv: Sequence[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    if args.config is not None and _direct_args_requested(args):
+        parser.error("-c 不能与 -idx/-csfs 同时使用")
+
+    if args.config is not None:
+        extract_from_config(
+            args.config,
+            output_file=args.output_file,
+            workers=args.workers,
+        )
+        return 0
+
+    if _direct_args_requested(args):
+        if args.idx_file is None or args.csfs_file is None:
+            parser.error("direct mode requires both -idx and -csfs")
+        output_file = _output_path_from_cli(
+            args.output_file,
+            default_dir=Path.cwd(),
+        )
+        extract_csfs_units(
+            [
+                CsfsSelectionUnit(
+                    idx_file=args.idx_file.resolve(),
+                    csfs_file=args.csfs_file.resolve(),
+                )
+            ],
+            output_file,
+            workers=args.workers,
+        )
+        return 0
+
+    parser.error("需要指定 -c，或同时指定 -idx 和 -csfs")
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(run_from_cli())
+    except Exception as err:
+        print(f"程序执行失败: {err}", file=sys.stderr)
+        raise SystemExit(1)
