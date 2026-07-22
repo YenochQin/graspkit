@@ -36,68 +36,44 @@ class CSFLoader(BaseLoader[CSFs]):
 
         subshell_info_raw = lines[:4]
 
-        # 查找所有包含星号的行
-        star_idxs = [idx for idx, line in enumerate(lines) if "*" in line]
+        # 查找 block 分隔行
+        star_idxs = [idx for idx, line in enumerate(lines) if line.strip() == "*"]
 
         CSFs_block_j_value: list[str] = []
         CSFs_block_parity: list[str] = []
         CSFs_block_data: list[list[list[str]]] = []
         CSFs_block_length: list[int] = []
 
-        # 处理每个块
-        for i, idx in enumerate(star_idxs):
-            # 获取J值和宇称（在星号前一行的第3行）
-            line_idx = idx - 1
-            j_parity_line = lines[line_idx].strip()
+        block_starts = [csf_start_idx, *(idx + 1 for idx in star_idxs)]
+        block_ends = [*star_idxs, len(lines)]
+        for block_idx, (start_idx, end_idx) in enumerate(
+            zip(block_starts, block_ends, strict=True)
+        ):
+            block_lines = lines[start_idx:end_idx]
+            if not block_lines:
+                raise ValueError(f"CSF block {block_idx} is empty")
+            if len(block_lines) % 3 != 0:
+                raise ValueError(
+                    f"CSF block {block_idx} length must be a multiple of 3, "
+                    f"got {len(block_lines)}"
+                )
 
-            # 解析J值和宇称
-            match = re.match(r"(\d+/)?\s+([+-])\s+$", j_parity_line)
+            j_parity_line = block_lines[-1].strip()
+            match = re.search(
+                r"(?P<j>\d+(?:/\d+)?)?\s*(?P<parity>[+-])$",
+                j_parity_line,
+            )
             if not match:
                 raise ValueError(f"Invalid J/parity format: {j_parity_line}")
 
-            j_str = match.group(1)
-            parity = match.group(2)
-
-            CSFs_block_j_value.append(j_str)
-            CSFs_block_parity.append(parity)
-
-            # 提取块数据（从上一个星号后到当前星号）
-            prev_idx = star_idxs[i - 1] if i > 0 else 0
-            next_idx = star_idxs[i] if i < len(star_idxs) else len(lines)
-
-            block_lines = lines[prev_idx + 1 : next_idx]
-
-            # 检查CSF块长度是否为3的倍数
-            if len(block_lines) % 3 != 0:
-                raise ValueError(
-                    f"CSF block length must be a multiple of 3, got {len(block_lines)}"
-                )
-
-            # 将CSF块分成每3行一组
-            block_csfs: list[list[str]] = [block_lines[i : i + 3] for i in range(0, len(block_lines), 3)]
-
+            block_csfs = [
+                block_lines[index : index + 3]
+                for index in range(0, len(block_lines), 3)
+            ]
+            CSFs_block_j_value.append(match.group("j") or "")
+            CSFs_block_parity.append(match.group("parity"))
             CSFs_block_data.append(block_csfs)
             CSFs_block_length.append(len(block_csfs))
-
-        # 处理最后一个块（最后一个星号后到文件结尾）
-        if star_idxs:
-            # 有星号分隔符：从最后一个星号后到文件结尾
-            last_block_lines = lines[star_idxs[-1] + 1:]
-        else:
-            # 没有星号分隔符：从CSF(s):后到文件结尾
-            last_block_lines = lines[csf_start_idx:]
-
-        if len(last_block_lines) % 3 != 0:
-            raise ValueError(
-                f"Last CSF block length must be a multiple of 3, got {len(last_block_lines)}"
-            )
-
-        last_block_csfs = [
-            last_block_lines[i : i + 3] for i in range(0, len(last_block_lines), 3)
-        ]
-
-        CSFs_block_data.append(last_block_csfs)
-        CSFs_block_length.append(len(last_block_csfs))
 
         # 确定宇称
         parity_set = set(CSFs_block_parity)
