@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-version = '3.2.dev2'
+version = "3.4.dev1"
 # version = '2.9.1'
-description = "A Python package for processing and analyzing GRASP program calculation results And ML-driven CSF selection"
-keywords = ["GRASP", "atomic physics", "machine learning", "CSF selection", "data processing"]
+description = "Stable data I/O, processing, and plotting for GRASP calculations"
+keywords = ["GRASP", "atomic physics", "data processing", "plotting"]
 
 requires-python = ">= 3.14"
 
@@ -17,42 +17,13 @@ dependencies = [
     "polars>=1.38.1",
     "pyarrow>=23.0.0",
     "matplotlib>=3.10.8",
-    "tqdm>=4.67.3",
-    # 机器学习库
-    "scikit-learn>=1.8.0",
-    # 注意：PyTorch依赖已移至optional-dependencies
-    # 使用 uv sync --extra cpu 或 uv sync --extra gpu 来安装PyTorch
-    # 数据可视化
-    "seaborn>=0.13.2",
-    # 模型序列化和工具
-    "joblib>=1.5.3",
-    # 表格格式化
-    "tabulate>=0.9.0",
-    # 位数组处理 (可选)
-    "bitarray>=3.8.0",
     # 配置文件处理
     "rtoml>=0.13.0",
-    "pydantic>=2.0",
     "rich>=14.3.3",
 ]
 
-# Optional dependencies for different environments
-# Use with: uv sync --extra cpu or uv sync --extra gpu
 [project.optional-dependencies]
-
-# CPU-optimized installation
-cpu = [
-    "torch==2.10.0",
-    "torchvision==0.25.0",
-]
-
-# GPU-optimized installation (for NVIDIA GPUs with CUDA)
-gpu = [
-    "torch==2.10.0",
-    "torchvision==0.25.0",
-]
 dev = [
-    # 开发工具依赖（不包含PyTorch，需要额外指定 --extra cpu 或 --extra gpu）
     "pytest>=9.0.2",
     "ruff>=0.15.1",
     "mypy>=1.19.1",
@@ -68,31 +39,12 @@ dev = [
     "build>=1.4.0",
     "twine>=6.2.0",
     "wheel>=0.46.3",
-    # 安装命令: uv sync --extra dev --extra cpu (CPU版) 或 uv sync --extra dev --extra gpu (GPU版)
 ]
 all = [
     'grasp-kit[dev]',
-    'grasp-kit[cpu]',
     # Install with: uv sync --all-extras
 ]
 
-
-# uv 按 extra 选择不同的 PyTorch wheel 源
-# PyPI 上的 torch 是 CPU-only；CUDA 版需从 PyTorch 官方 wheel 仓库获取
-# cpu extra 不指定源，由下方镜像（tuna/aliyun）下载 CPU-only wheel
-# gpu extra 必须指向 PyTorch 官方仓库，镜像不同步 CUDA wheel
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-gpu", extra = "gpu" },
-]
-torchvision = [
-    { index = "pytorch-gpu", extra = "gpu" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-gpu"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
 
 [[tool.uv.index]]
 name = "tuna"
@@ -123,7 +75,6 @@ classifiers = [
 
     # Topic classification
     "Topic :: Scientific/Engineering :: Physics",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Intended Audience :: Science/Research",
 
     # Environment
@@ -133,8 +84,6 @@ classifiers = [
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/graspkit",
-    "src/graspkit_config",
-    "src/graspkit_ml",
     "src/graspkit_plot",
 ]
 
@@ -148,14 +97,6 @@ quote-style = "double"
 python_version = "3.14"
 strict = true
 disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["joblib", "sklearn", "sklearn.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["seaborn", "scipy", "scipy.*"]
-ignore_missing_imports = true
 
 [tool.basedpyright]
 include = ["src"]
@@ -172,8 +113,3 @@ reportMissingTypeStubs = false
 
 [project.urls]
 Homepage = "https://github.com/YenochQin/graspkit.git"
-
-[dependency-groups]
-dev = [
-    "scikit-learn-stubs>=0.0.3",
-]

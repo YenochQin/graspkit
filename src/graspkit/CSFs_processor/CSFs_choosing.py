@@ -1019,6 +1019,41 @@ def _unit_from_pipeline_config(config: Any) -> CsfsSelectionUnit:
     )
 
 
+def _pipeline_paths_from_raw_config(
+    raw_config: dict[str, Any],
+    config_path: Path,
+) -> tuple[CsfsSelectionUnit, Path]:
+    """Resolve the legacy Tools pipeline paths without importing Tools models."""
+    target = raw_config.get("target")
+    cal_settings = raw_config.get("cal_settings")
+    if not isinstance(target, dict) or not isinstance(cal_settings, dict):
+        raise ValueError(f"{config_path} 缺少 target 或 cal_settings 配置")
+
+    conf = str(target["conf"])
+    root_path = _resolve_relative_path(
+        str(cal_settings["root_path"]),
+        config_path.parent,
+    )
+    loop_num = int(cal_settings["cal_loop_num"])
+    full_csfs_path = _resolve_relative_path(
+        str(target["full_CSFs_set_file"]),
+        root_path,
+    )
+    parquet_path = full_csfs_path.with_suffix(".parquet")
+    idx_file = (
+        root_path / "results" / f"{conf}_{loop_num - 1}_final_sampled_idxs.npy"
+        if loop_num > 1
+        else root_path / f"{conf}_presampled_idxs.npy"
+    )
+    unit = CsfsSelectionUnit(
+        idx_file=idx_file,
+        csfs_file=parquet_path if parquet_path.is_file() else full_csfs_path,
+        label=conf,
+    )
+    output = root_path / f"{conf}_{loop_num}" / f"{conf}_{loop_num}.c"
+    return unit, output
+
+
 def _output_from_pipeline_config(
     config: Any,
     cli_output_file: str | None,
@@ -1051,11 +1086,13 @@ def extract_from_config(
             output_file,
         )
     else:
-        from ..data_IO import load_config
-
-        config = load_config(config_path)
-        units = [_unit_from_pipeline_config(config)]
-        resolved_output = _output_from_pipeline_config(config, output_file)
+        unit, default_output = _pipeline_paths_from_raw_config(raw_config, config_path)
+        units = [unit]
+        resolved_output = (
+            _output_path_from_cli(output_file, default_dir=default_output.parent)
+            if output_file is not None
+            else default_output
+        )
 
     return extract_csfs_units(units, resolved_output, workers=workers)
 

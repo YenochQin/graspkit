@@ -136,38 +136,3 @@ class CSFs:
             CSFs_block_length=data.get("CSFs_block_length", []),
             block_num=data.get("block_num", 0),
         )
-
-
-@dataclass
-class MLDataCounts:
-    """Counters and retention metrics tracked during ML-guided CSF selection.
-
-    Attributes:
-        total_csfs_count: Total number of CSFs in the candidate space.
-        cal_csfs_count: Number of CSFs included in the current calculation.
-        important_csfs_count: Count of verified important CSFs.
-        ml_sampled_count: Count of CSFs selected by ML for the next loop.
-        ml_predicted_count: Count of CSFs predicted as important by ML.
-        final_sampled_count: Final number of CSFs sampled for calculation.
-        important_retention_rate: Retention rate for verified important CSFs.
-        screening_retention_rate: Retention rate after explicit calculation.
-        ml_retention_rate: Retention rate after ML prediction and cutoff.
-        iteration_retention_rate: Relative growth between calculation loops.
-    """
-
-    total_csfs_count: int
-    cal_csfs_count: int
-
-    important_csfs_count: int | None = None
-    ml_sampled_count: int | None = None
-    ml_predicted_count: int | None = None
-    final_sampled_count: int | None = None
-
-    # 重要组态留存率 (important Retention Rate)：本轮计算的重要组态/上一轮计算的重要组态
-    important_retention_rate: float | None = None
-    # 验证留存率 (Screening Retention Rate) / 良品率:经过实际计算（或仿真/实验）后，有多少数据被认为是“好”的并保留下来。
-    screening_retention_rate: float | None = None
-    # ML 预测留存率 (ML Selection Retention Rate) : 进行预测并截断时产生的留存率,模型对未知空间的探索力度。
-    ml_retention_rate: float | None = None
-    # 迭代增长率 (Iteration Growth/Retention Rate): 下一次计算的规模相对于这一次的变化, 控制计算成本。如果 $>1$，计算量在发散；如果 $<1$，计算量在收敛。
-    iteration_retention_rate: float | None = None

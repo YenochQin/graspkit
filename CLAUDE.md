@@ -1,182 +1,37 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-A Python package for data collection and processing of results from GRASP (General-purpose Relativistic Atomic Structure Package). This tool enhances GRASP's built-in data handling capabilities with more flexible Python-based processing, machine learning optimization, and automated workflow management.
+`graspkit` is the stable library for reading, processing, and plotting GRASP2018 calculation results. ML models, ML configuration, and iterative CSF training are owned by the sibling `graspkit-tools` repository.
 
-## Core Architecture
+## Architecture
 
-### Package Structure
-- **graspkit/** - Main Python package (in `src/`)
-  - **CSFs_processor/** - Configuration State Function processing and selection algorithms
-  - **data_IO/** - Data input/output handling, including specialized loaders for different data formats
-  - **grasp_data_extractor/** - Data extraction from GRASP2018 calculations (ASF and transition data)
-  - **ml_module/** - Machine learning infrastructure (neural networks, training, analysis)
-  - **utils/** - Utility functions (environment config, progress management, tool functions)
-- **graspkit_config/** - Pydantic configuration models (in `src/`)
-- **graspkit_ml/** - ML utilities (in `src/`)
-- **graspkit_plot/** - Plotting utilities (in `src/`)
+- `src/graspkit/data_IO/`: typed GRASP text and binary loaders plus stable CSF writers.
+- `src/graspkit/grasp_data_extractor/`: ASF, energy-level, LSJ, transition, and mixing-coefficient post-processing.
+- `src/graspkit/CSFs_processor/`: CSF parsing, descriptors, and deterministic selection algorithms.
+- `src/graspkit/utils/`: shared GRASP data models, environment detection, and utility functions.
+- `src/graspkit_plot/`: plotting and publication-style helpers.
 
-### Key Components
+The package root exposes metadata only. Import functionality from explicit subpackages. Do not add PyTorch, scikit-learn, ML configuration models, or workflow state back into this repository.
 
-1. **ML-driven CSF Selection Pipeline** - Uses machine learning to optimize Configuration State Function selection for quantum mechanical calculations
-2. **GRASP Integration** - Automated workflow management for GRASP2018 calculations via shell scripts
-3. **Data Processing** - Comprehensive tools for atomic physics data analysis and visualization
+## Development
 
-## Development Commands
+Use the `graspkit-tools/.venv` environment for workspace integration tests because Tools installs this repository editable:
 
-### Environment Setup
-
-#### UV Package Manager (Recommended)
 ```bash
-# Create and activate environment
-uv venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
-
-# Install dependencies (must choose CPU or GPU)
-uv sync --extra cpu --extra dev    # CPU version with dev tools
-uv sync --extra gpu --extra dev     # GPU version with dev tools (NVIDIA CUDA)
-
-# Alternative legacy installation
-uv pip install -e .
+cd ../graspkit-tools
+uv sync
+uv run pytest ../graspkit/tests
 ```
 
-#### Traditional pip Installation
+Standalone development is also supported:
+
 ```bash
-# Create and activate environment
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # macOS/Linux
-
-# Install dependencies
-pip install -e .  # Uses CPU dependencies by default
-```
-
-### Building and Quality
-
-#### Package Building
-```bash
-# Build the package (cross-platform scripts)
-python build_package.py --clean    # Clean build
-./build_package.sh --clean         # Unix-like systems
-build_package.bat --clean          # Windows
-
-# Manual build
-python -m build
-
-# Development build with all dependencies
-python build_package.py --dev --clean
-```
-
-#### Linting and Quality
-```bash
-# Run Ruff linting with NumPy 2.0 compatibility rules
-ruff check .
-
-# Auto-fix linting issues
-ruff check . --fix
-
-# Type checking (optional)
-mypy src/
-```
-
-#### Testing
-```bash
-# Run tests in tests/ directory
+uv sync --extra dev
 pytest tests/
-
-# Example test files:
-# tests/test_asfs_data_processor.py
-# tests/test_bilous_cnn_model.py
-# tests/test_ml_selection.py
-# tests/test_streaming_descriptors.py
-# (16 test files total)
+ruff check .
+mypy src/
+python -m build
 ```
 
-#### Package Verification
-```bash
-# Verify installation
-python -c "import graspkit; print('Package OK')"
-
-# Check version
-python -c "import graspkit; print(graspkit.__version__)"
-```
-
-### Key Development Patterns
-
-#### Centralized Import Structure
-The package exposes core functionality through `src/graspkit/__init__.py` with lazy imports:
-- `MLCalConfig` - ML calculation configuration
-- `CalPath` - Calculation path management
-- `load_config` - Configuration loading
-
-Subpackage imports are available for deeper access (e.g., `graspkit.ml_module`, `graspkit.CSFs_processor`).
-
-#### Module Interdependencies
-- **data_IO** serves as foundation, providing file loading and persistence
-- **CSFs_processor** contains core quantum mechanics algorithms
-- **ml_module** depends on processed data from CSFs_processor
-- **grasp_data_extractor** handles GRASP-specific data formats
-- **utils** provides shared functionality across all modules
-
-#### Environment-Aware Logging
-The codebase includes environment detection for HPC/SLURM environments:
-- `utils/environment_config.py` - Detects SLURM jobs, debug mode, and manages progress display configuration
-- Use `log_stage_start()` / `log_stage_end()` functions for structured logging
-
-#### Type Safety
-- Data structures use `@dataclass` (e.g., `MixCoefficientData`, `CSFs` in `utils/data_modules.py`)
-- PyTorch models use type annotations
-
-### Configuration Management
-
-#### Main Package Configuration
-- **pyproject.toml** - Modern Python packaging configuration using Hatchling
-- **UV Environment** - Supports CPU/GPU optional dependencies via `--extra cpu` or `--extra gpu`
-- **Ruff Configuration** - NumPy 2.0 compatibility rules (`NPY201`) in pyproject.toml
-
-#### Dependencies Management
-- **CPU Environment** - PyTorch CPU version (`torch==2.10.0`) for general compatibility
-- **GPU Environment** - PyTorch CUDA version (cu128) for NVIDIA GPUs
-- **Development Tools** - pytest, ruff, mypy, black, jupyter ecosystem
-- **Data Processing** - pandas, numpy, matplotlib, polars, pyarrow
-
-### Current Repository Status
-- **Version**: 3.2.dev2 (from `src/graspkit/version.py`)
-- **Python Version**: Requires ≥ 3.14
-- **Package Manager**: Hatchling with UV support
-- **Build System**: Modern packaging with optional dependencies
-- **Testing**: 16 test files in tests/ directory covering ML, data processing, and integration tests
-
-## Common Development Workflows
-
-### Data Processing Pipeline
-```python
-# Typical workflow for processing GRASP data
-import graspkit as gk
-
-# Load configuration
-config = gk.load_config("path/to/config.toml")
-
-# Access ML calculation config
-ml_config = gk.MLCalConfig(...)
-
-# Subpackage access for specific operations
-from graspkit.CSFs_processor import ...
-from graspkit.ml_module import ANNClassifier
-```
-
-### Environment-Specific Commands
-```bash
-# Check which PyTorch environment is active
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-
-# Switch between CPU/GPU environments
-uv sync --extra cpu --extra dev    # CPU with dev tools
-uv sync --extra gpu --extra dev     # GPU with dev tools
-```
+Python 3.14 or newer is required. Prefer explicit type hints, `pathlib.Path`, and realistic GRASP fixtures for parser changes.

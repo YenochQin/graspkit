@@ -69,7 +69,7 @@ print(json.dumps({
 """
     )
 
-    assert result["all"] == ["__author__", "__version__", "MLCalConfig", "CalPath", "load_config"]
+    assert result["all"] == ["__author__", "__version__"]
     assert result["ml_loaded"] is False
     assert result["plot_loaded"] is False
 
@@ -93,16 +93,14 @@ print(json.dumps({
     assert result["plot_loaded"] is False
 
 
-def test_root_core_export_loads_on_demand_without_ml() -> None:
+def test_root_does_not_expose_tools_configuration() -> None:
     _clear_graspkit_modules()
     graspkit = importlib.import_module("graspkit")
 
     assert "graspkit.data_IO" not in sys.modules
-
-    ml_config_model = graspkit.MLCalConfig
-
-    assert ml_config_model.__name__ == "MLCalConfig"
-    assert "graspkit.data_IO" in sys.modules
+    assert not hasattr(graspkit, "MLCalConfig")
+    assert not hasattr(graspkit, "CalPath")
+    assert not hasattr(graspkit, "load_config")
     assert "graspkit.ml_module" not in sys.modules
 
 
@@ -120,9 +118,10 @@ def test_root_no_longer_exposes_ml_or_plot_compat_exports() -> None:
     assert "graspkit.utils.plot_functions" not in sys.modules
 
 
-def test_graspkit_ml_exports_streaming_helpers() -> None:
-    graspkit_ml = importlib.import_module("graspkit_ml")
-
-    assert hasattr(graspkit_ml, "build_labeled_training_array_from_lazy_descriptors")
-    assert hasattr(graspkit_ml, "predict_model_streaming")
-    assert hasattr(graspkit_ml, "validate_csf_desc_coverage_streaming")
+def test_removed_ml_packages_are_not_importable() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("graspkit.ml_module")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("graspkit_ml")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("graspkit_config")
