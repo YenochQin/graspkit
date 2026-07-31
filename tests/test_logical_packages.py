@@ -38,40 +38,37 @@ import json
 import sys
 
 import graspkit
-from graspkit.data_IO import MLCalConfig
+import graspkit.data_IO
 
 print(json.dumps({
     "ml_loaded": any(name == "graspkit.ml_module" or name.startswith("graspkit.ml_module.") for name in sys.modules),
     "plot_loaded": any(name == "graspkit.utils.plot_functions" or name.startswith("graspkit.utils.plot_functions.") for name in sys.modules),
-    "config_name": MLCalConfig.__name__,
-    "has_load_config": hasattr(graspkit, "load_config"),
+    "has_ml_config": hasattr(graspkit.data_IO, "MLCalConfig"),
+    "has_load_config": hasattr(graspkit.data_IO, "load_config"),
 }))
 """
     )
 
     assert result["ml_loaded"] is False
     assert result["plot_loaded"] is False
-    assert result["config_name"] == "MLCalConfig"
-    assert result["has_load_config"] is True
+    assert result["has_ml_config"] is False
+    assert result["has_load_config"] is False
 
 
-def test_import_graspkit_ml_loads_ml_layer() -> None:
+def test_graspkit_distribution_no_longer_contains_ml_layer() -> None:
     result = _run_python(
         """
 import json
-import sys
-
-import graspkit_ml
+from pathlib import Path
+import graspkit
 
 print(json.dumps({
-    "ml_loaded": any(name == "graspkit.ml_module" or name.startswith("graspkit.ml_module.") for name in sys.modules),
-    "has_train_model": hasattr(graspkit_ml, "train_model"),
+    "ml_path_exists": (Path(graspkit.__file__).parent / "ml_module").exists(),
 }))
 """
     )
 
-    assert result["ml_loaded"] is True
-    assert result["has_train_model"] is True
+    assert result["ml_path_exists"] is False
 
 
 def test_import_graspkit_plot_loads_plot_layer_without_ml() -> None:
