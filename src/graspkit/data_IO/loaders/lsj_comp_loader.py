@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import ClassVar, TypedDict, override
 
 import polars as pl
 
@@ -54,7 +54,7 @@ class LevelComposition:
         Returns:
             格式化的组成字符串
         """
-        parts = []
+        parts: list[str] = []
         count = 0
 
         for comp in self.compositions:
@@ -73,6 +73,21 @@ class LevelComposition:
         return " + ".join(parts)
 
 
+class CompositionDataFrameRow(TypedDict):
+    coefficient: float
+    weight: float
+    configuration: str
+
+
+class LevelDataFrameRow(TypedDict):
+    Pos: int
+    J: str
+    Parity: str
+    EnergyTotal: float
+    CompOfAsf: str
+    compositions: list[CompositionDataFrameRow]
+
+
 class LSJCompLoader(BaseLoader[pl.DataFrame]):
     """LSJ组成文件加载器
 
@@ -87,19 +102,12 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
     """
 
     # 正则表达式模式
-    LEVEL_LINE_PATTERN = re.compile(
-        r"^\s*(\d+)\s+"  # Pos (integer)
-        r"([\d/]+)\s+"  # J (could be 1, 3/2, etc.)
-        r"([+-])\s+"  # Parity (+ or -)
-        r"(-?\d+\.\d+)\s+"  # Energy Total (float)
-        r"([\d.]+)%\s*$"  # Comp. of ASF (percentage)
+    LEVEL_LINE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"^\s*(\d+)\s+([\d/]+)\s+([+-])\s+(-?\d+\.\d+)\s+([\d.]+)%\s*$"
     )
 
-    COMPOSITION_LINE_PATTERN = re.compile(
-        r"^\s+"  # Must start with whitespace (not a level line)
-        r"(-?\d+\.\d+)\s+"  # CI coefficient (float)
-        r"(-?\d+\.\d+)\s+"  # CI coefficient squared / weight (float)
-        r"(.+?)\s*$"  # Configuration string
+    COMPOSITION_LINE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"^\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(.+?)\s*$"
     )
 
     def __init__(self, file_path: str | Path) -> None:
@@ -109,20 +117,20 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
             file_path: LSJ文件路径（.lsj.lbl 文本文件）
         """
         super().__init__(file_path)
-        self.df: pl.DataFrame = self._parse_lsj_file()
-        self._levels: list[LevelComposition] = self._build_level_compositions()
+        self._levels: list[LevelComposition] = self._parse_lsj_file()
+        self.df: pl.DataFrame = self._levels_to_dataframe(self._levels)
 
-    def _parse_lsj_file(self) -> pl.DataFrame:
-        """解析 .lsj.lbl 文本文件为 polars DataFrame
+    def _parse_lsj_file(self) -> list[LevelComposition]:
+        """解析 .lsj.lbl 文本文件为类型化的能级组成列表。
 
         Returns:
-            包含能级和组成信息的DataFrame
+            类型化的能级组成列表。
         """
         with open(self.file_path, "r", encoding="utf-8") as f:
             lines = [line.rstrip("\n") for line in f.readlines()]
 
-        data_rows = []
-        current_level: dict[str, Any] | None = None
+        levels: list[LevelComposition] = []
+        current_level: LevelComposition | None = None
 
         for line in lines:
             # 跳过空行
@@ -134,81 +142,64 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
             if level_match:
                 # 保存前一个能级的数据
                 if current_level is not None:
-                    data_rows.append(current_level)
+                    levels.append(current_level)
 
                 # 创建新能级
-                current_level = {
-                    "Pos": int(level_match.group(1)),
-                    "J": level_match.group(2),
-                    "Parity": level_match.group(3),
-                    "EnergyTotal": float(level_match.group(4)),
-                    "CompOfAsf": level_match.group(5),
-                    "compositions": [],
-                }
+                current_level = LevelComposition(
+                    pos=int(level_match.group(1)),
+                    j=level_match.group(2),
+                    parity=level_match.group(3),
+                    energy_total=float(level_match.group(4)),
+                    composition_asf=level_match.group(5),
+                    compositions=[],
+                )
                 continue
 
             # 尝试匹配组成行
             comp_match = self.COMPOSITION_LINE_PATTERN.match(line)
             if comp_match and current_level is not None:
-                compositions = cast(list[dict[str, Any]], current_level["compositions"])
-                compositions.append(
-                    {
-                        "coefficient": float(comp_match.group(1)),
-                        "weight": float(comp_match.group(2)),
-                        "configuration": comp_match.group(3).strip(),
-                    }
+                current_level.compositions.append(
+                    CompositionUnit(
+                        coefficient=float(comp_match.group(1)),
+                        weight=float(comp_match.group(2)),
+                        configuration=comp_match.group(3).strip(),
+                    )
                 )
 
         # 保存最后一个能级
         if current_level is not None:
-            data_rows.append(current_level)
-
-        # 构建 DataFrame
-        df_data = []
-        for row in data_rows:
-            df_data.append(
-                {
-                    "Pos": row["Pos"],
-                    "J": row["J"],
-                    "Parity": row["Parity"],
-                    "EnergyTotal": row["EnergyTotal"],
-                    "CompOfAsf": row["CompOfAsf"],
-                    "compositions": row["compositions"],
-                }
-            )
-
-        return pl.DataFrame(df_data)
-
-    def _build_level_compositions(self) -> list[LevelComposition]:
-        """从DataFrame构建LevelComposition对象列表
-
-        Returns:
-            LevelComposition对象列表
-        """
-        levels = []
-        for row in self.df.iter_rows(named=True):
-            compositions = [
-                CompositionUnit(
-                    coefficient=comp["coefficient"],
-                    weight=comp["weight"],
-                    configuration=comp["configuration"],
-                )
-                for comp in row["compositions"]
-            ]
-
-            levels.append(
-                LevelComposition(
-                    pos=row["Pos"],
-                    j=row["J"],
-                    parity=row["Parity"],
-                    energy_total=row["EnergyTotal"],
-                    composition_asf=row["CompOfAsf"],
-                    compositions=compositions,
-                )
-            )
+            levels.append(current_level)
 
         return levels
 
+    @staticmethod
+    def _levels_to_dataframe(levels: list[LevelComposition]) -> pl.DataFrame:
+        """将类型化的能级组成列表转换为 Polars DataFrame。
+
+        Returns:
+            包含能级和组成信息的 DataFrame。
+        """
+        rows: list[LevelDataFrameRow] = [
+            {
+                "Pos": level.pos,
+                "J": level.j,
+                "Parity": level.parity,
+                "EnergyTotal": level.energy_total,
+                "CompOfAsf": level.composition_asf,
+                "compositions": [
+                    {
+                        "coefficient": composition.coefficient,
+                        "weight": composition.weight,
+                        "configuration": composition.configuration,
+                    }
+                    for composition in level.compositions
+                ],
+            }
+            for level in levels
+        ]
+        return pl.DataFrame(rows)
+
+    @override
     def load(self) -> pl.DataFrame:
         """加载数据（实现抽象方法）
 

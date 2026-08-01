@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
 import re
 from pathlib import Path
+from typing import override
 
 import polars as pl
 
@@ -49,8 +50,7 @@ class TransitionFileScan:
             base_suffix = ".ct"
         else:
             raise ValueError(
-                f"Invalid calculation_type: {calculation_type}. "
-                "Must be 'rmcdhf' or 'rci'"
+                f"Invalid calculation_type: {calculation_type}. Must be 'rmcdhf' or 'rci'"
             )
 
         # 确定要查找的后缀
@@ -69,16 +69,14 @@ class TransitionFileScan:
                 files = sorted(dir_path.glob(f"*{base_suffix}"))
                 if not files:
                     raise ValueError(
-                        f"No transition files found with suffix {suffix} or {base_suffix} "
-                        f"in directory: {directory}"
+                        f"No transition files found with suffix {suffix} \nor {base_suffix} in directory: {directory}"
                     )
             else:
                 # 没找到基础文件，尝试查找 .lsj 文件
                 files = sorted(dir_path.glob(f"*{base_suffix}.lsj"))
                 if not files:
                     raise ValueError(
-                        f"No transition files found with suffix {suffix} or {base_suffix}.lsj "
-                        f"in directory: {directory}"
+                        f"No transition files found with suffix {suffix} \nor {base_suffix}.lsj in directory: {directory}"
                     )
 
         return files
@@ -436,7 +434,7 @@ class TransitionLoader(BaseLoader[list[str]]):
         file_path: str | Path,
         calculation_type: str = "rci",
         load_ct_lsj: bool = False,
-    ):
+    ) -> None:
         """初始化跃迁文件加载器
 
         Args:
@@ -451,13 +449,12 @@ class TransitionLoader(BaseLoader[list[str]]):
         Raises:
             ValueError: 路径不存在或参数无效
         """
-        path_obj: Path = Path(file_path)
+        try:
+            super().__init__(file_path)
+        except FileNotFoundError as exc:
+            raise ValueError(f"Path does not exist: {file_path}") from exc
 
-        if not path_obj.exists():
-            raise ValueError(f"Path does not exist: {file_path}")
-
-        # 始终保存用户输入的原始路径
-        self.file_path = path_obj
+        path_obj = self.file_path
 
         # 判断是文件还是目录
         self._is_directory: bool = path_obj.is_dir()
@@ -471,9 +468,10 @@ class TransitionLoader(BaseLoader[list[str]]):
             # 单文件模式
             self.file_paths = [path_obj]
 
-        self.calculation_type = calculation_type
-        self.load_ct_lsj = load_ct_lsj
+        self.calculation_type: str = calculation_type
+        self.load_ct_lsj: bool = load_ct_lsj
 
+    @override
     def load(self) -> list[str]:
         """加载跃迁数据
 
