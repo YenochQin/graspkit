@@ -63,6 +63,35 @@ _PARITY_LIST: list[str] = ["+", "-"]
 _RYDBERG_CONSTANT: float = 109737.31568508
 
 
+def _collect_level_metadata(
+    blocks: list[MixCoefficientBlock],
+) -> tuple[list[int], list[str], list[int], list[float]]:
+    """Collect strongly typed level metadata from NumPy-backed blocks."""
+    positions: list[int] = []
+    j_values: list[str] = []
+    parity_indices: list[int] = []
+    energies: list[float] = []
+
+    for block in blocks:
+        block_positions = cast(list[int], block.level_indices.tolist())
+        for position in block_positions:
+            level_energy = cast(
+                np.float64,
+                block.level_energies[position],
+            ).item()
+            positions.append(position)
+            j_values.append(block.j_value)
+            parity_indices.append(block.parity)
+            energies.append(block.base_energy + level_energy)
+
+    return positions, j_values, parity_indices, energies
+
+
+def _sorted_level_order(energies: list[float]) -> list[int]:
+    """Return level indices sorted by ascending energy."""
+    return sorted(range(len(energies)), key=lambda index: energies[index])
+
+
 class MixCoefLoader(BinaryFileLoader):
     """混合系数文件加载器 (.[c]m文件）
 
@@ -166,22 +195,12 @@ class MixCoefLoader(BinaryFileLoader):
                     )
                 )
 
-            # 收集能级数据用于打印
-            temp_pos: list[int] = []
-            temp_J: list[str] = []
-            temp_parity_idx: list[int] = []
-            temp_energy: list[float] = []
-
-            for block in blocks:
-                for pos in block.level_indices.tolist():
-                    temp_pos.append(pos)
-                    temp_J.append(block.j_value)
-                    temp_parity_idx.append(block.parity)
-                    temp_energy.append(float(block.base_energy + block.level_energies[pos]))
+            # 收集能级能量
+            temp_energy = _collect_level_metadata(blocks)[3]
 
             # 按能量排序
-            level_idx: NDArray[np.int_] = np.argsort(temp_energy)
-            level_energy_list: list[float] = [temp_energy[int(i)] for i in level_idx]
+            level_order = _sorted_level_order(temp_energy)
+            level_energy_list = [temp_energy[index] for index in level_order]
 
             # 创建 MixCoefficientData 对象
             data = MixCoefficientData(
@@ -230,38 +249,30 @@ def print_mix_coef_levels_rich(
     table.add_column("Levels (cm⁻¹)", justify="right", width=14)
 
     # 重建能级数据（复现 load() 中的 block-level 能量整理逻辑）
-    temp_pos: list[int] = []
-    temp_J: list[str] = []
-    temp_parity_idx: list[int] = []
-    temp_energy: list[float] = []
-
-    for block in data.blocks:
-        for pos in block.level_indices.tolist():
-            temp_pos.append(pos)
-            temp_J.append(block.j_value)
-            temp_parity_idx.append(block.parity)
-            temp_energy.append(float(block.base_energy + block.level_energies[pos]))
+    temp_pos, temp_j, temp_parity_idx, temp_energy = _collect_level_metadata(
+        data.blocks
+    )
 
     # 按能量排序
-    level_idx = np.argsort(temp_energy)
+    level_order = _sorted_level_order(temp_energy)
 
     # 填充表格
-    base_energy = temp_energy[int(level_idx[0])]
+    base_energy = temp_energy[level_order[0]]
 
-    for i, idx in enumerate(level_idx):
-        pos = temp_pos[int(idx)]
-        j_val = temp_J[int(idx)]
-        parity = _PARITY_LIST[temp_parity_idx[int(idx)] - 1]
-        energy_au = temp_energy[int(idx)]
+    for number, index in enumerate(level_order, start=1):
+        pos = temp_pos[index]
+        j_val = temp_j[index]
+        parity = _PARITY_LIST[temp_parity_idx[index] - 1]
+        energy_au = temp_energy[index]
 
-        if i == 0:
+        if number == 1:
             levels_cm = 0.0
         else:
             energy_diff = energy_au - base_energy
             levels_cm = energy_diff * Rydberg * 2
 
         table.add_row(
-            str(i + 1),
+            str(number),
             str(pos),
             j_val,
             parity,

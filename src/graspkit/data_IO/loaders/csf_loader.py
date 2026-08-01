@@ -1,5 +1,7 @@
 # -*- encoding: utf-8 -*-
 import re
+from typing import override
+
 from .base_loader import BaseLoader
 from ...utils.data_modules import CSFs
 
@@ -11,6 +13,7 @@ class CSFLoader(BaseLoader[CSFs]):
     解析子轨道信息和块结构。
     """
 
+    @override
     def load(self) -> CSFs:
         """加载CSF数据
 
@@ -54,8 +57,7 @@ class CSFLoader(BaseLoader[CSFs]):
                 raise ValueError(f"CSF block {block_idx} is empty")
             if len(block_lines) % 3 != 0:
                 raise ValueError(
-                    f"CSF block {block_idx} length must be a multiple of 3, "
-                    f"got {len(block_lines)}"
+                    f"CSF block {block_idx} length must be a multiple of 3, got {len(block_lines)}"
                 )
 
             j_parity_line = block_lines[-1].strip()

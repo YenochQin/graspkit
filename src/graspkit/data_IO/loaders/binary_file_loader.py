@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 import struct
 from abc import ABC
-from typing import IO, TypeVar
+from typing import IO, TypeVar, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -9,6 +9,22 @@ from numpy.typing import NDArray
 from .base_loader import BaseLoader
 
 _T = TypeVar("_T", bound=np.generic)
+
+
+def _unpack_int32(data: bytes) -> int:
+    """Unpack one native-endian signed 32-bit integer."""
+    if len(data) != 4:
+        raise ValueError(f"Expected 4 bytes for int32, got {len(data)}")
+    return cast(int, struct.unpack("i", data)[0])
+
+
+def _unpack_float64(data: bytes) -> float:
+    """Unpack one native-endian 64-bit floating-point value."""
+    if len(data) != 8:
+        raise ValueError(f"Expected 8 bytes for float64, got {len(data)}")
+    return cast(float, struct.unpack("d", data)[0])
+
+
 class BinaryFileLoader(BaseLoader[object], ABC):
     """二进制文件加载器基类
 
@@ -55,7 +71,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         if len(record_len_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record length")
 
-        record_len: int = struct.unpack("i", record_len_bytes)[0]
+        record_len = _unpack_int32(record_len_bytes)
 
         # 读取实际数据
         data: NDArray[_T] = np.fromfile(file, dtype=dtype, count=count)
@@ -65,7 +81,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         if len(record_len_end_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record end marker")
 
-        record_len_end: int = struct.unpack("i", record_len_end_bytes)[0]
+        record_len_end = _unpack_int32(record_len_end_bytes)
 
         # 验证记录长度匹配
         if record_len != record_len_end:
@@ -122,7 +138,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         if len(record_len_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record length")
 
-        record_len: int = struct.unpack("i", record_len_bytes)[0]
+        record_len = _unpack_int32(record_len_bytes)
 
         # 验证记录长度
         if record_len != data_size:
@@ -134,17 +150,16 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         result: list[int | float] = []
         for fmt in parsed_specs:
             if fmt == "i":
-                data = struct.unpack("i", file.read(4))[0]
+                result.append(_unpack_int32(file.read(4)))
             else:  # fmt == "d"
-                data = struct.unpack("d", file.read(8))[0]
-            result.append(data)
+                result.append(_unpack_float64(file.read(8)))
 
         # 读取记录结束标记（4字节）
         record_len_end_bytes = file.read(4)
         if len(record_len_end_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record end marker")
 
-        record_len_end = struct.unpack("i", record_len_end_bytes)[0]
+        record_len_end = _unpack_int32(record_len_end_bytes)
 
         # 验证记录结束标记
         if record_len_end != record_len:
@@ -202,7 +217,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         if len(record_len_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record length")
 
-        record_len: int = struct.unpack("i", record_len_bytes)[0]
+        record_len = _unpack_int32(record_len_bytes)
 
         # 验证记录长度
         if record_len != data_size:
@@ -214,19 +229,26 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         result: list[list[int] | list[float]] = []
         for fmt, count in parsed_specs:
             if fmt == "i":
-                data = list(struct.unpack(f"{count}i", file.read(4 * count)))
+                unpacked_ints = cast(
+                    tuple[int, ...],
+                    struct.unpack(f"{count}i", file.read(4 * count)),
+                )
+                result.append(list(unpacked_ints))
             elif fmt == "d":
-                data = list(struct.unpack(f"{count}d", file.read(8 * count)))
+                unpacked_floats = cast(
+                    tuple[float, ...],
+                    struct.unpack(f"{count}d", file.read(8 * count)),
+                )
+                result.append(list(unpacked_floats))
             else:
                 raise ValueError(f"Unsupported format: {fmt}")
-            result.append(data)
 
         # 读取记录结束标记（4字节）
         record_len_end_bytes: bytes = file.read(4)
         if len(record_len_end_bytes) < 4:
             raise ValueError("Unexpected end of file while reading record end marker")
 
-        record_len_end = struct.unpack("i", record_len_end_bytes)[0]
+        record_len_end = _unpack_int32(record_len_end_bytes)
 
         # 验证记录结束标记
         if record_len_end != record_len:

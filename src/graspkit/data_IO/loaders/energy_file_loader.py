@@ -1,5 +1,6 @@
 # -*- encoding: utf-8 -*-
 from pathlib import Path
+from typing import ClassVar, cast, override
 
 import polars as pl
 
@@ -15,7 +16,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
     """
 
     # 列名定义
-    COLUMN_NAMES = [
+    COLUMN_NAMES: ClassVar[tuple[str, ...]] = (
         "No",
         "Pos",
         "J",
@@ -24,7 +25,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         "EnergyLevel",
         "splitting",
         "configuration_raw",
-    ]
+    )
 
     def __init__(self, file_path: str | Path) -> None:
         """初始化能级文件加载器
@@ -71,7 +72,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         data_dict: dict[str, list[str | float]] = {col: [] for col in self.COLUMN_NAMES}
 
         for line_parts in data_lines:
-            for i, col in enumerate[str](self.COLUMN_NAMES):
+            for i, col in enumerate(self.COLUMN_NAMES):
                 if i < len(line_parts):
                     data_dict[col].append(line_parts[i])
                 else:
@@ -94,6 +95,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
 
         return df
 
+    @override
     def load(self) -> pl.DataFrame:
         """加载数据（实现抽象方法）
 
@@ -121,11 +123,10 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         """
         if "EnergyTotal" not in self.df.columns:
             raise ValueError(
-                "EnergyTotal column not found in DataFrame. "
-                f"Available columns: {list(self.df.columns)}"
+                f"EnergyTotal column not found in DataFrame. Available columns: {self.df.columns}"
             )
 
-        return float(self.df["EnergyTotal"][0])
+        return cast(float, self.df["EnergyTotal"].item(0))
 
     def get_number_of_levels(self) -> int:
         """获取能级数量
@@ -143,8 +144,7 @@ class EnergyFileLoader(BaseLoader[pl.DataFrame]):
         """
         if "configuration_raw" not in self.df.columns:
             raise ValueError(
-                f"configuration column not found. "
-                f"Available columns: {list(self.df.columns)}"
+                f"configuration column not found. \nAvailable columns: {list(self.df.columns)}"
             )
 
         return self.df["configuration_raw"]
