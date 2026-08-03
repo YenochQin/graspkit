@@ -68,8 +68,7 @@ def transition_data_level_location(
     ]
     if missing_transition_cols:
         raise KeyError(
-            f"跃迁数据缺少必需的列: {missing_transition_cols}。"
-            f"需要: {required_transition_cols}"
+            f"跃迁数据缺少必需的列: {missing_transition_cols}。需要: {required_transition_cols}"
         )
 
     # 验证能级数据包含必需的列
@@ -119,8 +118,7 @@ def transition_data_level_location(
     if unmatched_upper_count > 0 or unmatched_lower_count > 0:
         unmatched_count = max(unmatched_upper_count, unmatched_lower_count)
         raise ValueError(
-            f"有 {unmatched_count} 条跃迁数据无法找到匹配的能级。"
-            f"请检查跃迁数据和能级数据的一致性。"
+            f"有 {unmatched_count} 条跃迁数据无法找到匹配的能级。请检查跃迁数据和能级数据的一致性。"
         )
 
     return with_level_indexes
@@ -162,8 +160,7 @@ def lsj_transition_data_level_location(
     ]
     if missing_transition_cols:
         raise KeyError(
-            f"跃迁数据缺少必需的列: {missing_transition_cols}。"
-            f"需要: {required_transition_cols}"
+            f"跃迁数据缺少必需的列: {missing_transition_cols}。需要: {required_transition_cols}"
         )
 
     # 验证能级数据包含必需的列
@@ -215,8 +212,7 @@ def lsj_transition_data_level_location(
     if unmatched_upper_count > 0 or unmatched_lower_count > 0:
         unmatched_count = max(unmatched_upper_count, unmatched_lower_count)
         raise ValueError(
-            f"有 {unmatched_count} 条跃迁数据无法找到匹配的能级。"
-            f"请检查跃迁数据和能级数据的一致性。"
+            f"有 {unmatched_count} 条跃迁数据无法找到匹配的能级。请检查跃迁数据和能级数据的一致性。"
         )
 
     return with_level_indexes
@@ -271,9 +267,13 @@ def add_transition_level_index(
         with_level_indexes = lsj_transition_data_level_location(transition_df, level_df)
     else:
         raise ValueError(
-            "无法识别跃迁数据格式。"
-            "标准格式需要包含: upper_pos, upper_j, upper_parity, lower_pos, lower_j, lower_parity；"
-            "LSJ 格式需要包含: upper_j, upper_configuration, lower_j, lower_configuration"
+            "".join(
+                [
+                    "无法识别跃迁数据格式。",
+                    "标准格式需要包含: upper_pos, upper_j, upper_parity, lower_pos, lower_j, lower_parity；",
+                    "LSJ 格式需要包含: upper_j, upper_configuration, lower_j, lower_configuration",
+                ]
+            )
         )
 
     # 按 Lower_index 和 Upper_index 排序

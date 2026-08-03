@@ -228,9 +228,6 @@ def format_configuration(
         TypeError: 当输入不是字符串时抛出异常
     """
 
-    if not isinstance(temp_configuration, str):
-        raise TypeError("temp_configuration must be a string")
-
     temp_configuration = re.sub(r"\n", "", temp_configuration).strip()
 
     if temp_configuration == "":
