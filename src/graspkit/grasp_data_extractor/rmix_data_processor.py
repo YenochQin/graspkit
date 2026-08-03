@@ -1,12 +1,33 @@
 # -*- encoding: utf-8 -*-
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ..data_IO.loaders.mix_coef_loader import MixCoefLoader
+
+
+def _iter_float64_rows(
+    array: NDArray[np.float64],
+) -> Iterator[NDArray[np.float64]]:
+    """Yield strongly typed rows from a two-dimensional float64 array."""
+    if array.ndim != 2:
+        raise ValueError("Expected a 2D float64 array")
+
+    row_count = cast(int, array.shape[0])
+    for row_index in range(row_count):
+        yield cast(NDArray[np.float64], array[row_index])
+
+
+def _int64_array_to_list(array: NDArray[np.int64]) -> list[int]:
+    """Convert a one-dimensional int64 array to a typed Python list."""
+    if array.ndim != 1:
+        raise ValueError("Expected a 1D int64 array")
+
+    return cast(list[int], array.tolist())
 
 
 @dataclass(frozen=True)
@@ -65,8 +86,10 @@ class RmixCiSquaredData:
             selected_asfs=self.selected_asfs,
             csf_indices_list=[
                 [
-                    sort_ci_scores(asf_scores, descending=descending)[0].tolist()
-                    for asf_scores in block_ci_squared
+                    _int64_array_to_list(
+                        sort_ci_scores(asf_scores, descending=descending)[0]
+                    )
+                    for asf_scores in _iter_float64_rows(block_ci_squared)
                 ]
                 for block_ci_squared in self.ci_squared_list
             ],
@@ -96,12 +119,14 @@ class RmixCiSquaredData:
             selected_asfs=self.selected_asfs,
             csf_indices_list=[
                 [
-                    filter_ci_scores_by_threshold(
-                        asf_scores,
-                        threshold=threshold,
-                        inclusive=inclusive,
-                    ).tolist()
-                    for asf_scores in block_ci_squared
+                    _int64_array_to_list(
+                        filter_ci_scores_by_threshold(
+                            asf_scores,
+                            threshold=threshold,
+                            inclusive=inclusive,
+                        )
+                    )
+                    for asf_scores in _iter_float64_rows(block_ci_squared)
                 ]
                 for block_ci_squared in self.ci_squared_list
             ],
@@ -126,13 +151,14 @@ class RmixCiSquaredData:
         block_csf_indices: list[list[list[int]]] = []
         for block_ci_squared in self.ci_squared_list:
             block_indices: list[list[int]] = []
-            for asf_scores in block_ci_squared:
+            for asf_scores in _iter_float64_rows(block_ci_squared):
                 sorted_indices, sorted_scores = sort_ci_scores(asf_scores)
                 cumulative_positions = filter_sorted_ci_scores_by_cumulative(
                     sorted_scores,
                     cumulative_threshold=cumulative_threshold,
                 )
-                block_indices.append(sorted_indices[cumulative_positions].tolist())
+                selected_indices = sorted_indices[cumulative_positions]
+                block_indices.append(_int64_array_to_list(selected_indices))
             block_csf_indices.append(block_indices)
 
         return RmixCsfIndexSelection(
@@ -314,24 +340,28 @@ def _normalize_asf_indices(
     NDArray[np.int64]
         规范化后的一维 ASF 索引数组。
     """
+    requested_asfs: NDArray[np.int64]
     if select_asfs is None or len(select_asfs) == 0:
         requested_asfs = np.array([], dtype=np.int64)
     else:
         requested_asfs = np.asarray(select_asfs, dtype=np.int64)
 
+    if requested_asfs.ndim != 1:
+        raise ValueError("select_asfs must be a 1D sequence of ASF indices")
+
+    requested_values = _int64_array_to_list(requested_asfs)
+
     if coefficients.ndim == 1:
-        if requested_asfs.size != 0 and (
-            requested_asfs.size != 1 or int(requested_asfs[0]) != 0
-        ):
+        if requested_values and requested_values != [0]:
             raise ValueError("1D coefficient arrays only support ASF index 0")
         return np.array([0], dtype=np.int64)
 
-    if requested_asfs.size == 0:
-        return np.arange(coefficients.shape[0], dtype=np.int64)
+    asf_count = cast(int, coefficients.shape[0])
 
-    if requested_asfs.ndim != 1:
-        raise ValueError("select_asfs must be a 1D sequence of ASF indices")
-    if np.any(requested_asfs < 0) or np.any(requested_asfs >= coefficients.shape[0]):
+    if not requested_values:
+        return np.arange(asf_count, dtype=np.int64)
+
+    if any(index < 0 or index >= asf_count for index in requested_values):
         raise ValueError("select_asfs contains an ASF index outside this block")
     return requested_asfs
 
@@ -377,7 +407,7 @@ def load_rmix_ci_squared(
             if coefficient_array.ndim == 1
             else coefficient_array[selected_asf_indices]
         )
-        selected_asfs.append(selected_asf_indices.tolist())
+        selected_asfs.append(_int64_array_to_list(selected_asf_indices))
         ci_squared_list.append(ci_squared(selected_coefficients))
 
     return RmixCiSquaredData(
