@@ -13,11 +13,13 @@ from graspkit.grasp_data_extractor.rmix_data_processor import (
     load_rmix_ci_squared,
     sort_ci_scores,
 )
-from graspkit.CSFs_processor.CSFs_choosing import (
+from graspkit.CSFs_processor.selection import (
     CSFs_sort_by_mix_coefficient,
     batch_asfs_mix_square_above_threshold,
-    batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
     single_asf_mix_square_above_threshold,
+)
+from graspkit.CSFs_processor.coupling import (
+    batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
 )
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
 
@@ -357,7 +359,7 @@ def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> No
 def test_legacy_csf_sort_by_mix_coefficient_uses_direct_block_scores(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import graspkit.CSFs_processor.CSFs_choosing as csfs_choosing
+    import graspkit.CSFs_processor.selection as selection_module
 
     def fail_aggregate(*args: object, **kwargs: object) -> None:
         raise AssertionError(
@@ -365,7 +367,7 @@ def test_legacy_csf_sort_by_mix_coefficient_uses_direct_block_scores(
         )
 
     monkeypatch.setattr(
-        csfs_choosing,
+        selection_module,
         "aggregate_ci_squared",
         fail_aggregate,
         raising=False,
