@@ -151,15 +151,25 @@ def load_csfs_header_lines(header_path: str | Path) -> list[str]:
     if not header_path.is_file():
         raise FileNotFoundError(f"CSFs header TOML 文件不存在: {header_path}")
 
-    header = rtoml.load(header_path)
-    header_info = header.get("header_info")
-    if not isinstance(header_info, dict):
+    header = cast(dict[str, object], rtoml.load(header_path))
+
+    raw_header_info = header.get("header_info")
+    if not isinstance(raw_header_info, dict):
         raise ValueError(f"header TOML 缺少 [header_info]: {header_path}")
-    header_lines = header_info.get("header_lines")
-    if not isinstance(header_lines, list) or not all(
-        isinstance(line, str) for line in header_lines
-    ):
+    header_info = cast(dict[str, object], raw_header_info)
+
+    raw_header_lines = header_info.get("header_lines")
+    if not isinstance(raw_header_lines, list):
         raise ValueError(f"header TOML 缺少 header_info.header_lines: {header_path}")
+
+    header_lines: list[str] = []
+    for line in cast(list[object], raw_header_lines):
+        if not isinstance(line, str):
+            raise ValueError(
+                f"header TOML 缺少 header_info.header_lines: {header_path}"
+            )
+        header_lines.append(line)
+
     if len(header_lines) != CSF_HEADER_LINE_COUNT:
         raise ValueError(f"CSFs header 必须是 5 行: {header_path}")
-    return list(header_lines)
+    return header_lines

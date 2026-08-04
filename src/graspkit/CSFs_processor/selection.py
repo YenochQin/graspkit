@@ -83,8 +83,7 @@ def batch_asfs_mix_square_above_threshold(
 
     if len(normalized_positions) != len(asfs_mix_data.blocks):
         raise ValueError(
-            f"asfs_position 第一层长度({len(normalized_positions)}) "
-            f"与 blocks({len(asfs_mix_data.blocks)}) 不一致。"
+            f"asfs_position 第一层长度({len(normalized_positions)}) 与 blocks({len(asfs_mix_data.blocks)}) 不一致。"
         )
 
     for block, selected_positions in zip(
@@ -94,8 +93,7 @@ def batch_asfs_mix_square_above_threshold(
         selected_set = {int(pos) for pos in selected_positions}
         if not selected_set.issubset(allowed_positions):
             raise ValueError(
-                f"asfs_position 元素 {sorted(selected_set)} "
-                f"不是 block.level_indices {sorted(allowed_positions)} 的子集。"
+                f"asfs_position 元素 {sorted(selected_set)} 不是 block.level_indices {sorted(allowed_positions)} 的子集。"
             )
 
         block_data = block.mix_coefficients[selected_positions]
@@ -232,6 +230,7 @@ def radom_choose_csfs(
         total_needed = math.ceil(ratio_or_quality)
     else:
         raise ValueError(f"method 必须是 'ratio' 或 'quality': {method!r}")
+
     choose_csfs_num = max(0, total_needed - selected_csfs_num)
 
     all_idxs = np.arange(block_csfs_num, dtype=np.int64)

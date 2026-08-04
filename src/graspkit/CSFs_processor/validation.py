@@ -65,8 +65,7 @@ def validate_selection_idxs(
         unique_count = int(np.unique(int_array).shape[0])
         if unique_count != int_array.shape[0]:
             raise ValueError(
-                f"选择索引包含重复值{label}: "
-                f"共 {int_array.shape[0]} 项，去重后 {unique_count} 项"
+                f"选择索引包含重复值{label}: 共 {int_array.shape[0]} 项，去重后 {unique_count} 项"
             )
 
     return int_array
@@ -103,20 +102,25 @@ def load_selection_idxs(
     )
 
 
-def validate_header_lines(header_lines: Sequence[str]) -> list[str]:
+def validate_header_lines(header_lines: Sequence[object]) -> list[str]:
     """Validate that a CSF header is exactly 5 string lines.
 
     Raises:
         ValueError: If ``header_lines`` is not a sequence of exactly 5
             strings.
     """
-    if not isinstance(header_lines, (list, tuple)) or not all(
-        isinstance(line, str) for line in header_lines
-    ):
+    if not isinstance(header_lines, (list, tuple)):
         raise ValueError("CSFs header 必须是字符串列表")
-    if len(header_lines) != 5:
-        raise ValueError(f"CSFs header 必须是 5 行: 实际 {len(header_lines)} 行")
-    return list(header_lines)
+
+    validated_lines: list[str] = []
+    for line in header_lines:
+        if not isinstance(line, str):
+            raise ValueError("CSFs header 必须是字符串列表")
+        validated_lines.append(line)
+
+    if len(validated_lines) != 5:
+        raise ValueError(f"CSFs header 必须是 5 行: 实际 {len(validated_lines)} 行")
+    return validated_lines
 
 
 def validate_headers_match(
@@ -150,8 +154,7 @@ def validate_headers_match(
         candidate = validate_header_lines(header_lines)
         if candidate != first:
             raise ValueError(
-                f"多个 CSFs 来源的 header 不一致: {_label(0)} 与 {_label(index)} "
-                "的 header_lines 不同"
+                f"多个 CSFs 来源的 header 不一致: {_label(0)} 与 {_label(index)} 的 header_lines 不同"
             )
     return first
 
@@ -200,6 +203,5 @@ def validate_csf_records(
     for row_index, record in enumerate(block_csfs):
         if len(record) != 3:
             raise ValueError(
-                f"CSF 记录必须是 3 行{block_label} row={row_index}: "
-                f"实际 {len(record)} 行"
+                f"CSF 记录必须是 3 行{block_label} row={row_index}: 实际 {len(record)} 行"
             )

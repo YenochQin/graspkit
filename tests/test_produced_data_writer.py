@@ -176,3 +176,14 @@ def test_load_csfs_header_lines_rejects_wrong_line_count(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="5 行"):
         load_csfs_header_lines(header_path)
+
+
+def test_load_csfs_header_lines_rejects_non_string_line(tmp_path: Path) -> None:
+    header_path = tmp_path / "bad_header.toml"
+    rtoml.dump(
+        {"header_info": {"header_lines": ["h1", "h2", "h3", "h4", 5]}},
+        header_path,
+    )
+
+    with pytest.raises(ValueError, match="header_lines"):
+        load_csfs_header_lines(header_path)
