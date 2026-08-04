@@ -8,6 +8,7 @@ from collections import Counter
 from typing import TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ..utils.data_modules import MixCoefficientData
 from .validation import validate_coupling_level, validate_csf_records
@@ -170,21 +171,30 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
         Mapping from coupling pattern to counts, CSF indices, and
         per-selected-ASF summed squared CI coefficients.
     """
+    normalized_positions: NDArray[np.int64]
     if block_asfs_position is None:
-        block_asfs_position = list(range(len(block_asfs_mix_coefficient_list)))
+        normalized_positions = np.arange(
+            len(block_asfs_mix_coefficient_list), dtype=np.int64
+        )
+    else:
+        normalized_positions = np.asarray(block_asfs_position, dtype=np.int64)
 
-    coeff_matrix = np.asarray(block_asfs_mix_coefficient_list)
+    coeff_matrix: NDArray[np.float64] = np.asarray(
+        block_asfs_mix_coefficient_list, dtype=np.float64
+    )
 
     base_coupling_dict = single_block_csfs_final_coupling_J_collector(
         block_CSFs, coupling_level
     )
     result: dict[tuple[str, ...], CouplingJInfoWithSumCiList] = {}
     for pattern, info in base_coupling_dict.items():
-        idxs = np.asarray(info["idxs"])
+        idxs: NDArray[np.int64] = np.asarray(info["idxs"], dtype=np.int64)
         sum_ci_list: list[float] = []
-        for asf_idx in block_asfs_position:
+        for asf_idx in normalized_positions:
             asf_coeff = coeff_matrix[int(asf_idx)]
-            sum_ci_list.append(float(np.sum(asf_coeff[idxs] ** 2)))
+            sum_ci_list.append(
+                float(np.sum(asf_coeff[idxs] ** 2, dtype=np.float64))
+            )
         result[pattern] = {"count": info["count"], "idxs": info["idxs"], "sum_ci": sum_ci_list}
 
     return result
@@ -227,14 +237,12 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
 
     if len(normalized_positions) != len(asfs_mix_data.blocks):
         raise ValueError(
-            f"asfs_position 第一层长度 {len(normalized_positions)} "
-            f"与 blocks {len(asfs_mix_data.blocks)} 不一致。"
+            f"asfs_position 第一层长度 {len(normalized_positions)} 与 blocks {len(asfs_mix_data.blocks)} 不一致。"
         )
 
     if len(blocks_CSFs_list) != len(asfs_mix_data.blocks):
         raise ValueError(
-            f"blocks_CSFs_list 长度 {len(blocks_CSFs_list)} "
-            f"与 mix blocks {len(asfs_mix_data.blocks)} 不一致。"
+            f"blocks_CSFs_list 长度 {len(blocks_CSFs_list)} 与 mix blocks {len(asfs_mix_data.blocks)} 不一致。"
         )
 
     blocks_asfs_coupling_J_sum_ci: dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]] = {}
@@ -245,15 +253,13 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         selected_set = {int(pos) for pos in selected_positions}
         if not selected_set.issubset(allowed_positions):
             raise ValueError(
-                f"asfs_position 第 {block_offset} 层元素 {sorted(selected_set)} "
-                f"不是 block.level_indices 对应层 {sorted(allowed_positions)} 的子集。"
+                f"asfs_position 第 {block_offset} 层元素 {sorted(selected_set)} 不是 block.level_indices 对应层 {sorted(allowed_positions)} 的子集。"
             )
 
         logger.info(f"Block {mix_block.block_index + 1}: 包含 {len(mix_block.mix_coefficients)} 个 ASF")
         if any(len(asf_mix) != len(block_csfs) for asf_mix in mix_block.mix_coefficients):
             raise ValueError(
-                f"Block {mix_block.block_index}: block_CSFs 长度 {len(block_csfs)} 与 "
-                f"block_asfs_mix_coefficient 长度不匹配。"
+                f"Block {mix_block.block_index}: block_CSFs 长度 {len(block_csfs)} 与 block_asfs_mix_coefficient 长度不匹配。"
             )
 
         blocks_asfs_coupling_J_sum_ci[mix_block.block_index] = (
