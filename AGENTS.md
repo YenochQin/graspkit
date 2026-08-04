@@ -31,7 +31,7 @@ Windows activation is `.venv\Scripts\activate`. GPU and PyTorch environments are
 - `python build_package.py --dev --clean`: development build with all dependencies.
 - `ruff check .`: run Ruff with NumPy 2.0 compatibility rules.
 - `ruff check . --fix`: auto-fix supported Ruff issues.
-- `mypy src/`: type-check the package.
+- `basedpyright src/`: type-check the package.
 - `pytest tests/`: run pytest tests.
 - `python test/test.py`: run legacy script-style checks when relevant.
 - `python -c "import graspkit; print('Package OK')"`: verify installation.
@@ -57,7 +57,7 @@ Run the relevant checks before submitting changes:
 ```bash
 pytest tests/
 ruff check .
-mypy src/
+basedpyright src/
 ```
 
 ## Common Workflows

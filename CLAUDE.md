@@ -30,7 +30,7 @@ Standalone development is also supported:
 uv sync --extra dev
 pytest tests/
 ruff check .
-mypy src/
+basedpyright src/
 python -m build
 ```
 
