@@ -1,4 +1,8 @@
 # -*- encoding: utf-8 -*-
+# Matplotlib intentionally exposes dynamic keyword APIs whose annotations contain
+# Unknown. Keep strict checking enabled for values owned by this module while
+# suppressing diagnostics caused solely by that third-party boundary.
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
 """
 图表样式设置模块
 
@@ -18,6 +22,7 @@
 - 共享颜色条和图例
 - 多子图保存优化
 """
+
 import re
 import warnings
 from typing import Any, Literal, cast
@@ -30,6 +35,40 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colorbar import Colorbar
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
+
+__all__ = [
+    "FIGURE_SIZES",
+    "JOURNAL_COLOR_SCHEMES",
+    "LEGEND_SIZE_PRESETS",
+    "SAVE_FORMATS",
+    "SUBPLOT_LAYOUTS",
+    "SUBPLOT_SIZE_FACTORS",
+    "SUBPLOT_SPACING",
+    "add_reference_lines_to_subplots",
+    "apply_transformed_x_axis_settings",
+    "calculate_subplot_figure_size",
+    "configure_for_latex",
+    "configure_matplotlib_for_publication",
+    "configure_subplot_grid",
+    "create_multi_subplot_figure",
+    "create_publication_figure",
+    "create_shared_colorbar",
+    "disable_font_warnings",
+    "finalize_figure_layout",
+    "get_cycled_linestyles",
+    "get_cycled_plot_colors",
+    "get_subplot_layout",
+    "init_publication_style",
+    "optimize_for_multi_subplot",
+    "optimize_for_plot_type",
+    "resolve_transformed_xscale",
+    "save_figure",
+    "save_multi_subplot_figure",
+    "set_color_scheme",
+    "set_figure_size",
+    "set_legend_size",
+    "use_plain_linear_x_axis",
+]
 
 
 def configure_matplotlib_for_publication() -> bool:
@@ -257,7 +296,17 @@ LEGEND_SIZE_PRESETS: dict[str, dict[str, int | float]] = {
 
 
 # Legend parameter key mapping
-_LEGEND_KEY_MAPPING: dict[str, str] = {
+LegendRcKey = Literal[
+    "legend.fontsize",
+    "legend.title_fontsize",
+    "legend.handlelength",
+    "legend.handletextpad",
+    "legend.borderpad",
+    "legend.labelspacing",
+    "legend.columnspacing",
+]
+
+_LEGEND_KEY_MAPPING: dict[str, LegendRcKey] = {
     "fontsize": "legend.fontsize",
     "title_fontsize": "legend.title_fontsize",
     "handlelength": "legend.handlelength",
@@ -543,7 +592,6 @@ def optimize_for_plot_type(plot_type: str) -> bool:
         elif plot_type == "scatter":
             plt.rcParams["lines.markersize"] = 10
             plt.rcParams["scatter.edgecolors"] = "black"
-            plt.rcParams["scatter.linewidths"] = 0.5
         elif plot_type == "bar":
             plt.rcParams["axes.linewidth"] = 1.2
             plt.rcParams["patch.linewidth"] = 0.8
@@ -768,6 +816,20 @@ def create_multi_subplot_figure(
     return fig, axes
 
 
+def _normalize_repeated_setting[T](
+    value: T | list[T] | None,
+    *,
+    default: T,
+    count: int,
+) -> list[T]:
+    """Expand an optional scalar subplot setting to a concrete list."""
+    if value is None:
+        return [default for _ in range(count)]
+    if isinstance(value, list):
+        return cast(list[T], value)
+    return [value for _ in range(count)]
+
+
 def add_reference_lines_to_subplots(
     axes: Axes | np.ndarray,
     layout: str = "2x2",
@@ -818,32 +880,37 @@ def add_reference_lines_to_subplots(
             y_values = [0]  # 默认添加y=0线
         if x_values is None:
             x_values = []
-        if y_styles is None:
-            y_styles = ["--"]
-        if x_styles is None:
-            x_styles = ["--"]
-        if y_colors is None:
-            y_colors = ["gray"]
-        if x_colors is None:
-            x_colors = ["gray"]
-        if y_labels is None:
-            y_labels = [None] * len(y_values)
-        if x_labels is None:
-            x_labels = [None] * len(x_values)
-
-        # 确保样式、颜色、标签列表长度匹配
-        if isinstance(y_styles, str):
-            y_styles = [y_styles] * len(y_values)
-        if isinstance(x_styles, str):
-            x_styles = [x_styles] * len(x_values)
-        if isinstance(y_colors, str):
-            y_colors = [y_colors] * len(y_values)
-        if isinstance(x_colors, str):
-            x_colors = [x_colors] * len(x_values)
-        if isinstance(y_labels, str):
-            y_labels = [y_labels] * len(y_values)
-        if isinstance(x_labels, str):
-            x_labels = [x_labels] * len(x_values)
+        # 将标量和缺省值统一为确定类型的列表，避免循环内继续处理联合类型。
+        resolved_y_styles = _normalize_repeated_setting(
+            y_styles,
+            default="--",
+            count=len(y_values),
+        )
+        resolved_x_styles = _normalize_repeated_setting(
+            x_styles,
+            default="--",
+            count=len(x_values),
+        )
+        resolved_y_colors = _normalize_repeated_setting(
+            y_colors,
+            default="gray",
+            count=len(y_values),
+        )
+        resolved_x_colors = _normalize_repeated_setting(
+            x_colors,
+            default="gray",
+            count=len(x_values),
+        )
+        resolved_y_labels = _normalize_repeated_setting(
+            y_labels,
+            default=None,
+            count=len(y_values),
+        )
+        resolved_x_labels = _normalize_repeated_setting(
+            x_labels,
+            default=None,
+            count=len(x_values),
+        )
 
         # 为每个子图添加参考线
         for i in range(nrows):
@@ -853,7 +920,10 @@ def add_reference_lines_to_subplots(
 
                     # 添加y轴参考线
                     for y_val, style, color, label in zip(
-                        y_values, y_styles, y_colors, y_labels
+                        y_values,
+                        resolved_y_styles,
+                        resolved_y_colors,
+                        resolved_y_labels,
                     ):
                         ax.axhline(
                             y=y_val,
@@ -866,7 +936,10 @@ def add_reference_lines_to_subplots(
 
                     # 添加x轴参考线
                     for x_val, style, color, label in zip(
-                        x_values, x_styles, x_colors, x_labels
+                        x_values,
+                        resolved_x_styles,
+                        resolved_x_colors,
+                        resolved_x_labels,
                     ):
                         ax.axvline(
                             x=x_val,
@@ -955,7 +1028,11 @@ def configure_subplot_grid(
                     if subtitle:
                         if isinstance(subtitle, list):
                             idx = i * ncols + j
-                            subtitle_item = subtitle[idx] if idx < len(subtitle) else None
+                            subtitle_item = (
+                                cast(str | None, subtitle[idx])
+                                if idx < len(subtitle)
+                                else None
+                            )
                             if subtitle_item is not None:
                                 ax.set_title(
                                     subtitle_item,
@@ -972,7 +1049,11 @@ def configure_subplot_grid(
                     if xlabel:
                         if isinstance(xlabel, list):
                             idx = i * ncols + j
-                            xlabel_item = xlabel[idx] if idx < len(xlabel) else None
+                            xlabel_item = (
+                                cast(str | None, xlabel[idx])
+                                if idx < len(xlabel)
+                                else None
+                            )
                             if xlabel_item is not None:
                                 ax.set_xlabel(xlabel_item)
                         else:
@@ -982,7 +1063,11 @@ def configure_subplot_grid(
                     if ylabel:
                         if isinstance(ylabel, list):
                             idx = i * ncols + j
-                            ylabel_item = ylabel[idx] if idx < len(ylabel) else None
+                            ylabel_item = (
+                                cast(str | None, ylabel[idx])
+                                if idx < len(ylabel)
+                                else None
+                            )
                             if ylabel_item is not None:
                                 ax.set_ylabel(ylabel_item)
                         else:
