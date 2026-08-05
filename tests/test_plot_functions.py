@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from graspkit.utils.plot_functions import rwfn_plot, rwfns_compare_plot
+from graspkit_plot.plot_functions import rwfn_plot, rwfns_compare_plot
 
 
 def _sample_rwfn_df(scale: float = 1.0) -> pl.DataFrame:
