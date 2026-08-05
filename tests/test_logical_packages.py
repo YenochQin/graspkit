@@ -42,7 +42,7 @@ import graspkit.data_IO
 
 print(json.dumps({
     "ml_loaded": any(name == "graspkit.ml_module" or name.startswith("graspkit.ml_module.") for name in sys.modules),
-    "plot_loaded": any(name == "graspkit.utils.plot_functions" or name.startswith("graspkit.utils.plot_functions.") for name in sys.modules),
+    "plot_loaded": any(name == "graspkit_plot" or name.startswith("graspkit_plot.") for name in sys.modules),
     "has_ml_config": hasattr(graspkit.data_IO, "MLCalConfig"),
     "has_load_config": hasattr(graspkit.data_IO, "load_config"),
 }))
@@ -81,7 +81,7 @@ import graspkit_plot
 
 print(json.dumps({
     "ml_loaded": any(name == "graspkit.ml_module" or name.startswith("graspkit.ml_module.") for name in sys.modules),
-    "plot_loaded": any(name == "graspkit.utils.plot_functions" or name.startswith("graspkit.utils.plot_functions.") for name in sys.modules),
+    "plot_loaded": any(name == "graspkit_plot" or name.startswith("graspkit_plot.") for name in sys.modules),
     "has_plot_bar": hasattr(graspkit_plot, "inter_coupling_channel_bar"),
 }))
 """
