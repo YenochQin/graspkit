@@ -1,25 +1,41 @@
 # -*- encoding: utf-8 -*-
+# Matplotlib intentionally exposes dynamic keyword APIs whose annotations contain
+# Unknown. Keep strict checking enabled for values owned by this module while
+# suppressing diagnostics caused solely by that third-party boundary.
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
 import warnings
-from typing import Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal, cast
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
+from matplotlib.typing import ColorType
 
 from .fig_settings import (
-        apply_transformed_x_axis_settings,
-        configure_matplotlib_for_publication,
-        create_multi_subplot_figure,
-        finalize_figure_layout,
-        get_cycled_linestyles,
-        get_cycled_plot_colors,
-        optimize_for_plot_type,
-        resolve_transformed_xscale,
-        set_color_scheme,
-        set_figure_size,
-    )
+    apply_transformed_x_axis_settings,
+    configure_matplotlib_for_publication,
+    create_multi_subplot_figure,
+    finalize_figure_layout,
+    get_cycled_linestyles,
+    get_cycled_plot_colors,
+    optimize_for_plot_type,
+    resolve_transformed_xscale,
+    set_color_scheme,
+    set_figure_size,
+)
+
+__all__ = [
+    "PlotMode",
+    "SingleSeriesMode",
+    "XTransform",
+    "inter_coupling_channel_bar",
+    "rwfn_plot",
+    "rwfns_compare_plot",
+]
 
 
 PlotMode = Literal["density", "P", "Q", "components"]
@@ -29,7 +45,9 @@ XTransform = Literal["sqrt", "linear", "raw", "log1p"]
 
 def _validate_plot_mode(plot_mode: str) -> None:
     if plot_mode not in {"density", "P", "Q", "components"}:
-        raise ValueError("plot_mode must be one of 'density', 'P', 'Q', or 'components'")
+        raise ValueError(
+            "plot_mode must be one of 'density', 'P', 'Q', or 'components'"
+        )
 
 
 def _component_column(orbital: str, component: Literal["P", "Q"]) -> str:
@@ -61,9 +79,7 @@ def _x_expr(x_col: str, x_transform: XTransform) -> pl.Expr:
         return expr
     if x_transform == "log1p":
         return (expr + 1).log()
-    raise ValueError(
-        "x_transform must be one of 'sqrt', 'linear', 'raw', or 'log1p'"
-    )
+    raise ValueError("x_transform must be one of 'sqrt', 'linear', 'raw', or 'log1p'")
 
 
 def _x_series(data: pl.DataFrame, x_col: str, x_transform: XTransform) -> pl.Series:
@@ -74,10 +90,10 @@ def _x_series(data: pl.DataFrame, x_col: str, x_transform: XTransform) -> pl.Ser
 
 
 def _rwfn_y_series(
-        data: pl.DataFrame,
-        orbital: str,
-        plot_mode: SingleSeriesMode,
-    ) -> pl.Series:
+    data: pl.DataFrame,
+    orbital: str,
+    plot_mode: SingleSeriesMode,
+) -> pl.Series:
     p_col = _component_column(orbital, "P")
     q_col = _component_column(orbital, "Q")
 
@@ -111,7 +127,9 @@ def _parse_layout(layout: str) -> tuple[int, int]:
     return nrows, ncols
 
 
-def _resolve_rwfn_layout(layout: str | None, plot_mode: PlotMode, n_orbitals: int) -> str:
+def _resolve_rwfn_layout(
+    layout: str | None, plot_mode: PlotMode, n_orbitals: int
+) -> str:
     if plot_mode == "components":
         if layout is None:
             return f"2x{n_orbitals}"
@@ -123,9 +141,9 @@ def _resolve_rwfn_layout(layout: str | None, plot_mode: PlotMode, n_orbitals: in
 
 
 def _build_plot_items(
-        orbitals: list[str],
-        plot_mode: PlotMode,
-    ) -> list[tuple[SingleSeriesMode, str, str]]:
+    orbitals: list[str],
+    plot_mode: PlotMode,
+) -> list[tuple[SingleSeriesMode, str, str]]:
     if plot_mode == "components":
         plot_items: list[tuple[SingleSeriesMode, str, str]] = []
         for orbital in orbitals:
@@ -142,10 +160,10 @@ def _build_plot_items(
 
 
 def _rwfn_plot_position(
-        index: int,
-        plot_mode: PlotMode,
-        ncols: int,
-    ) -> tuple[int, int]:
+    index: int,
+    plot_mode: PlotMode,
+    ncols: int,
+) -> tuple[int, int]:
     if plot_mode == "components":
         group_index = index // 2
         component_index = index % 2
@@ -154,14 +172,14 @@ def _rwfn_plot_position(
 
 
 def _rwfn_single_plot_style(
-        series_mode: SingleSeriesMode,
-        orbital: str,
-        orbitals: list[str],
-        orbital_colors: list[str],
-        color: str | None,
-        linestyle: Any,
-        plot_mode: PlotMode,
-    ) -> tuple[str | None, Any]:
+    series_mode: SingleSeriesMode,
+    orbital: str,
+    orbitals: list[str],
+    orbital_colors: list[str],
+    color: str | None,
+    linestyle: Any,
+    plot_mode: PlotMode,
+) -> tuple[str | None, Any]:
     if color is not None or plot_mode != "components":
         return color, linestyle
 
@@ -170,10 +188,10 @@ def _rwfn_single_plot_style(
 
 
 def _significant_mask_expr(
-        orbitals: list[str],
-        plot_mode: PlotMode,
-        threshold: float,
-    ) -> pl.Expr:
+    orbitals: list[str],
+    plot_mode: PlotMode,
+    threshold: float,
+) -> pl.Expr:
     masks: list[pl.Expr] = []
     for orbital in orbitals:
         p_col = _component_column(orbital, "P")
@@ -198,13 +216,13 @@ def _significant_mask_expr(
 
 
 def _last_significant_x_from_polars(
-        data: pl.DataFrame,
-        orbitals: list[str],
-        x_col: str,
-        plot_mode: PlotMode,
-        x_transform: XTransform,
-        threshold: float,
-    ) -> float | None:
+    data: pl.DataFrame,
+    orbitals: list[str],
+    x_col: str,
+    plot_mode: PlotMode,
+    x_transform: XTransform,
+    threshold: float,
+) -> float | None:
     selected = (
         data.with_columns(_x_expr(x_col, x_transform).alias("__x_plot"))
         .filter(_significant_mask_expr(orbitals, plot_mode, threshold))
@@ -215,23 +233,23 @@ def _last_significant_x_from_polars(
 
 
 def _calculate_default_max_x_from_polars(
-        data: pl.DataFrame,
-        x_col: str,
-        x_transform: XTransform,
-    ) -> float:
+    data: pl.DataFrame,
+    x_col: str,
+    x_transform: XTransform,
+) -> float:
     last_x = float(_x_series(data, x_col, x_transform)[-1])
     return float(int(np.ceil(last_x / 10)) * 10)
 
 
 def _calculate_auto_max_x_from_polars(
-        data_list: list[pl.DataFrame],
-        orbitals: list[str],
-        x_col: str,
-        plot_mode: PlotMode,
-        x_transform: XTransform,
-        threshold: float,
-        padding: float,
-    ) -> float | None:
+    data_list: list[pl.DataFrame],
+    orbitals: list[str],
+    x_col: str,
+    plot_mode: PlotMode,
+    x_transform: XTransform,
+    threshold: float,
+    padding: float,
+) -> float | None:
     max_x_candidates = [
         last_x
         for data in data_list
@@ -244,7 +262,8 @@ def _calculate_auto_max_x_from_polars(
                 x_transform,
                 threshold,
             )
-        ) is not None
+        )
+        is not None
     ]
     if not max_x_candidates:
         return None
@@ -259,15 +278,15 @@ def _validate_auto_max_x_settings(threshold: float, padding: float) -> None:
 
 
 def inter_coupling_channel_bar(
-        categories: Any,
-        quantity: Any,
-        sum_squared_ci: Any,
-        colors: list[Any] | None = None,
-        figsize: str | tuple[float, float] = 'double_column',
-        color_scheme: str = 'nature',
-        min_threshold: int = 10,
-        fontsize_scale: float = 1.0,
-    ) -> tuple[Figure, Axes, Axes]:
+    categories: Sequence[object],
+    quantity: Sequence[float],
+    sum_squared_ci: Sequence[float],
+    colors: Sequence[ColorType] | None = None,
+    figsize: str | tuple[float, float] = "double_column",
+    color_scheme: str = "nature",
+    min_threshold: int = 10,
+    fontsize_scale: float = 1.0,
+) -> tuple[Figure, Axes, Axes]:
     """
     创建专业的双轴柱状图，展示占比和贡献值
 
@@ -300,15 +319,17 @@ def inter_coupling_channel_bar(
 
     # 配置matplotlib为发表级别
     if not configure_matplotlib_for_publication():
-        warnings.warn("Failed to configure matplotlib for publication, using default settings")
+        warnings.warn(
+            "Failed to configure matplotlib for publication, using default settings"
+        )
 
     # 转换为numpy数组
-    categories = np.array(categories)
-    quantity = np.array(quantity, dtype=float)
-    sum_squared_ci = np.array(sum_squared_ci, dtype=float)
+    category_values = np.asarray(categories, dtype=object)
+    quantity_values = np.asarray(quantity, dtype=np.float64)
+    sum_squared_ci_values = np.asarray(sum_squared_ci, dtype=np.float64)
 
     # 处理元组类别名称
-    def format_category(cat: Any) -> str:
+    def format_category(cat: object) -> str:
         """Convert a category value to a display label.
 
         Args:
@@ -318,15 +339,18 @@ def inter_coupling_channel_bar(
             String label suitable for axis ticks and legends.
         """
         if isinstance(cat, tuple):
-            return '-'.join(str(item) for item in cat)
+            tuple_items = cast(tuple[object, ...], cat)
+            return "-".join(str(item) for item in tuple_items)
         else:
             return str(cat)
 
-    categories = [format_category(cat) for cat in categories]
-    categories = np.array(categories)
+    category_labels = np.asarray(
+        [format_category(cat) for cat in category_values],
+        dtype=np.str_,
+    )
 
     # 归一化占比到100%
-    quantity_percent = quantity / quantity.sum() * 100
+    quantity_percent = quantity_values / quantity_values.sum() * 100
 
     # 聚合小占比类别
     if min_threshold > 0:
@@ -334,39 +358,46 @@ def inter_coupling_channel_bar(
 
         if np.any(~mask_above_threshold):
             # 计算聚合值
-            aggregated_quantity = quantity[~mask_above_threshold].sum()
-            aggregated_sum_squared_ci = sum_squared_ci[~mask_above_threshold].sum()
+            aggregated_quantity = quantity_values[~mask_above_threshold].sum()
+            aggregated_sum_squared_ci = sum_squared_ci_values[
+                ~mask_above_threshold
+            ].sum()
             aggregated_quantity_percent = quantity_percent[~mask_above_threshold].sum()
             # aggregated_count = np.sum(~mask_above_threshold)
 
             # 保留大于阈值的类别
-            categories_keep = categories[mask_above_threshold]
-            quantity_keep = quantity[mask_above_threshold]
-            sum_squared_ci_keep = sum_squared_ci[mask_above_threshold]
+            categories_keep = category_labels[mask_above_threshold]
+            quantity_keep = quantity_values[mask_above_threshold]
+            sum_squared_ci_keep = sum_squared_ci_values[mask_above_threshold]
             quantity_percent_keep = quantity_percent[mask_above_threshold]
 
             # 添加"Others"类别
-            categories = np.append(categories_keep, f"Others")
-            quantity = np.append(quantity_keep, aggregated_quantity)
-            sum_squared_ci = np.append(sum_squared_ci_keep, aggregated_sum_squared_ci)
-            quantity_percent = np.append(quantity_percent_keep, aggregated_quantity_percent)
+            category_labels = np.append(categories_keep, "Others")
+            quantity_values = np.append(quantity_keep, aggregated_quantity)
+            sum_squared_ci_values = np.append(
+                sum_squared_ci_keep,
+                aggregated_sum_squared_ci,
+            )
+            quantity_percent = np.append(
+                quantity_percent_keep, aggregated_quantity_percent
+            )
 
     # 按贡献值排序，但保持"Others"在最后
-    others_mask = np.char.startswith(categories, 'Others')
+    others_mask = np.char.startswith(category_labels, "Others")
     normal_mask = ~others_mask
 
     if np.any(normal_mask):
         normal_idxs = np.where(normal_mask)[0]
         others_idxs = np.where(others_mask)[0]
 
-        normal_sort_idx = normal_idxs[np.argsort(-sum_squared_ci[normal_idxs])]
+        normal_sort_idx = normal_idxs[np.argsort(-sum_squared_ci_values[normal_idxs])]
         final_sort_idx = np.concatenate([normal_sort_idx, others_idxs])
     else:
-        final_sort_idx = np.arange(len(categories))
+        final_sort_idx = np.arange(len(category_labels))
 
-    categories = categories[final_sort_idx]
-    quantity = quantity[final_sort_idx]
-    sum_squared_ci = sum_squared_ci[final_sort_idx]
+    category_labels = category_labels[final_sort_idx]
+    quantity_values = quantity_values[final_sort_idx]
+    sum_squared_ci_values = sum_squared_ci_values[final_sort_idx]
     quantity_percent = quantity_percent[final_sort_idx]
 
     # 设置图表尺寸
@@ -383,52 +414,68 @@ def inter_coupling_channel_bar(
     # 设置颜色
     if colors is None:
         # 使用matplotlib的默认配色
-        cmap = plt.get_cmap('tab20')
-        colors = [cmap(i % 20) for i in range(len(categories))]
+        cmap = plt.get_cmap("tab20")
+        colors = [cmap(i % 20) for i in range(len(category_labels))]
 
     # 优化柱状图设置
-    optimize_for_plot_type('bar')
+    optimize_for_plot_type("bar")
 
     # 创建柱状图（占比）
-    bars = ax1.bar(range(len(categories)), quantity_percent,
-                   color=colors, alpha=0.7, edgecolor='black', linewidth=0.8)
+    bars = cast(
+        Sequence[Rectangle],
+        ax1.bar(
+            range(len(category_labels)),
+            quantity_percent,
+            color=colors,
+            alpha=0.7,
+            edgecolor="black",
+            linewidth=0.8,
+        ),
+    )
 
     # 创建折线图（贡献值）
     line = ax2.plot(
-                range(len(categories)),
-                sum_squared_ci,
-                'o-',
-                color='darkred',
-                linewidth=2, markersize=6,
-                alpha=0.8,
-                label='Contribution Value', markerfacecolor='white',
-                markeredgewidth=2,
-                markeredgecolor='darkred')
+        range(len(category_labels)),
+        sum_squared_ci_values,
+        "o-",
+        color="darkred",
+        linewidth=2,
+        markersize=6,
+        alpha=0.8,
+        label="Contribution Value",
+        markerfacecolor="white",
+        markeredgewidth=2,
+        markeredgecolor="darkred",
+    )
 
     # 添加数据标签
-    for i, (bar, pct, val, cat) in enumerate(zip(bars, quantity_percent, sum_squared_ci, categories)):
+    for bar, pct, val in zip(bars, quantity_percent, sum_squared_ci_values):
         height = bar.get_height()
 
         # 添加占比和贡献值标签
-        ax1.text(bar.get_x() + bar.get_width()/2., height + max(quantity_percent) * 0.02,
-                f'{pct:.1f}%\n{val:.3f}',
-                ha='center', va='bottom', fontsize=int(10 * fontsize_scale))
+        ax1.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + max(quantity_percent) * 0.02,
+            f"{pct:.1f}%\n{val:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=int(10 * fontsize_scale),
+        )
 
     # 设置坐标轴标签
     label_fontsize = int(12 * fontsize_scale)
     tick_fontsize = int(10 * fontsize_scale)
 
-    ax1.set_ylabel('Percentage Share (%)', fontsize=label_fontsize, color='blue')
-    ax1.set_xlabel('Intermediate coupling channel', fontsize=label_fontsize)
-    ax1.tick_params(axis='y', labelcolor='blue', labelsize=tick_fontsize)
-    ax1.tick_params(axis='x', labelsize=tick_fontsize, rotation=45)
+    ax1.set_ylabel("Percentage Share (%)", fontsize=label_fontsize, color="blue")
+    ax1.set_xlabel("Intermediate coupling channel", fontsize=label_fontsize)
+    ax1.tick_params(axis="y", labelcolor="blue", labelsize=tick_fontsize)
+    ax1.tick_params(axis="x", labelsize=tick_fontsize, rotation=45)
 
-    ax2.set_ylabel('Contribution Value', fontsize=label_fontsize, color='darkred')
-    ax2.tick_params(axis='y', labelcolor='darkred', labelsize=tick_fontsize)
+    ax2.set_ylabel("Contribution Value", fontsize=label_fontsize, color="darkred")
+    ax2.tick_params(axis="y", labelcolor="darkred", labelsize=tick_fontsize)
 
     # 设置Y轴范围，为顶部标签留出空间
     max_percentage = max(quantity_percent)
-
 
     # 设置主Y轴（百分比），增加20%的上边距为标签留空间
     ax1.set_ylim(0, max_percentage * 1.25)
@@ -438,52 +485,39 @@ def inter_coupling_channel_bar(
 
     # 设置完整的边框
     for ax in [ax1, ax2]:
-        ax.spines['top'].set_visible(True)
-        ax.spines['right'].set_visible(True)
-        ax.spines['left'].set_visible(True)
-        ax.spines['bottom'].set_visible(True)
-        ax.spines['top'].set_color('black')
-        ax.spines['right'].set_color('black')
-        ax.spines['left'].set_color('black')
-        ax.spines['bottom'].set_color('black')
-        ax.spines['top'].set_linewidth(1)
-        ax.spines['right'].set_linewidth(1)
-        ax.spines['left'].set_linewidth(1)
-        ax.spines['bottom'].set_linewidth(1)
+        ax.spines["top"].set_visible(True)
+        ax.spines["right"].set_visible(True)
+        ax.spines["left"].set_visible(True)
+        ax.spines["bottom"].set_visible(True)
+        ax.spines["top"].set_color("black")
+        ax.spines["right"].set_color("black")
+        ax.spines["left"].set_color("black")
+        ax.spines["bottom"].set_color("black")
+        ax.spines["top"].set_linewidth(1)
+        ax.spines["right"].set_linewidth(1)
+        ax.spines["left"].set_linewidth(1)
+        ax.spines["bottom"].set_linewidth(1)
 
     # 确保Y轴刻度标签位置正确
     ax1.tick_params(
-        axis='y',
-        which='both',
-        left=True,
-        right=False,
-        labelleft=True,
-        labelright=False)
+        axis="y", which="both", left=True, right=False, labelleft=True, labelright=False
+    )
     ax2.tick_params(
-        axis='y',
-        which='both',
-        left=False,
-        right=True,
-        labelleft=False,
-        labelright=True)
+        axis="y", which="both", left=False, right=True, labelleft=False, labelright=True
+    )
 
     # 设置X轴标签
-    ax1.set_xticks(range(len(categories)))
+    ax1.set_xticks(range(len(category_labels)))
     ax1.set_xticklabels(
-        categories,
-        rotation=45,
-        ha='right',
-        fontsize=tick_fontsize)
+        category_labels, rotation=45, ha="right", fontsize=tick_fontsize
+    )
 
     # 设置图例
     legend_fontsize = int(10 * fontsize_scale)
-    ax1.legend(
-        handles=line,
-        loc='upper right',
-        fontsize=legend_fontsize)
+    ax1.legend(handles=line, loc="upper right", fontsize=legend_fontsize)
 
     # 添加网格
-    ax1.grid(True, alpha=0.3, axis='y')
+    ax1.grid(True, alpha=0.3, axis="y")
 
     # 调整布局
     plt.tight_layout()
@@ -492,16 +526,16 @@ def inter_coupling_channel_bar(
 
 
 def _resolve_rwfn_max_x(
-        data_list: list[pl.DataFrame],
-        orbitals: list[str],
-        x_col: str,
-        plot_mode: PlotMode,
-        x_transform: XTransform,
-        max_x: float | None,
-        auto_max_x: bool,
-        threshold: float,
-        padding: float,
-    ) -> float:
+    data_list: list[pl.DataFrame],
+    orbitals: list[str],
+    x_col: str,
+    plot_mode: PlotMode,
+    x_transform: XTransform,
+    max_x: float | None,
+    auto_max_x: bool,
+    threshold: float,
+    padding: float,
+) -> float:
     if max_x is not None:
         return max_x
 
@@ -522,13 +556,13 @@ def _resolve_rwfn_max_x(
 
 
 def _finalize_rwfn_plot(
-        fig: Figure,
-        axes: np.ndarray,
-        layout: str,
-        suptitle: str,
-        xlabel: str | None,
-        ylabel: str | None,
-    ) -> None:
+    fig: Figure,
+    axes: np.ndarray,
+    layout: str,
+    suptitle: str | None,
+    xlabel: str | None,
+    ylabel: str | None,
+) -> None:
     _parse_layout(layout)
     for ax in axes.flat:
         ax.axhline(y=0, color="gray", linestyle="--", alpha=0.7, linewidth=1)
@@ -540,7 +574,15 @@ def _finalize_rwfn_plot(
     if xlabel is not None:
         fig.text(0.5, 0.01, xlabel, ha="center", va="center", fontsize=12)
     if ylabel is not None:
-        fig.text(0.01, 0.5, ylabel, ha="center", va="center", rotation="vertical", fontsize=12)
+        fig.text(
+            0.01,
+            0.5,
+            ylabel,
+            ha="center",
+            va="center",
+            rotation="vertical",
+            fontsize=12,
+        )
 
     finalize_figure_layout(
         fig,
@@ -549,29 +591,29 @@ def _finalize_rwfn_plot(
 
 
 def rwfn_plot(
-        data: pl.DataFrame,
-        orbitals: list[str],
-        x_col: str = "r(a.u)",
-        plot_mode: PlotMode = "density",
-        layout: str | None = None,
-        base_size: str | tuple[float, float] = "single_column",
-        spacing: str = "normal",
-        color_scheme: str = "nature",
-        legend_size: str = "medium",
-        alpha: float = 0.75,
-        max_x: float | None = None,
-        xscale: str | None = None,
-        linthresh: int = 1,
-        suptitle: str = "Radial Wavefunction",
-        color: str | None = None,
-        linestyle: Any = "-",
-        xlabel: str | None = None,
-        ylabel: str | None = None,
-        x_transform: XTransform = "sqrt",
-        auto_max_x: bool = True,
-        x_tail_threshold: float = 0.0,
-        x_tail_padding: float = 1.05,
-    ) -> tuple[Figure, np.ndarray]:
+    data: pl.DataFrame,
+    orbitals: list[str],
+    x_col: str = "r(a.u)",
+    plot_mode: PlotMode = "density",
+    layout: str | None = None,
+    base_size: str | tuple[float, float] = "single_column",
+    spacing: str = "normal",
+    color_scheme: str = "nature",
+    legend_size: str = "medium",
+    alpha: float = 0.75,
+    max_x: float | None = None,
+    xscale: str | None = None,
+    linthresh: int = 1,
+    suptitle: str = "Radial Wavefunction",
+    color: str | None = None,
+    linestyle: Any = "-",
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    x_transform: XTransform = "sqrt",
+    auto_max_x: bool = True,
+    x_tail_threshold: float = 0.0,
+    x_tail_padding: float = 1.05,
+) -> tuple[Figure, np.ndarray]:
     """Plot radial wavefunctions from one Polars DataFrame."""
     _validate_plot_mode(plot_mode)
     _validate_auto_max_x_settings(x_tail_threshold, x_tail_padding)
@@ -605,7 +647,9 @@ def rwfn_plot(
     orbital_colors = get_cycled_plot_colors(None, len(orbitals), color_scheme)
     max_items = nrows * ncols
     if len(plot_items) > max_items:
-        warnings.warn("More wavefunction plot items were requested than the layout can show")
+        warnings.warn(
+            "More wavefunction plot items were requested than the layout can show"
+        )
 
     for index, (series_mode, orbital, title) in enumerate(plot_items[:max_items]):
         row, col = _rwfn_plot_position(index, plot_mode, ncols)
@@ -648,30 +692,30 @@ def rwfn_plot(
 
 
 def rwfns_compare_plot(
-        data_list: list[pl.DataFrame],
-        orbitals: list[str],
-        x_col: str = "r(a.u)",
-        labels: list[str] | None = None,
-        plot_mode: PlotMode = "density",
-        layout: str | None = None,
-        base_size: str | tuple[float, float] = "single_column",
-        spacing: str = "normal",
-        color_scheme: str = "nature",
-        legend_size: str = "medium",
-        alpha: float = 0.75,
-        max_x: float | None = None,
-        xscale: str | None = None,
-        linthresh: int = 1,
-        suptitle: str = "Radial Wavefunction Comparison",
-        colors: list[str] | None = None,
-        linestyles: list[Any] | None = None,
-        xlabel: str | None = None,
-        ylabel: str | None = None,
-        x_transform: XTransform = "sqrt",
-        auto_max_x: bool = True,
-        x_tail_threshold: float = 0.0,
-        x_tail_padding: float = 1.05,
-    ) -> tuple[Figure, np.ndarray]:
+    data_list: list[pl.DataFrame],
+    orbitals: list[str],
+    x_col: str = "r(a.u)",
+    labels: list[str] | None = None,
+    plot_mode: PlotMode = "density",
+    layout: str | None = None,
+    base_size: str | tuple[float, float] = "single_column",
+    spacing: str = "normal",
+    color_scheme: str = "nature",
+    legend_size: str = "medium",
+    alpha: float = 0.75,
+    max_x: float | None = None,
+    xscale: str | None = None,
+    linthresh: int = 1,
+    suptitle: str = "Radial Wavefunction Comparison",
+    colors: list[str] | None = None,
+    linestyles: list[Any] | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    x_transform: XTransform = "sqrt",
+    auto_max_x: bool = True,
+    x_tail_threshold: float = 0.0,
+    x_tail_padding: float = 1.05,
+) -> tuple[Figure, np.ndarray]:
     """Compare radial wavefunctions from multiple Polars DataFrames."""
     _validate_plot_mode(plot_mode)
     _validate_auto_max_x_settings(x_tail_threshold, x_tail_padding)
@@ -684,7 +728,9 @@ def rwfns_compare_plot(
     if labels is None:
         labels = [f"Data {i + 1}" for i in range(n_datasets)]
     elif len(labels) != n_datasets:
-        raise ValueError(f"Number of labels ({len(labels)}) must match number of datasets ({n_datasets})")
+        raise ValueError(
+            f"Number of labels ({len(labels)}) must match number of datasets ({n_datasets})"
+        )
 
     resolved_layout = _resolve_rwfn_layout(layout, plot_mode, len(orbitals))
     nrows, ncols = _parse_layout(resolved_layout)
@@ -712,12 +758,12 @@ def rwfns_compare_plot(
         legend_size=legend_size,
     )
 
-    x_values_by_dataset = [
-        _x_series(data, x_col, x_transform) for data in data_list
-    ]
+    x_values_by_dataset = [_x_series(data, x_col, x_transform) for data in data_list]
     max_items = nrows * ncols
     if len(plot_items) > max_items:
-        warnings.warn("More wavefunction plot items were requested than the layout can show")
+        warnings.warn(
+            "More wavefunction plot items were requested than the layout can show"
+        )
 
     for index, (series_mode, orbital, title) in enumerate(plot_items[:max_items]):
         row, col = _rwfn_plot_position(index, plot_mode, ncols)

@@ -7,7 +7,12 @@ import numpy as np
 import polars as pl
 import pytest
 
-from graspkit_plot.plot_functions import rwfn_plot, rwfns_compare_plot
+from graspkit_plot.fig_settings import optimize_for_plot_type
+from graspkit_plot.plot_functions import (
+    inter_coupling_channel_bar,
+    rwfn_plot,
+    rwfns_compare_plot,
+)
 
 
 def _sample_rwfn_df(scale: float = 1.0) -> pl.DataFrame:
@@ -20,6 +25,25 @@ def _sample_rwfn_df(scale: float = 1.0) -> pl.DataFrame:
             "Q(2s )": [0.0, 0.4 * scale, 0.5 * scale, 0.6 * scale],
         }
     )
+
+
+def test_inter_coupling_channel_bar_keeps_aggregated_series_aligned() -> None:
+    fig, ax1, ax2 = inter_coupling_channel_bar(
+        categories=["large", "small"],
+        quantity=[95.0, 5.0],
+        sum_squared_ci=[0.8, 0.2],
+        min_threshold=10,
+    )
+
+    assert [tick.get_text() for tick in ax1.get_xticklabels()] == ["large", "Others"]
+    assert len(ax1.patches) == 2
+    assert len(ax2.lines[0].get_xdata()) == 2
+    plt.close(fig)
+
+
+def test_scatter_plot_optimization_uses_valid_rcparams() -> None:
+    assert optimize_for_plot_type("scatter") is True
+    assert plt.rcParams["scatter.edgecolors"] == "black"
 
 
 def test_rwfn_plot_defaults_to_density_mode() -> None:
