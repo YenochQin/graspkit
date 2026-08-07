@@ -183,7 +183,9 @@ def validate_coupling_level(coupling_level: int | None) -> int | None:
     Raises:
         ValueError: If ``coupling_level`` is given and not positive.
     """
-    if coupling_level is not None and coupling_level <= 0:
+    if coupling_level is not None and (
+        type(coupling_level) is not int or coupling_level <= 0
+    ):
         raise ValueError(f"coupling_level 必须是 None 或正整数: {coupling_level}")
     return coupling_level
 

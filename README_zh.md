@@ -37,6 +37,24 @@ from graspkit.CSFs_processor import batch_asfs_mix_square_above_threshold
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 
+## Windows 终端编码
+
+在使用旧代码页的 Windows 终端中，`MixCoefLoader` 等加载器通过 Rich
+输出 `cm⁻¹` 等科学单位时，可能触发 `UnicodeEncodeError`。请使用 UTF-8
+模式启动 Python：
+
+```powershell
+python -X utf8 your_script.py
+```
+
+也可以使用以下命令快速检查混合系数文件的加载：
+
+```powershell
+python -X utf8 -c "from graspkit.data_IO import MixCoefLoader; MixCoefLoader(r'path\to\file.m').load()"
+```
+
+`-X utf8` 只会调整 Python 的文本与终端输出编码，不会改变 GRASP 文件的解析方式。
+
 ## 开发检查
 
 ```bash

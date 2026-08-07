@@ -41,6 +41,25 @@ from graspkit.CSFs_processor import batch_asfs_mix_square_above_threshold
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 
+## Windows terminal encoding
+
+On Windows terminals that use a legacy code page, Rich output from loaders
+such as `MixCoefLoader` may raise `UnicodeEncodeError` when printing scientific
+labels such as `cm⁻¹`. Run Python in UTF-8 mode:
+
+```powershell
+python -X utf8 your_script.py
+```
+
+For a one-line loader check:
+
+```powershell
+python -X utf8 -c "from graspkit.data_IO import MixCoefLoader; MixCoefLoader(r'path\to\file.m').load()"
+```
+
+This option changes terminal text encoding only; it does not change how GRASP
+files are parsed.
+
 ## Development
 
 ```bash

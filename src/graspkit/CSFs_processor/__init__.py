@@ -7,9 +7,11 @@ from .coupling import (
     CouplingJInfoWithSumCiList,
     batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
     batch_blocks_csfs_final_coupling_J_collection,
+    collect_coupling_groups,
     single_asf_csfs_final_coupling_J_mix_coefficient_sum,
     single_block_batch_asfs_CSFs_final_coupling_J_collection,
     single_block_csfs_final_coupling_J_collector,
+    summarize_coupling_ci_squared,
 )
 from .extraction import (
     SelectedCsfsBlock,
@@ -42,6 +44,8 @@ __all__ = [
     "CouplingJInfo",
     "CouplingJInfoWithSumCi",
     "CouplingJInfoWithSumCiList",
+    "collect_coupling_groups",
+    "summarize_coupling_ci_squared",
     "single_block_csfs_final_coupling_J_collector",
     "batch_blocks_csfs_final_coupling_J_collection",
     "single_asf_csfs_final_coupling_J_mix_coefficient_sum",

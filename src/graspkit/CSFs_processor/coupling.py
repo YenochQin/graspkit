@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-"""Coupling-J pattern collection and CI-square summaries for CSF blocks."""
+"""Polars coupling-signature analysis with legacy raw-line compatibility."""
 
 from __future__ import annotations
 
@@ -9,11 +9,290 @@ from typing import TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
+import polars as pl
 
 from ..utils.data_modules import MixCoefficientData
 from .validation import validate_coupling_level, validate_csf_records
 
 logger = logging.getLogger(__name__)
+
+_COUPLING_SIGNATURE_COLUMN = "coupling_signature"
+_SELECTED_COUPLING_COLUMN = "_selected_coupling"
+
+
+def _validate_coupling_frame(csfs_df: pl.DataFrame) -> None:
+    """Validate the rCSFs DataFrame contract used by coupling analysis."""
+    required_columns = {"idx", "block_id", _COUPLING_SIGNATURE_COLUMN}
+    missing_columns = required_columns.difference(csfs_df.columns)
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise ValueError(f"CSF DataFrame 缺少必要列: {missing}")
+
+    if csfs_df.schema[_COUPLING_SIGNATURE_COLUMN] != pl.List(pl.Int32):
+        raise ValueError("coupling_signature 必须是 Polars List(Int32) 列")
+    if not csfs_df.schema["block_id"].is_integer():
+        raise ValueError("block_id 必须是整数列")
+    if not csfs_df.schema["idx"].is_integer():
+        raise ValueError("idx 必须是整数列")
+    if csfs_df.is_empty():
+        raise ValueError("CSF DataFrame 不能为空")
+
+    for column in ("idx", "block_id", _COUPLING_SIGNATURE_COLUMN):
+        if csfs_df[column].null_count() != 0:
+            raise ValueError(f"{column} 不能包含 null")
+
+    has_empty_signature = bool(
+        csfs_df.select(pl.col(_COUPLING_SIGNATURE_COLUMN).list.len().eq(0).any()).item()
+    )
+    if has_empty_signature:
+        raise ValueError("coupling_signature 不能是空列表")
+
+    has_null_item = bool(
+        csfs_df.select(
+            pl.col(_COUPLING_SIGNATURE_COLUMN)
+            .list.eval(pl.element().is_null())
+            .list.any()
+            .any()
+        ).item()
+    )
+    if has_null_item:
+        raise ValueError("coupling_signature 不能包含 null 元素")
+
+
+def _with_selected_coupling(
+    csfs_df: pl.DataFrame,
+    coupling_level: int | None,
+) -> pl.DataFrame:
+    """Add block-local row indices and the requested trailing signature."""
+    coupling_level = validate_coupling_level(coupling_level)
+    selected_coupling = pl.col(_COUPLING_SIGNATURE_COLUMN)
+    if coupling_level is not None:
+        selected_coupling = selected_coupling.list.slice(-coupling_level)
+
+    return csfs_df.with_columns(
+        pl.int_range(pl.len(), dtype=pl.UInt64).over("block_id").alias("block_csf_idx"),
+        selected_coupling.alias(_SELECTED_COUPLING_COLUMN),
+    )
+
+
+def collect_coupling_groups(
+    csfs_df: pl.DataFrame,
+    coupling_level: int | None = None,
+) -> pl.DataFrame:
+    """Group rCSFs coupling signatures with local and global CSF indices.
+
+    Args:
+        csfs_df: DataFrame returned by ``rcsfs.read_csfs`` with both
+            ``include_block_id`` and ``include_coupling_signature`` enabled.
+        coupling_level: Number of trailing coupling ``2J`` values used as the
+            grouping pattern. ``None`` retains the complete signature.
+
+    Returns:
+        One row per block and coupling pattern with columns ``block_id``,
+        ``coupling_signature``, ``count``, block-local ``idxs``, and source
+        ``global_idxs``.
+
+    Raises:
+        ValueError: If the DataFrame does not satisfy the rCSFs column
+            contract or ``coupling_level`` is invalid.
+    """
+    _validate_coupling_frame(csfs_df)
+    annotated = _with_selected_coupling(csfs_df, coupling_level)
+
+    return (
+        annotated.group_by(
+            ["block_id", _SELECTED_COUPLING_COLUMN],
+            maintain_order=True,
+        )
+        .agg(
+            pl.len().alias("count"),
+            pl.col("block_csf_idx").alias("idxs"),
+            pl.col("idx").cast(pl.UInt64).alias("global_idxs"),
+        )
+        .rename({_SELECTED_COUPLING_COLUMN: _COUPLING_SIGNATURE_COLUMN})
+        .select(
+            "block_id",
+            _COUPLING_SIGNATURE_COLUMN,
+            "count",
+            "idxs",
+            "global_idxs",
+        )
+    )
+
+
+def _normalize_asf_positions(
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: list[list[int]] | None,
+) -> list[list[int]]:
+    if asfs_position is None:
+        normalized = [
+            block.level_indices.astype(np.int64).tolist()
+            for block in asfs_mix_data.blocks
+        ]
+    else:
+        normalized = [
+            [int(position) for position in block_positions]
+            for block_positions in asfs_position
+        ]
+
+    if len(normalized) != len(asfs_mix_data.blocks):
+        raise ValueError(
+            "asfs_position 第一层长度与 mixing coefficient block 数量不一致"
+        )
+    return normalized
+
+
+def _mixing_coefficients_to_long_frame(
+    csfs_df: pl.DataFrame,
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: list[list[int]] | None,
+) -> pl.DataFrame:
+    """Convert selected ASF-by-CSF matrices to one Polars long frame."""
+    normalized_positions = _normalize_asf_positions(
+        asfs_mix_data,
+        asfs_position,
+    )
+    dataframe_block_ids = (
+        csfs_df.get_column("block_id").unique(maintain_order=True).to_list()
+    )
+    mix_block_ids = [block.block_index for block in asfs_mix_data.blocks]
+    if dataframe_block_ids != mix_block_ids:
+        raise ValueError(
+            f"CSF block IDs {dataframe_block_ids} 与 rmix block IDs {mix_block_ids} 不一致"
+        )
+
+    long_frames: list[pl.DataFrame] = []
+    for mix_block, selected_positions in zip(
+        asfs_mix_data.blocks,
+        normalized_positions,
+        strict=True,
+    ):
+        coefficient_matrix = np.asarray(
+            mix_block.mix_coefficients,
+            dtype=np.float64,
+        )
+        if coefficient_matrix.ndim != 2:
+            raise ValueError(
+                f"Block {mix_block.block_index}: mixing coefficients 必须是二维矩阵"
+            )
+
+        dataframe_csf_count = csfs_df.filter(
+            pl.col("block_id") == mix_block.block_index
+        ).height
+        if coefficient_matrix.shape[1] != dataframe_csf_count:
+            raise ValueError(
+                f"Block {mix_block.block_index}: rmix CSF 数量 {coefficient_matrix.shape[1]} 与 CSF DataFrame {dataframe_csf_count} 不一致"
+            )
+
+        allowed_positions = set(mix_block.level_indices.astype(np.int64).tolist())
+        if len(selected_positions) != len(set(selected_positions)):
+            raise ValueError(f"Block {mix_block.block_index}: asfs_position 包含重复值")
+        if not selected_positions:
+            raise ValueError(f"Block {mix_block.block_index}: asfs_position 不能为空")
+        if not set(selected_positions).issubset(allowed_positions):
+            raise ValueError(
+                f"Block {mix_block.block_index}: asfs_position 不是 block.level_indices 的子集"
+            )
+        if any(
+            position < 0 or position >= coefficient_matrix.shape[0]
+            for position in selected_positions
+        ):
+            raise ValueError(f"Block {mix_block.block_index}: asfs_position 越界")
+
+        selected_coefficients = coefficient_matrix[selected_positions]
+        selected_count = len(selected_positions)
+        csf_count = coefficient_matrix.shape[1]
+        long_frames.append(
+            pl.DataFrame(
+                {
+                    "block_id": np.full(
+                        selected_count * csf_count,
+                        mix_block.block_index,
+                        dtype=np.uint32,
+                    ),
+                    "asf_index": np.repeat(
+                        np.asarray(selected_positions, dtype=np.int64),
+                        csf_count,
+                    ),
+                    "block_csf_idx": np.tile(
+                        np.arange(csf_count, dtype=np.uint64),
+                        selected_count,
+                    ),
+                    "ci_squared": np.square(
+                        selected_coefficients,
+                        dtype=np.float64,
+                    ).reshape(-1),
+                },
+                schema={
+                    "block_id": pl.UInt32,
+                    "asf_index": pl.Int64,
+                    "block_csf_idx": pl.UInt64,
+                    "ci_squared": pl.Float64,
+                },
+            )
+        )
+
+    if not long_frames:
+        raise ValueError("没有可汇总的 mixing coefficient block")
+    return pl.concat(long_frames, how="vertical")
+
+
+def summarize_coupling_ci_squared(
+    csfs_df: pl.DataFrame,
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: list[list[int]] | None = None,
+    coupling_level: int | None = None,
+) -> pl.DataFrame:
+    """Summarize CI-square contributions by block, ASF, and coupling pattern.
+
+    The returned frame is in long form: one row represents one selected ASF
+    and one coupling signature in one block. This keeps the ASF identity
+    explicit instead of encoding aligned sums in nested dictionaries.
+    """
+    _validate_coupling_frame(csfs_df)
+    annotated = _with_selected_coupling(csfs_df, coupling_level).select(
+        "block_id",
+        "block_csf_idx",
+        pl.col("idx").cast(pl.UInt64),
+        _SELECTED_COUPLING_COLUMN,
+    )
+    coefficient_frame = _mixing_coefficients_to_long_frame(
+        csfs_df,
+        asfs_mix_data,
+        asfs_position,
+    )
+    joined = coefficient_frame.join(
+        annotated,
+        on=["block_id", "block_csf_idx"],
+        how="inner",
+        validate="m:1",
+        maintain_order="left",
+    )
+    if joined.height != coefficient_frame.height:
+        raise ValueError("mixing coefficient 行与 CSF DataFrame 未能完整对齐")
+
+    return (
+        joined.group_by(
+            ["block_id", "asf_index", _SELECTED_COUPLING_COLUMN],
+            maintain_order=True,
+        )
+        .agg(
+            pl.len().alias("count"),
+            pl.col("block_csf_idx").alias("idxs"),
+            pl.col("idx").alias("global_idxs"),
+            pl.col("ci_squared").sum().alias("sum_ci"),
+        )
+        .rename({_SELECTED_COUPLING_COLUMN: _COUPLING_SIGNATURE_COLUMN})
+        .select(
+            "block_id",
+            "asf_index",
+            _COUPLING_SIGNATURE_COLUMN,
+            "count",
+            "idxs",
+            "global_idxs",
+            "sum_ci",
+        )
+    )
 
 
 class CouplingJInfo(TypedDict):
@@ -59,7 +338,11 @@ class CouplingJInfoWithSumCiList(TypedDict):
 def single_block_csfs_final_coupling_J_collector(
     block_csfs: list[list[str]], coupling_level: int | None = None
 ) -> dict[tuple[str, ...], CouplingJInfo]:
-    """Collect final coupling-J patterns from one CSF block.
+    """Collect whitespace tokens from legacy raw ``line3`` CSF records.
+
+    Prefer :func:`collect_coupling_groups` for DataFrames produced by rCSFs.
+    This compatibility function does not perform GRASP fixed-width coupling
+    parsing and therefore cannot recover the complete coupling signature.
 
     Args:
         block_csfs: CSF records whose third line contains whitespace-separated
@@ -192,10 +475,12 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
         sum_ci_list: list[float] = []
         for asf_idx in normalized_positions:
             asf_coeff = coeff_matrix[int(asf_idx)]
-            sum_ci_list.append(
-                float(np.sum(asf_coeff[idxs] ** 2, dtype=np.float64))
-            )
-        result[pattern] = {"count": info["count"], "idxs": info["idxs"], "sum_ci": sum_ci_list}
+            sum_ci_list.append(float(np.sum(asf_coeff[idxs] ** 2, dtype=np.float64)))
+        result[pattern] = {
+            "count": info["count"],
+            "idxs": info["idxs"],
+            "sum_ci": sum_ci_list,
+        }
 
     return result
 
@@ -231,8 +516,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         ]
     else:
         normalized_positions = [
-            [int(pos) for pos in block_positions]
-            for block_positions in asfs_position
+            [int(pos) for pos in block_positions] for block_positions in asfs_position
         ]
 
     if len(normalized_positions) != len(asfs_mix_data.blocks):
@@ -245,7 +529,9 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
             f"blocks_CSFs_list 长度 {len(blocks_CSFs_list)} 与 mix blocks {len(asfs_mix_data.blocks)} 不一致。"
         )
 
-    blocks_asfs_coupling_J_sum_ci: dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]] = {}
+    blocks_asfs_coupling_J_sum_ci: dict[
+        int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]
+    ] = {}
     for block_offset, (block_csfs, mix_block, selected_positions) in enumerate(
         zip(blocks_CSFs_list, asfs_mix_data.blocks, normalized_positions, strict=True)
     ):
@@ -256,8 +542,12 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
                 f"asfs_position 第 {block_offset} 层元素 {sorted(selected_set)} 不是 block.level_indices 对应层 {sorted(allowed_positions)} 的子集。"
             )
 
-        logger.info(f"Block {mix_block.block_index + 1}: 包含 {len(mix_block.mix_coefficients)} 个 ASF")
-        if any(len(asf_mix) != len(block_csfs) for asf_mix in mix_block.mix_coefficients):
+        logger.info(
+            f"Block {mix_block.block_index + 1}: 包含 {len(mix_block.mix_coefficients)} 个 ASF"
+        )
+        if any(
+            len(asf_mix) != len(block_csfs) for asf_mix in mix_block.mix_coefficients
+        ):
             raise ValueError(
                 f"Block {mix_block.block_index}: block_CSFs 长度 {len(block_csfs)} 与 block_asfs_mix_coefficient 长度不匹配。"
             )
