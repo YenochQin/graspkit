@@ -1,8 +1,245 @@
+import numpy as np
+import polars as pl
 import pytest
 
 from graspkit.CSFs_processor.coupling import (
+    collect_coupling_groups,
     single_block_csfs_final_coupling_J_collector,
+    summarize_coupling_ci_squared,
 )
+from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
+
+
+def _csfs_df() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "idx": [0, 1, 2, 3, 4],
+            "block_id": [0, 0, 0, 1, 1],
+            "line1": ["l1-0", "l1-1", "l1-2", "l1-3", "l1-4"],
+            "line2": ["l2-0", "l2-1", "l2-2", "l2-3", "l2-4"],
+            "line3": ["l3-0", "l3-1", "l3-2", "l3-3", "l3-4"],
+            "coupling_signature": [
+                [1, 2, 8],
+                [3, 4, 8],
+                [1, 2, 8],
+                [5, 6],
+                [7, 6],
+            ],
+        },
+        schema_overrides={
+            "idx": pl.UInt64,
+            "block_id": pl.UInt32,
+            "coupling_signature": pl.List(pl.Int32),
+        },
+    )
+
+
+def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBlock:
+    coefficient_array = np.asarray(coefficients, dtype=np.float64)
+    return MixCoefficientBlock(
+        block_index=block_index,
+        csf_count=coefficient_array.shape[1],
+        level_count=coefficient_array.shape[0],
+        j_value_location=block_index + 1,
+        j_value=str(block_index),
+        parity=1,
+        level_indices=np.arange(coefficient_array.shape[0], dtype=np.int64),
+        base_energy=float(block_index),
+        level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64),
+        mix_coefficients=coefficient_array,
+    )
+
+
+def test_collect_coupling_groups_uses_rcsfs_signature_and_block_local_indices() -> None:
+    result = collect_coupling_groups(_csfs_df())
+
+    assert result.schema == {
+        "block_id": pl.UInt32,
+        "coupling_signature": pl.List(pl.Int32),
+        "count": pl.UInt32,
+        "idxs": pl.List(pl.UInt64),
+        "global_idxs": pl.List(pl.UInt64),
+    }
+    assert result.to_dicts() == [
+        {
+            "block_id": 0,
+            "coupling_signature": [1, 2, 8],
+            "count": 2,
+            "idxs": [0, 2],
+            "global_idxs": [0, 2],
+        },
+        {
+            "block_id": 0,
+            "coupling_signature": [3, 4, 8],
+            "count": 1,
+            "idxs": [1],
+            "global_idxs": [1],
+        },
+        {
+            "block_id": 1,
+            "coupling_signature": [5, 6],
+            "count": 1,
+            "idxs": [0],
+            "global_idxs": [3],
+        },
+        {
+            "block_id": 1,
+            "coupling_signature": [7, 6],
+            "count": 1,
+            "idxs": [1],
+            "global_idxs": [4],
+        },
+    ]
+
+
+def test_collect_coupling_groups_keeps_trailing_signature_values() -> None:
+    result = collect_coupling_groups(_csfs_df(), coupling_level=1)
+
+    assert result.to_dicts() == [
+        {
+            "block_id": 0,
+            "coupling_signature": [8],
+            "count": 3,
+            "idxs": [0, 1, 2],
+            "global_idxs": [0, 1, 2],
+        },
+        {
+            "block_id": 1,
+            "coupling_signature": [6],
+            "count": 2,
+            "idxs": [0, 1],
+            "global_idxs": [3, 4],
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    ("column", "expected_message"),
+    [
+        ("block_id", "block_id"),
+        ("idx", "idx"),
+        ("coupling_signature", "coupling_signature"),
+    ],
+)
+def test_collect_coupling_groups_rejects_missing_contract_column(
+    column: str,
+    expected_message: str,
+) -> None:
+    with pytest.raises(ValueError, match=expected_message):
+        collect_coupling_groups(_csfs_df().drop(column))
+
+
+def test_collect_coupling_groups_rejects_wrong_signature_dtype() -> None:
+    csfs_df = _csfs_df().with_columns(
+        pl.col("coupling_signature").cast(pl.List(pl.Int64))
+    )
+
+    with pytest.raises(ValueError, match=r"List\(Int32\)"):
+        collect_coupling_groups(csfs_df)
+
+
+@pytest.mark.parametrize("bad_level", [0, -1, 1.5, True])
+def test_collect_coupling_groups_rejects_invalid_coupling_level(
+    bad_level: object,
+) -> None:
+    with pytest.raises(ValueError, match="正整数"):
+        collect_coupling_groups(_csfs_df(), coupling_level=bad_level)  # type: ignore[arg-type]
+
+
+def test_summarize_coupling_ci_squared_returns_long_polars_summary() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                0,
+                np.array(
+                    [
+                        [0.5, 0.1, 0.0],
+                        [0.0, 0.3, 0.1],
+                    ]
+                ),
+            ),
+            _mix_block(1, np.array([[0.4, 0.2]])),
+        ],
+        level_list=[0.0, 0.1, 1.0],
+    )
+
+    result = summarize_coupling_ci_squared(
+        _csfs_df(),
+        mix_data,
+        asfs_position=[[1], [0]],
+        coupling_level=2,
+    )
+
+    assert result.schema == {
+        "block_id": pl.UInt32,
+        "asf_index": pl.Int64,
+        "coupling_signature": pl.List(pl.Int32),
+        "count": pl.UInt32,
+        "idxs": pl.List(pl.UInt64),
+        "global_idxs": pl.List(pl.UInt64),
+        "sum_ci": pl.Float64,
+    }
+    assert result.to_dicts() == [
+        {
+            "block_id": 0,
+            "asf_index": 1,
+            "coupling_signature": [2, 8],
+            "count": 2,
+            "idxs": [0, 2],
+            "global_idxs": [0, 2],
+            "sum_ci": pytest.approx(0.01),
+        },
+        {
+            "block_id": 0,
+            "asf_index": 1,
+            "coupling_signature": [4, 8],
+            "count": 1,
+            "idxs": [1],
+            "global_idxs": [1],
+            "sum_ci": pytest.approx(0.09),
+        },
+        {
+            "block_id": 1,
+            "asf_index": 0,
+            "coupling_signature": [5, 6],
+            "count": 1,
+            "idxs": [0],
+            "global_idxs": [3],
+            "sum_ci": pytest.approx(0.16),
+        },
+        {
+            "block_id": 1,
+            "asf_index": 0,
+            "coupling_signature": [7, 6],
+            "count": 1,
+            "idxs": [1],
+            "global_idxs": [4],
+            "sum_ci": pytest.approx(0.04),
+        },
+    ]
+
+
+def test_summarize_coupling_ci_squared_rejects_block_count_mismatch() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[_mix_block(0, np.array([[0.5, 0.1, 0.0]]))],
+        level_list=[0.0],
+    )
+
+    with pytest.raises(ValueError, match="block"):
+        summarize_coupling_ci_squared(_csfs_df(), mix_data)
+
+
+def test_summarize_coupling_ci_squared_rejects_csf_count_mismatch() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[0.5, 0.1]])),
+            _mix_block(1, np.array([[0.4, 0.2]])),
+        ],
+        level_list=[0.0, 1.0],
+    )
+
+    with pytest.raises(ValueError, match="CSF"):
+        summarize_coupling_ci_squared(_csfs_df(), mix_data)
 
 
 def test_collector_groups_by_full_coupling_pattern_by_default() -> None:
