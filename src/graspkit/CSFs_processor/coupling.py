@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 import polars as pl
 
+from ..grasp_data_extractor.rmix_data_processor import RmixCiSquaredData
 from ..utils.data_modules import MixCoefficientData
 from .validation import validate_coupling_level, validate_csf_records
 
@@ -335,6 +336,126 @@ class CouplingJInfoWithSumCiList(TypedDict):
     sum_ci: list[float]
 
 
+def collect_coupling_groups_from_records(
+    block_csfs: list[list[str]],
+    *,
+    coupling_level: int,
+) -> dict[tuple[str, ...], CouplingJInfo]:
+    """Group legacy raw-line CSFs using the tool's coupling-level convention.
+
+    ``coupling_level`` is intentionally an integer here because this is the
+    compatibility seam for the old ``.c`` text representation:
+
+    - positive values retain that many trailing tokens (short records retain
+      all tokens);
+    - zero retains all tokens;
+    - negative values drop that many leading tokens.
+
+    The structured rCSFS DataFrame interface uses
+    :func:`collect_coupling_groups` instead and does not inherit the negative
+    raw-token convention.
+    """
+    validate_csf_records(block_csfs)
+    selected_tokens: list[tuple[str, ...]] = []
+    for csf in block_csfs:
+        tokens = tuple(csf[2].lstrip().split())
+        if coupling_level > 0:
+            pattern = tokens[-coupling_level:] if len(tokens) >= coupling_level else tokens
+        elif coupling_level == 0:
+            pattern = tokens
+        else:
+            pattern = tokens[-coupling_level:]
+        selected_tokens.append(pattern)
+
+    counts = Counter(selected_tokens)
+    groups: dict[tuple[str, ...], CouplingJInfo] = {
+        pattern: {"count": count, "idxs": []}
+        for pattern, count in counts.items()
+    }
+    for index, pattern in enumerate(selected_tokens):
+        groups[pattern]["idxs"].append(index)
+    return groups
+
+
+def select_csfs_by_coupling_theme(
+    blocks_csfs: list[list[list[str]]],
+    rmix_data: RmixCiSquaredData,
+    *,
+    cutoff_value: float,
+    coupling_level: int,
+) -> list[list[int]]:
+    """Select CSF indices by CI-square threshold and dominant theme.
+
+    For every block, this returns the ordered union of CSFs whose selected ASF
+    CI-square exceeds ``cutoff_value`` and all members of the dominant coupling
+    group for each selected ASF. The returned indices are local to each block;
+    this function performs no file I/O and does not depend on a CSF loader.
+
+    ``coupling_level`` follows the legacy raw-line convention implemented by
+    :func:`collect_coupling_groups_from_records`. Structured rCSFS signatures
+    should use :func:`collect_coupling_groups` directly.
+    """
+    if type(cutoff_value) not in (int, float):
+        raise ValueError("cutoff_value must be a finite non-negative number")
+    cutoff = float(cutoff_value)
+    if not np.isfinite(cutoff) or cutoff < 0:
+        raise ValueError("cutoff_value must be a finite non-negative number")
+
+    block_count = len(blocks_csfs)
+    if not (
+        block_count
+        == len(rmix_data.block_indices)
+        == len(rmix_data.selected_asfs)
+        == len(rmix_data.ci_squared_list)
+    ):
+        raise ValueError("CSF blocks and rmix blocks must have matching lengths")
+
+    selected_by_block: list[list[int]] = []
+    for block_offset, (block_csfs, selected_asfs, ci_squared) in enumerate(
+        zip(
+            blocks_csfs,
+            rmix_data.selected_asfs,
+            rmix_data.ci_squared_list,
+            strict=True,
+        )
+    ):
+        scores = np.asarray(ci_squared, dtype=np.float64)
+        if scores.ndim != 2:
+            raise ValueError(f"rmix block {block_offset} CI-square data must be 2D")
+        if scores.shape[0] != len(selected_asfs):
+            raise ValueError(
+                f"rmix block {block_offset} selected ASF count does not match "
+                "the CI-square rows"
+            )
+        if scores.shape[1] != len(block_csfs):
+            raise ValueError(
+                f"rmix block {block_offset} has {scores.shape[1]} CSFs but "
+                f"the .c file has {len(block_csfs)}"
+            )
+        if scores.shape[0] == 0:
+            raise ValueError(f"rmix block {block_offset} contains no selected ASFs")
+
+        coupling_groups = collect_coupling_groups_from_records(
+            block_csfs,
+            coupling_level=coupling_level,
+        )
+        if not coupling_groups:
+            raise ValueError(f"CSF block {block_offset} contains no coupling themes")
+
+        selected_indices = set(
+            np.flatnonzero(np.any(scores > cutoff, axis=0)).astype(int).tolist()
+        )
+        for asf_row in scores:
+            dominant_group = max(
+                coupling_groups.values(),
+                key=lambda info: float(np.sum(asf_row[info["idxs"]])),
+            )
+            selected_indices.update(dominant_group["idxs"])
+        selected_by_block.append(sorted(selected_indices))
+
+    return selected_by_block
+
+
 def single_block_csfs_final_coupling_J_collector(
     block_csfs: list[list[str]], coupling_level: int | None = None
 ) -> dict[tuple[str, ...], CouplingJInfo]:
@@ -359,29 +480,10 @@ def single_block_csfs_final_coupling_J_collector(
             CSF record does not have exactly 3 lines.
     """
     coupling_level = validate_coupling_level(coupling_level)
-    validate_csf_records(block_csfs)
-
-    all_tokens: list[tuple[str, ...]] = [
-        tuple(csf[2].lstrip().split()) for csf in block_csfs
-    ]
-
-    if coupling_level is None:
-        selected_tokens = all_tokens
-    else:
-        selected_tokens = [
-            tokens[-coupling_level:] if len(tokens) >= coupling_level else tokens
-            for tokens in all_tokens
-        ]
-
-    coupling_J_counts = Counter(selected_tokens)
-    coupling_J_collection: dict[tuple[str, ...], CouplingJInfo] = {
-        pattern: {"count": cnt, "idxs": []}
-        for pattern, cnt in coupling_J_counts.items()
-    }
-    for idx, pattern in enumerate(selected_tokens):
-        coupling_J_collection[pattern]["idxs"].append(idx)
-
-    return coupling_J_collection
+    return collect_coupling_groups_from_records(
+        block_csfs,
+        coupling_level=0 if coupling_level is None else coupling_level,
+    )
 
 
 def batch_blocks_csfs_final_coupling_J_collection(

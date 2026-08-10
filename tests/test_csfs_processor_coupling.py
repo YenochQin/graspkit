@@ -4,9 +4,11 @@ import pytest
 
 from graspkit.CSFs_processor.coupling import (
     collect_coupling_groups,
+    select_csfs_by_coupling_theme,
     single_block_csfs_final_coupling_J_collector,
     summarize_coupling_ci_squared,
 )
+from graspkit.grasp_data_extractor.rmix_data_processor import RmixCiSquaredData
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
 
 
@@ -32,6 +34,50 @@ def _csfs_df() -> pl.DataFrame:
             "coupling_signature": pl.List(pl.Int32),
         },
     )
+
+
+def _raw_csf(label: str, theme: str) -> list[str]:
+    return [f"{label}-line1", f"{label}-line2", f"prefix {theme}"]
+
+
+def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() -> None:
+    blocks = [
+        [_raw_csf("a", "A"), _raw_csf("b", "A"), _raw_csf("c", "B")],
+        [_raw_csf("d", "X"), _raw_csf("e", "Y")],
+    ]
+    rmix_data = RmixCiSquaredData(
+        block_indices=[0, 1],
+        selected_asfs=[[0, 1], [0]],
+        ci_squared_list=[
+            np.array([[0.60, 0.00, 0.10], [0.00, 0.00, 0.80]]),
+            np.array([[0.10, 0.70]]),
+        ],
+    )
+
+    result = select_csfs_by_coupling_theme(
+        blocks,
+        rmix_data,
+        cutoff_value=0.25,
+        coupling_level=1,
+    )
+
+    assert result == [[0, 1, 2], [1]]
+
+
+def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
+    rmix_data = RmixCiSquaredData(
+        block_indices=[0],
+        selected_asfs=[[0]],
+        ci_squared_list=[np.array([[1.0]])],
+    )
+
+    with pytest.raises(ValueError, match="matching lengths"):
+        select_csfs_by_coupling_theme(
+            [[_raw_csf("a", "A")], [_raw_csf("b", "B")]],
+            rmix_data,
+            cutoff_value=0.1,
+            coupling_level=1,
+        )
 
 
 def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBlock:
