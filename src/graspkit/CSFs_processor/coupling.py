@@ -11,7 +11,6 @@ import numpy as np
 from numpy.typing import NDArray
 import polars as pl
 
-from ..grasp_data_extractor.rmix_data_processor import RmixCiSquaredData
 from ..utils.data_modules import MixCoefficientData
 from .validation import validate_coupling_level, validate_csf_records
 
@@ -108,7 +107,7 @@ def collect_coupling_groups(
         .agg(
             pl.len().alias("count"),
             pl.col("block_csf_idx").alias("idxs"),
-            pl.col("idx").cast(pl.UInt64).alias("global_idxs"),
+            pl.col("idx").cast(pl.UInt64()).alias("global_idxs"),
         )
         .rename({_SELECTED_COUPLING_COLUMN: _COUPLING_SIGNATURE_COLUMN})
         .select(
@@ -143,12 +142,12 @@ def _normalize_asf_positions(
     return normalized
 
 
-def _mixing_coefficients_to_long_frame(
+def _selected_block_coefficients(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
     asfs_position: list[list[int]] | None,
-) -> pl.DataFrame:
-    """Convert selected ASF-by-CSF matrices to one Polars long frame."""
+) -> list[tuple[int, list[int], NDArray[np.float64]]]:
+    """Validate block alignment and return selected ASF coefficient matrices."""
     normalized_positions = _normalize_asf_positions(
         asfs_mix_data,
         asfs_position,
@@ -162,7 +161,7 @@ def _mixing_coefficients_to_long_frame(
             f"CSF block IDs {dataframe_block_ids} 与 rmix block IDs {mix_block_ids} 不一致"
         )
 
-    long_frames: list[pl.DataFrame] = []
+    selected_blocks: list[tuple[int, list[int], NDArray[np.float64]]] = []
     for mix_block, selected_positions in zip(
         asfs_mix_data.blocks,
         normalized_positions,
@@ -200,15 +199,36 @@ def _mixing_coefficients_to_long_frame(
         ):
             raise ValueError(f"Block {mix_block.block_index}: asfs_position 越界")
 
-        selected_coefficients = coefficient_matrix[selected_positions]
+        selected_blocks.append(
+            (
+                mix_block.block_index,
+                selected_positions,
+                coefficient_matrix[selected_positions],
+            )
+        )
+    return selected_blocks
+
+
+def _mixing_coefficients_to_long_frame(
+    csfs_df: pl.DataFrame,
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: list[list[int]] | None,
+) -> pl.DataFrame:
+    """Convert selected ASF-by-CSF matrices to one Polars long frame."""
+    long_frames: list[pl.DataFrame] = []
+    for (
+        block_index,
+        selected_positions,
+        selected_coefficients,
+    ) in _selected_block_coefficients(csfs_df, asfs_mix_data, asfs_position):
         selected_count = len(selected_positions)
-        csf_count = coefficient_matrix.shape[1]
+        csf_count = selected_coefficients.shape[1]
         long_frames.append(
             pl.DataFrame(
                 {
                     "block_id": np.full(
                         selected_count * csf_count,
-                        mix_block.block_index,
+                        block_index,
                         dtype=np.uint32,
                     ),
                     "asf_index": np.repeat(
@@ -254,7 +274,7 @@ def summarize_coupling_ci_squared(
     annotated = _with_selected_coupling(csfs_df, coupling_level).select(
         "block_id",
         "block_csf_idx",
-        pl.col("idx").cast(pl.UInt64),
+        pl.col("idx").cast(pl.UInt64()),
         _SELECTED_COUPLING_COLUMN,
     )
     coefficient_frame = _mixing_coefficients_to_long_frame(
@@ -337,21 +357,23 @@ class CouplingJInfoWithSumCiList(TypedDict):
 
 
 def select_csfs_by_coupling_theme(
-    blocks_csfs: list[list[list[str]]],
-    rmix_data: RmixCiSquaredData,
+    csfs_df: pl.DataFrame,
+    asfs_mix_data: MixCoefficientData,
     *,
+    asfs_position: list[list[int]] | None = None,
     cutoff_value: float,
     coupling_level: int,
-) -> list[list[int]]:
-    """Select CSF indices by CI-square threshold and dominant theme.
+) -> pl.DataFrame:
+    """Select rCSFs rows by CI-square threshold and dominant coupling theme.
 
-    For every block, this returns the ordered union of CSFs whose selected ASF
-    CI-square exceeds ``cutoff_value`` and all members of the dominant coupling
-    group for each selected ASF. The returned indices are local to each block;
-    this function performs no file I/O and does not depend on a CSF loader.
+    The input must be returned by :func:`rcsfs.read_csfs` with both
+    ``include_block_id`` and ``include_coupling_signature`` enabled. For every
+    block, the result is the source-ordered union of CSFs whose selected-ASF
+    CI-square exceeds ``cutoff_value`` and every member of the dominant coupling
+    group for each selected ASF.
 
-    ``coupling_level`` is the positive number of trailing coupling tokens
-    retained from each raw CSF record.
+    ``coupling_level`` is the positive number of trailing integer ``2J`` values
+    retained from the rCSFs fixed-width coupling signature.
     """
     validate_coupling_level(coupling_level)
     if type(cutoff_value) not in (int, float):
@@ -360,59 +382,40 @@ def select_csfs_by_coupling_theme(
     if not np.isfinite(cutoff) or cutoff < 0:
         raise ValueError("cutoff_value must be a finite non-negative number")
 
-    block_count = len(blocks_csfs)
-    if not (
-        block_count
-        == len(rmix_data.block_indices)
-        == len(rmix_data.selected_asfs)
-        == len(rmix_data.ci_squared_list)
-    ):
-        raise ValueError("CSF blocks and rmix blocks must have matching lengths")
-
-    selected_by_block: list[list[int]] = []
-    for block_offset, (block_csfs, selected_asfs, ci_squared) in enumerate(
-        zip(
-            blocks_csfs,
-            rmix_data.selected_asfs,
-            rmix_data.ci_squared_list,
-            strict=True,
+    coupling_groups = collect_coupling_groups(csfs_df, coupling_level)
+    groups_by_block: dict[int, list[NDArray[np.int64]]] = {}
+    for block_id, idxs in coupling_groups.select("block_id", "idxs").iter_rows():
+        groups_by_block.setdefault(int(block_id), []).append(
+            np.asarray(idxs, dtype=np.int64)
         )
+
+    block_ids = csfs_df.get_column("block_id").to_numpy()
+    selected_row_positions: list[int] = []
+    for block_id, _, selected_coefficients in _selected_block_coefficients(
+        csfs_df,
+        asfs_mix_data,
+        asfs_position,
     ):
-        scores = np.asarray(ci_squared, dtype=np.float64)
-        if scores.ndim != 2:
-            raise ValueError(f"rmix block {block_offset} CI-square data must be 2D")
-        if scores.shape[0] != len(selected_asfs):
-            raise ValueError(
-                f"rmix block {block_offset} selected ASF count does not match "
-                "the CI-square rows"
-            )
-        if scores.shape[1] != len(block_csfs):
-            raise ValueError(
-                f"rmix block {block_offset} has {scores.shape[1]} CSFs but "
-                f"the .c file has {len(block_csfs)}"
-            )
-        if scores.shape[0] == 0:
-            raise ValueError(f"rmix block {block_offset} contains no selected ASFs")
+        scores = np.square(selected_coefficients, dtype=np.float64)
+        block_groups = groups_by_block.get(block_id)
+        if not block_groups:
+            raise ValueError(f"CSF block {block_id} contains no coupling themes")
 
-        coupling_groups = single_block_csfs_final_coupling_J_collector(
-            block_csfs,
-            coupling_level=coupling_level,
-        )
-        if not coupling_groups:
-            raise ValueError(f"CSF block {block_offset} contains no coupling themes")
-
-        selected_indices = set(
+        selected_local = set(
             np.flatnonzero(np.any(scores > cutoff, axis=0)).astype(int).tolist()
         )
-        for asf_row in scores:
-            dominant_group = max(
-                coupling_groups.values(),
-                key=lambda info: float(np.sum(asf_row[info["idxs"]])),
-            )
-            selected_indices.update(dominant_group["idxs"])
-        selected_by_block.append(sorted(selected_indices))
+        group_sums = np.column_stack(
+            [np.sum(scores[:, idxs], axis=1) for idxs in block_groups]
+        )
+        for dominant_group_index in np.argmax(group_sums, axis=1):
+            selected_local.update(block_groups[int(dominant_group_index)].tolist())
 
-    return selected_by_block
+        block_row_positions = np.flatnonzero(block_ids == block_id)
+        selected_row_positions.extend(
+            block_row_positions[sorted(selected_local)].astype(int).tolist()
+        )
+
+    return csfs_df[np.asarray(sorted(selected_row_positions), dtype=np.int64)]
 
 
 def single_block_csfs_final_coupling_J_collector(
@@ -448,8 +451,7 @@ def single_block_csfs_final_coupling_J_collector(
     ]
     counts = Counter(selected_tokens)
     groups: dict[tuple[str, ...], CouplingJInfo] = {
-        pattern: {"count": count, "idxs": []}
-        for pattern, count in counts.items()
+        pattern: {"count": count, "idxs": []} for pattern, count in counts.items()
     }
     for index, pattern in enumerate(selected_tokens):
         groups[pattern]["idxs"].append(index)

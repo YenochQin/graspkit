@@ -8,7 +8,6 @@ from graspkit.CSFs_processor.coupling import (
     single_block_csfs_final_coupling_J_collector,
     summarize_coupling_ci_squared,
 )
-from graspkit.grasp_data_extractor.rmix_data_processor import RmixCiSquaredData
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
 
 
@@ -40,65 +39,6 @@ def _raw_csf(label: str, theme: str) -> list[str]:
     return [f"{label}-line1", f"{label}-line2", f"prefix {theme}"]
 
 
-def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() -> None:
-    blocks = [
-        [_raw_csf("a", "A"), _raw_csf("b", "A"), _raw_csf("c", "B")],
-        [_raw_csf("d", "X"), _raw_csf("e", "Y")],
-    ]
-    rmix_data = RmixCiSquaredData(
-        block_indices=[0, 1],
-        selected_asfs=[[0, 1], [0]],
-        ci_squared_list=[
-            np.array([[0.60, 0.00, 0.10], [0.00, 0.00, 0.80]]),
-            np.array([[0.10, 0.70]]),
-        ],
-    )
-
-    result = select_csfs_by_coupling_theme(
-        blocks,
-        rmix_data,
-        cutoff_value=0.25,
-        coupling_level=1,
-    )
-
-    assert result == [[0, 1, 2], [1]]
-
-
-def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
-    rmix_data = RmixCiSquaredData(
-        block_indices=[0],
-        selected_asfs=[[0]],
-        ci_squared_list=[np.array([[1.0]])],
-    )
-
-    with pytest.raises(ValueError, match="matching lengths"):
-        select_csfs_by_coupling_theme(
-            [[_raw_csf("a", "A")], [_raw_csf("b", "B")]],
-            rmix_data,
-            cutoff_value=0.1,
-            coupling_level=1,
-        )
-
-
-@pytest.mark.parametrize("bad_level", [0, -1])
-def test_select_csfs_by_coupling_theme_rejects_non_positive_level(
-    bad_level: int,
-) -> None:
-    rmix_data = RmixCiSquaredData(
-        block_indices=[0],
-        selected_asfs=[[0]],
-        ci_squared_list=[np.array([[1.0]])],
-    )
-
-    with pytest.raises(ValueError, match="正整数"):
-        select_csfs_by_coupling_theme(
-            [[_raw_csf("a", "A")]],
-            rmix_data,
-            cutoff_value=0.1,
-            coupling_level=bad_level,
-        )
-
-
 def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBlock:
     coefficient_array = np.asarray(coefficients, dtype=np.float64)
     return MixCoefficientBlock(
@@ -113,6 +53,90 @@ def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBloc
         level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64),
         mix_coefficients=coefficient_array,
     )
+
+
+def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                0,
+                np.sqrt(
+                    np.array(
+                        [[0.60, 0.00, 0.10], [0.00, 0.80, 0.00]],
+                        dtype=np.float64,
+                    )
+                ),
+            ),
+            _mix_block(1, np.sqrt(np.array([[0.10, 0.70]], dtype=np.float64))),
+        ],
+        level_list=[0.0, 0.1, 1.0],
+    )
+
+    result = select_csfs_by_coupling_theme(
+        _csfs_df(),
+        mix_data,
+        asfs_position=[[0, 1], [0]],
+        cutoff_value=0.25,
+        coupling_level=3,
+    )
+
+    assert result.get_column("idx").to_list() == [0, 1, 2, 4]
+
+
+def test_select_csfs_by_coupling_theme_uses_signature_not_raw_line3() -> None:
+    csfs_df = _csfs_df().with_columns(pl.lit("same raw line").alias("line3"))
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.sqrt(np.array([[0.60, 0.00, 0.10]]))),
+            _mix_block(1, np.sqrt(np.array([[0.70, 0.10]]))),
+        ],
+        level_list=[0.0, 1.0],
+    )
+
+    result = select_csfs_by_coupling_theme(
+        csfs_df,
+        mix_data,
+        cutoff_value=0.5,
+        coupling_level=3,
+    )
+
+    assert result.get_column("idx").to_list() == [0, 2, 3]
+
+
+def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[_mix_block(0, np.array([[1.0, 0.0, 0.0]]))],
+        level_list=[0.0],
+    )
+
+    with pytest.raises(ValueError, match="block IDs"):
+        select_csfs_by_coupling_theme(
+            _csfs_df(),
+            mix_data,
+            cutoff_value=0.1,
+            coupling_level=1,
+        )
+
+
+@pytest.mark.parametrize("bad_level", [0, -1])
+def test_select_csfs_by_coupling_theme_rejects_non_positive_level(
+    bad_level: int,
+) -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[1.0, 0.0, 0.0]])),
+            _mix_block(1, np.array([[1.0, 0.0]])),
+        ],
+        level_list=[0.0, 1.0],
+    )
+
+    with pytest.raises(ValueError, match="正整数"):
+        select_csfs_by_coupling_theme(
+            _csfs_df(),
+            mix_data,
+            cutoff_value=0.1,
+            coupling_level=bad_level,
+        )
 
 
 def test_collect_coupling_groups_uses_rcsfs_signature_and_block_local_indices() -> None:
