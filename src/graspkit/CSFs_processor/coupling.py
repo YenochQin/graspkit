@@ -336,47 +336,6 @@ class CouplingJInfoWithSumCiList(TypedDict):
     sum_ci: list[float]
 
 
-def collect_coupling_groups_from_records(
-    block_csfs: list[list[str]],
-    *,
-    coupling_level: int,
-) -> dict[tuple[str, ...], CouplingJInfo]:
-    """Group legacy raw-line CSFs using the tool's coupling-level convention.
-
-    ``coupling_level`` is intentionally an integer here because this is the
-    compatibility seam for the old ``.c`` text representation:
-
-    - positive values retain that many trailing tokens (short records retain
-      all tokens);
-    - zero retains all tokens;
-    - negative values drop that many leading tokens.
-
-    The structured rCSFS DataFrame interface uses
-    :func:`collect_coupling_groups` instead and does not inherit the negative
-    raw-token convention.
-    """
-    validate_csf_records(block_csfs)
-    selected_tokens: list[tuple[str, ...]] = []
-    for csf in block_csfs:
-        tokens = tuple(csf[2].lstrip().split())
-        if coupling_level > 0:
-            pattern = tokens[-coupling_level:] if len(tokens) >= coupling_level else tokens
-        elif coupling_level == 0:
-            pattern = tokens
-        else:
-            pattern = tokens[-coupling_level:]
-        selected_tokens.append(pattern)
-
-    counts = Counter(selected_tokens)
-    groups: dict[tuple[str, ...], CouplingJInfo] = {
-        pattern: {"count": count, "idxs": []}
-        for pattern, count in counts.items()
-    }
-    for index, pattern in enumerate(selected_tokens):
-        groups[pattern]["idxs"].append(index)
-    return groups
-
-
 def select_csfs_by_coupling_theme(
     blocks_csfs: list[list[list[str]]],
     rmix_data: RmixCiSquaredData,
@@ -391,10 +350,10 @@ def select_csfs_by_coupling_theme(
     group for each selected ASF. The returned indices are local to each block;
     this function performs no file I/O and does not depend on a CSF loader.
 
-    ``coupling_level`` follows the legacy raw-line convention implemented by
-    :func:`collect_coupling_groups_from_records`. Structured rCSFS signatures
-    should use :func:`collect_coupling_groups` directly.
+    ``coupling_level`` is the positive number of trailing coupling tokens
+    retained from each raw CSF record.
     """
+    validate_coupling_level(coupling_level)
     if type(cutoff_value) not in (int, float):
         raise ValueError("cutoff_value must be a finite non-negative number")
     cutoff = float(cutoff_value)
@@ -435,7 +394,7 @@ def select_csfs_by_coupling_theme(
         if scores.shape[0] == 0:
             raise ValueError(f"rmix block {block_offset} contains no selected ASFs")
 
-        coupling_groups = collect_coupling_groups_from_records(
+        coupling_groups = single_block_csfs_final_coupling_J_collector(
             block_csfs,
             coupling_level=coupling_level,
         )
@@ -480,10 +439,21 @@ def single_block_csfs_final_coupling_J_collector(
             CSF record does not have exactly 3 lines.
     """
     coupling_level = validate_coupling_level(coupling_level)
-    return collect_coupling_groups_from_records(
-        block_csfs,
-        coupling_level=0 if coupling_level is None else coupling_level,
-    )
+    validate_csf_records(block_csfs)
+    selected_tokens = [
+        tuple(csf[2].lstrip().split())[-coupling_level:]
+        if coupling_level is not None
+        else tuple(csf[2].lstrip().split())
+        for csf in block_csfs
+    ]
+    counts = Counter(selected_tokens)
+    groups: dict[tuple[str, ...], CouplingJInfo] = {
+        pattern: {"count": count, "idxs": []}
+        for pattern, count in counts.items()
+    }
+    for index, pattern in enumerate(selected_tokens):
+        groups[pattern]["idxs"].append(index)
+    return groups
 
 
 def batch_blocks_csfs_final_coupling_J_collection(
