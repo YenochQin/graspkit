@@ -80,6 +80,25 @@ def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
         )
 
 
+@pytest.mark.parametrize("bad_level", [0, -1])
+def test_select_csfs_by_coupling_theme_rejects_non_positive_level(
+    bad_level: int,
+) -> None:
+    rmix_data = RmixCiSquaredData(
+        block_indices=[0],
+        selected_asfs=[[0]],
+        ci_squared_list=[np.array([[1.0]])],
+    )
+
+    with pytest.raises(ValueError, match="正整数"):
+        select_csfs_by_coupling_theme(
+            [[_raw_csf("a", "A")]],
+            rmix_data,
+            cutoff_value=0.1,
+            coupling_level=bad_level,
+        )
+
+
 def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBlock:
     coefficient_array = np.asarray(coefficients, dtype=np.float64)
     return MixCoefficientBlock(
