@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from fractions import Fraction
 from typing import TypedDict
 
 import numpy as np
@@ -135,7 +136,7 @@ def _selected_block_coefficients(
     asfs_mix_data: MixCoefficientData,
     asf_row_indices: list[list[int]] | None,
 ) -> list[tuple[int, list[int], NDArray[np.float64]]]:
-    """Validate block alignment and return selected ASF coefficient matrices."""
+    """Validate J/CSF alignment and return selected ASF coefficient matrices."""
     normalized_positions = normalize_asf_row_indices(
         asfs_mix_data,
         asf_row_indices,
@@ -150,8 +151,9 @@ def _selected_block_coefficients(
         )
 
     selected_blocks: list[tuple[int, list[int], NDArray[np.float64]]] = []
-    for mix_block, selected_positions in zip(
+    for mix_block, mix_j_value, selected_positions in zip(
         asfs_mix_data.blocks,
+        asfs_mix_data.level_J_value_list,
         normalized_positions,
         strict=True,
     ):
@@ -164,12 +166,32 @@ def _selected_block_coefficients(
                 f"Block {mix_block.block_index}: mixing coefficients 必须是二维矩阵"
             )
 
-        dataframe_csf_count = csfs_df.filter(
+        dataframe_block = csfs_df.filter(
             pl.col("block_id") == mix_block.block_index
-        ).height
+        )
+        dataframe_csf_count = dataframe_block.height
         if coefficient_matrix.shape[1] != dataframe_csf_count:
             raise ValueError(
                 f"Block {mix_block.block_index}: rmix CSF 数量 {coefficient_matrix.shape[1]} 与 CSF DataFrame {dataframe_csf_count} 不一致"
+            )
+
+        csf_two_j_values = (
+            dataframe_block.get_column(_COUPLING_SIGNATURE_COLUMN)
+            .list.last()
+            .unique(maintain_order=True)
+            .to_list()
+        )
+        if len(csf_two_j_values) != 1:
+            raise ValueError(
+                f"Block {mix_block.block_index}: CSF DataFrame 包含多个总 J: "
+                f"2J={csf_two_j_values}"
+            )
+        rmix_two_j = _twice_j_value(mix_j_value, block_index=mix_block.block_index)
+        csf_two_j = int(csf_two_j_values[0])
+        if csf_two_j != rmix_two_j:
+            raise ValueError(
+                f"Block {mix_block.block_index}: CSF J={_format_twice_j(csf_two_j)} "
+                f"与 rmix J={mix_j_value} 不一致"
             )
 
         selected_blocks.append(
@@ -180,6 +202,26 @@ def _selected_block_coefficients(
             )
         )
     return selected_blocks
+
+
+def _twice_j_value(j_value: str, *, block_index: int) -> int:
+    """Convert an rmix integer or half-integer J label to integral ``2J``."""
+    try:
+        twice_j = Fraction(j_value) * 2
+    except (ValueError, ZeroDivisionError) as error:
+        raise ValueError(
+            f"Block {block_index}: rmix J 值格式无效: {j_value!r}"
+        ) from error
+    if twice_j.denominator != 1 or twice_j.numerator < 0:
+        raise ValueError(f"Block {block_index}: rmix J 值无效: {j_value!r}")
+    return twice_j.numerator
+
+
+def _format_twice_j(two_j: int) -> str:
+    """Format integral ``2J`` using the same labels as MixCoefficientData."""
+    if two_j % 2 == 0:
+        return str(two_j // 2)
+    return f"{two_j}/2"
 
 
 def _mixing_coefficients_to_long_frame(

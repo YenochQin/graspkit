@@ -35,14 +35,21 @@ def _csfs_df() -> pl.DataFrame:
     )
 
 
-def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBlock:
+def _mix_block(
+    block_index: int,
+    coefficients: np.ndarray,
+    *,
+    j_value: str | None = None,
+) -> MixCoefficientBlock:
     coefficient_array = np.asarray(coefficients, dtype=np.float64)
+    if j_value is None:
+        j_value = {0: "4", 1: "3"}[block_index]
     return MixCoefficientBlock(
         block_index=block_index,
         csf_count=coefficient_array.shape[1],
         level_count=coefficient_array.shape[0],
         j_value_location=block_index + 1,
-        j_value=str(block_index),
+        j_value=j_value,
         parity=1,
         level_ids=np.arange(coefficient_array.shape[0], dtype=np.int64),
         base_energy=float(block_index),
@@ -370,6 +377,67 @@ def test_summarize_coupling_ci_squared_rejects_csf_count_mismatch() -> None:
 
     with pytest.raises(ValueError, match="CSF"):
         summarize_coupling_ci_squared(_csfs_df(), mix_data)
+
+
+def test_summarize_coupling_ci_squared_rejects_j_value_mismatch() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[0.5, 0.1, 0.0]]), j_value="7/2"),
+            _mix_block(1, np.array([[0.4, 0.2]])),
+        ],
+        sorted_level_energies=[0.0, 1.0],
+    )
+
+    with pytest.raises(ValueError, match=r"J.*不一致"):
+        summarize_coupling_ci_squared(_csfs_df(), mix_data)
+
+
+def test_summarize_coupling_ci_squared_accepts_half_integer_j_value() -> None:
+    csfs_df = pl.DataFrame(
+        {
+            "idx": [0, 1],
+            "block_id": [0, 0],
+            "coupling_signature": [[3, 1], [5, 1]],
+        },
+        schema_overrides={
+            "idx": pl.UInt64,
+            "block_id": pl.UInt32,
+            "coupling_signature": pl.List(pl.Int32),
+        },
+    )
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                0,
+                np.array([[0.5, 0.1], [0.2, 0.4]]),
+                j_value="1/2",
+            )
+        ],
+        sorted_level_energies=[0.0, 0.1],
+    )
+
+    result = summarize_coupling_ci_squared(csfs_df, mix_data)
+
+    assert result.height == 4
+
+
+def test_summarize_coupling_ci_squared_rejects_multiple_j_values_in_csf_block() -> None:
+    csfs_df = _csfs_df().with_columns(
+        pl.when(pl.col("idx") == 0)
+        .then(pl.lit([1, 2, 7], dtype=pl.List(pl.Int32)))
+        .otherwise(pl.col("coupling_signature"))
+        .alias("coupling_signature")
+    )
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[0.5, 0.1, 0.0]])),
+            _mix_block(1, np.array([[0.4, 0.2]])),
+        ],
+        sorted_level_energies=[0.0, 1.0],
+    )
+
+    with pytest.raises(ValueError, match="多个总 J"):
+        summarize_coupling_ci_squared(csfs_df, mix_data)
 
 
 def test_collector_groups_by_full_coupling_pattern_by_default() -> None:
