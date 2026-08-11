@@ -8,7 +8,12 @@ from numpy.typing import NDArray
 
 @dataclass(frozen=True)
 class MixCoefficientBlock:
-    """Parsed mixing coefficients and metadata for one rmix block."""
+    """Parsed mixing coefficients and metadata for one rmix block.
+
+    ``level_ids`` contains GRASP identifiers from ``ivec``. It is metadata,
+    not a matrix index. Rows of ``level_energies`` and ``mix_coefficients``
+    are addressed only by zero-based ``asf_row_indices``.
+    """
 
     block_index: int
     csf_count: int
@@ -16,10 +21,36 @@ class MixCoefficientBlock:
     j_value_location: int
     j_value: str
     parity: int
-    level_indices: NDArray[np.int64]
+    level_ids: NDArray[np.int64]
     base_energy: float
     level_energies: NDArray[np.float64]
     mix_coefficients: NDArray[np.float64]
+
+    def __post_init__(self) -> None:
+        if self.level_ids.shape != (self.level_count,):
+            raise ValueError("level_ids shape must match level_count")
+        if len(np.unique(self.level_ids)) != self.level_count:
+            raise ValueError("level_ids must be unique within a block")
+        if self.level_energies.shape != (self.level_count,):
+            raise ValueError("level_energies shape must match level_count")
+        if self.mix_coefficients.shape != (self.level_count, self.csf_count):
+            raise ValueError(
+                "mix_coefficients shape must be (level_count, csf_count)"
+            )
+
+    @property
+    def asf_row_indices(self) -> NDArray[np.int64]:
+        """Return the matrix row indices for all ASFs in this block."""
+        return np.arange(self.level_count, dtype=np.int64)
+
+    def row_for_level_id(self, level_id: int) -> int:
+        """Resolve one GRASP level ID to its ASF matrix row."""
+        matches = np.flatnonzero(self.level_ids == level_id)
+        if matches.size == 0:
+            raise ValueError(
+                f"Block {self.block_index}: unknown level ID {level_id}"
+            )
+        return int(matches[0])
 
 
 @dataclass(frozen=True)
@@ -28,11 +59,11 @@ class MixCoefficientData:
 
     Attributes:
         blocks: Parsed block-level rmix data.
-        level_list: Flat list of level identifiers.
+        sorted_level_energies: Absolute level energies sorted ascending.
     """
 
     blocks: list[MixCoefficientBlock]
-    level_list: list[float]
+    sorted_level_energies: list[float]
 
     @property
     def block_num(self) -> int:
@@ -59,8 +90,8 @@ class MixCoefficientData:
         return [block.parity for block in self.blocks]
 
     @property
-    def block_levels_idx_list(self) -> list[NDArray[np.int64]]:
-        return [block.level_indices for block in self.blocks]
+    def block_level_ids_list(self) -> list[NDArray[np.int64]]:
+        return [block.level_ids for block in self.blocks]
 
     @property
     def block_energy_list(self) -> list[float]:

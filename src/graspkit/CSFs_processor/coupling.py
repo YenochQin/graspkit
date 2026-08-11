@@ -13,7 +13,7 @@ import polars as pl
 
 from ..utils.data_modules import MixCoefficientData
 from .validation import (
-    normalize_asf_positions,
+    normalize_asf_row_indices,
     validate_coupling_level,
     validate_csf_records,
 )
@@ -127,12 +127,12 @@ def collect_coupling_groups(
 def _selected_block_coefficients(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None,
+    asf_row_indices: list[list[int]] | None,
 ) -> list[tuple[int, list[int], NDArray[np.float64]]]:
     """Validate block alignment and return selected ASF coefficient matrices."""
-    normalized_positions = normalize_asf_positions(
+    normalized_positions = normalize_asf_row_indices(
         asfs_mix_data,
-        asfs_position,
+        asf_row_indices,
     )
     dataframe_block_ids = (
         csfs_df.get_column("block_id").unique(maintain_order=True).to_list()
@@ -179,7 +179,7 @@ def _selected_block_coefficients(
 def _mixing_coefficients_to_long_frame(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None,
+    asf_row_indices: list[list[int]] | None,
 ) -> pl.DataFrame:
     """Convert selected ASF-by-CSF matrices to one Polars long frame."""
     long_frames: list[pl.DataFrame] = []
@@ -187,7 +187,7 @@ def _mixing_coefficients_to_long_frame(
         block_index,
         selected_positions,
         selected_coefficients,
-    ) in _selected_block_coefficients(csfs_df, asfs_mix_data, asfs_position):
+    ) in _selected_block_coefficients(csfs_df, asfs_mix_data, asf_row_indices):
         selected_count = len(selected_positions)
         csf_count = selected_coefficients.shape[1]
         long_frames.append(
@@ -228,7 +228,7 @@ def _mixing_coefficients_to_long_frame(
 def summarize_coupling_ci_squared(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None = None,
+    asf_row_indices: list[list[int]] | None = None,
     coupling_level: int | None = None,
 ) -> pl.DataFrame:
     """Summarize CI-square contributions by block, ASF, and coupling pattern.
@@ -247,7 +247,7 @@ def summarize_coupling_ci_squared(
     coefficient_frame = _mixing_coefficients_to_long_frame(
         csfs_df,
         asfs_mix_data,
-        asfs_position,
+        asf_row_indices,
     )
     joined = coefficient_frame.join(
         annotated,
@@ -327,7 +327,7 @@ def select_csfs_by_coupling_theme(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
     *,
-    asfs_position: list[list[int]] | None = None,
+    asf_row_indices: list[list[int]] | None = None,
     ci_squared_cutoff: float,
     coupling_level: int,
 ) -> pl.DataFrame:
@@ -361,7 +361,7 @@ def select_csfs_by_coupling_theme(
     for block_id, _, selected_coefficients in _selected_block_coefficients(
         csfs_df,
         asfs_mix_data,
-        asfs_position,
+        asf_row_indices,
     ):
         scores = np.square(selected_coefficients, dtype=np.float64)
         block_groups = groups_by_block.get(block_id)
@@ -477,7 +477,7 @@ def single_asf_csfs_final_coupling_J_mix_coefficient_sum(
 def single_block_batch_asfs_CSFs_final_coupling_J_collection(
     block_CSFs: list[list[str]],
     block_asfs_mix_coefficient_list: list[np.ndarray] | np.ndarray,
-    block_asfs_position: list[int] | np.ndarray | None = None,
+    asf_row_indices: list[int] | np.ndarray | None = None,
     coupling_level: int | None = None,
 ) -> dict[tuple[str, ...], CouplingJInfoWithSumCiList]:
     """Collect coupling-J contributions for selected ASFs in one CSF block.
@@ -486,7 +486,7 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
         block_CSFs: CSF records for a single block.
         block_asfs_mix_coefficient_list: Matrix-like ASF by CSF CI
             coefficients for the block.
-        block_asfs_position: ASF indices to include. If None, all ASFs are
+        asf_row_indices: ASF matrix row indices to include. If None, all ASFs are
             included.
         coupling_level: Number of trailing coupling tokens used to define each
             coupling pattern.
@@ -496,12 +496,12 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
         per-selected-ASF summed squared CI coefficients.
     """
     normalized_positions: NDArray[np.int64]
-    if block_asfs_position is None:
+    if asf_row_indices is None:
         normalized_positions = np.arange(
             len(block_asfs_mix_coefficient_list), dtype=np.int64
         )
     else:
-        normalized_positions = np.asarray(block_asfs_position, dtype=np.int64)
+        normalized_positions = np.asarray(asf_row_indices, dtype=np.int64)
 
     coeff_matrix: NDArray[np.float64] = np.asarray(
         block_asfs_mix_coefficient_list, dtype=np.float64
@@ -529,7 +529,7 @@ def single_block_batch_asfs_CSFs_final_coupling_J_collection(
 def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
     blocks_CSFs_list: list[list[list[str]]],
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None = None,
+    asf_row_indices: list[list[int]] | None = None,
     coupling_level: int | None = None,
 ) -> dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]]:
     """Collect coupling-J CI-square summaries for all CSF blocks.
@@ -537,8 +537,8 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
     Args:
         blocks_CSFs_list: CSF blocks aligned with ``asfs_mix_data``.
         asfs_mix_data: Parsed ASF mixing-coefficient data.
-        asfs_position: Optional selected ASF indices for each block. Defaults
-            to each block's ``level_indices``.
+        asf_row_indices: Optional selected ASF matrix row indices for each
+            block. Defaults to all matrix rows.
         coupling_level: Number of trailing coupling tokens used to define each
             coupling pattern.
 
@@ -550,20 +550,10 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         ValueError: If ASF positions are inconsistent with the mixing data or
             CSF and coefficient lengths do not match.
     """
-    if asfs_position is None:
-        normalized_positions: list[list[int]] = [
-            block.level_indices.astype(np.int64).tolist()
-            for block in asfs_mix_data.blocks
-        ]
-    else:
-        normalized_positions = [
-            [int(pos) for pos in block_positions] for block_positions in asfs_position
-        ]
-
-    if len(normalized_positions) != len(asfs_mix_data.blocks):
-        raise ValueError(
-            f"asfs_position 第一层长度 {len(normalized_positions)} 与 blocks {len(asfs_mix_data.blocks)} 不一致。"
-        )
+    normalized_positions = normalize_asf_row_indices(
+        asfs_mix_data,
+        asf_row_indices,
+    )
 
     if len(blocks_CSFs_list) != len(asfs_mix_data.blocks):
         raise ValueError(
@@ -573,16 +563,9 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
     blocks_asfs_coupling_J_sum_ci: dict[
         int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]
     ] = {}
-    for block_offset, (block_csfs, mix_block, selected_positions) in enumerate(
+    for block_csfs, mix_block, selected_positions in (
         zip(blocks_CSFs_list, asfs_mix_data.blocks, normalized_positions, strict=True)
     ):
-        allowed_positions = set(mix_block.level_indices.astype(np.int64).tolist())
-        selected_set = {int(pos) for pos in selected_positions}
-        if not selected_set.issubset(allowed_positions):
-            raise ValueError(
-                f"asfs_position 第 {block_offset} 层元素 {sorted(selected_set)} 不是 block.level_indices 对应层 {sorted(allowed_positions)} 的子集。"
-            )
-
         logger.info(
             f"Block {mix_block.block_index + 1}: 包含 {len(mix_block.mix_coefficients)} 个 ASF"
         )
@@ -597,7 +580,7 @@ def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
             single_block_batch_asfs_CSFs_final_coupling_J_collection(
                 block_CSFs=block_csfs,
                 block_asfs_mix_coefficient_list=mix_block.mix_coefficients,
-                block_asfs_position=selected_positions,
+                asf_row_indices=selected_positions,
                 coupling_level=coupling_level,
             )
         )

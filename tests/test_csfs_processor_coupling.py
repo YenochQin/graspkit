@@ -48,7 +48,7 @@ def _mix_block(block_index: int, coefficients: np.ndarray) -> MixCoefficientBloc
         j_value_location=block_index + 1,
         j_value=str(block_index),
         parity=1,
-        level_indices=np.arange(coefficient_array.shape[0], dtype=np.int64),
+        level_ids=np.arange(coefficient_array.shape[0], dtype=np.int64),
         base_energy=float(block_index),
         level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64),
         mix_coefficients=coefficient_array,
@@ -69,13 +69,13 @@ def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() ->
             ),
             _mix_block(1, np.sqrt(np.array([[0.10, 0.70]], dtype=np.float64))),
         ],
-        level_list=[0.0, 0.1, 1.0],
+        sorted_level_energies=[0.0, 0.1, 1.0],
     )
 
     result = select_csfs_by_coupling_theme(
         _csfs_df(),
         mix_data,
-        asfs_position=[[0, 1], [0]],
+        asf_row_indices=[[0, 1], [0]],
         ci_squared_cutoff=0.25,
         coupling_level=3,
     )
@@ -90,7 +90,7 @@ def test_select_csfs_by_coupling_theme_uses_signature_not_raw_line3() -> None:
             _mix_block(0, np.sqrt(np.array([[0.60, 0.00, 0.10]]))),
             _mix_block(1, np.sqrt(np.array([[0.70, 0.10]]))),
         ],
-        level_list=[0.0, 1.0],
+        sorted_level_energies=[0.0, 1.0],
     )
 
     result = select_csfs_by_coupling_theme(
@@ -106,7 +106,7 @@ def test_select_csfs_by_coupling_theme_uses_signature_not_raw_line3() -> None:
 def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
     mix_data = MixCoefficientData(
         blocks=[_mix_block(0, np.array([[1.0, 0.0, 0.0]]))],
-        level_list=[0.0],
+        sorted_level_energies=[0.0],
     )
 
     with pytest.raises(ValueError, match="block IDs"):
@@ -127,7 +127,7 @@ def test_select_csfs_by_coupling_theme_rejects_non_positive_level(
             _mix_block(0, np.array([[1.0, 0.0, 0.0]])),
             _mix_block(1, np.array([[1.0, 0.0]])),
         ],
-        level_list=[0.0, 1.0],
+        sorted_level_energies=[0.0, 1.0],
     )
 
     with pytest.raises(ValueError, match="正整数"):
@@ -249,13 +249,13 @@ def test_summarize_coupling_ci_squared_returns_long_polars_summary() -> None:
             ),
             _mix_block(1, np.array([[0.4, 0.2]])),
         ],
-        level_list=[0.0, 0.1, 1.0],
+        sorted_level_energies=[0.0, 0.1, 1.0],
     )
 
     result = summarize_coupling_ci_squared(
         _csfs_df(),
         mix_data,
-        asfs_position=[[1], [0]],
+        asf_row_indices=[[1], [0]],
         coupling_level=2,
     )
 
@@ -311,7 +311,7 @@ def test_summarize_coupling_ci_squared_returns_long_polars_summary() -> None:
 def test_summarize_coupling_ci_squared_rejects_block_count_mismatch() -> None:
     mix_data = MixCoefficientData(
         blocks=[_mix_block(0, np.array([[0.5, 0.1, 0.0]]))],
-        level_list=[0.0],
+        sorted_level_energies=[0.0],
     )
 
     with pytest.raises(ValueError, match="block"):
@@ -324,7 +324,7 @@ def test_summarize_coupling_ci_squared_rejects_csf_count_mismatch() -> None:
             _mix_block(0, np.array([[0.5, 0.1]])),
             _mix_block(1, np.array([[0.4, 0.2]])),
         ],
-        level_list=[0.0, 1.0],
+        sorted_level_energies=[0.0, 1.0],
     )
 
     with pytest.raises(ValueError, match="CSF"):

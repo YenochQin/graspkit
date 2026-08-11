@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Literal
-import warnings
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,64 +17,44 @@ from ..grasp_data_extractor.rmix_data_processor import (
     sort_ci_scores,
 )
 from ..utils.data_modules import MixCoefficientData
-from .validation import normalize_asf_positions, validate_selection_idxs
+from .validation import normalize_asf_row_indices, validate_selection_idxs
 
 
-def single_asf_mix_square_above_threshold(
-    asf_mix_data_array: np.ndarray, threshold: float = 0.1
-) -> list[tuple[int]]:
-    """
-    获取一维数组中平方值超过阈值的元素的索引，并按绝对值降序排序
+def select_csf_indices_above_ci_squared_cutoff(
+    coefficients: np.ndarray,
+    *,
+    ci_squared_cutoff: float = 0.1,
+) -> NDArray[np.int64]:
+    """Return CSF indices above a CI-square cutoff, highest score first."""
+    coefficient_array = np.asarray(coefficients, dtype=np.float64)
+    if coefficient_array.ndim != 1:
+        raise ValueError("coefficients must be a one-dimensional array")
 
-    Args:
-        asf_mix_data_array: 一维输入数组
-        threshold: 阈值(平方值比较)，默认0.1
-
-    Returns:
-        包含索引的元组列表，如[(idx1,), (idx2,), ...]，按绝对值降序排列
-        如果数组为空或没有元素超过阈值，返回空列表
-    """
-    if asf_mix_data_array.ndim != 1:
-        raise ValueError("输入数组必须是一维的")
-
-    squared_scores = ci_squared(asf_mix_data_array)
-    idxs = filter_ci_scores_by_threshold(squared_scores, threshold)
-
-    if len(idxs) == 0:
-        return []
-
-    values = np.asarray(asf_mix_data_array)[idxs]
-    sorted_idxs = idxs[np.argsort(-np.abs(values))]
-
-    return [(int(idx),) for idx in sorted_idxs]
+    squared_scores = ci_squared(coefficient_array)
+    indices = filter_ci_scores_by_threshold(
+        squared_scores,
+        threshold=ci_squared_cutoff,
+    )
+    if indices.size == 0:
+        return np.array([], dtype=np.int64)
+    return indices[np.argsort(-squared_scores[indices])].astype(np.int64, copy=False)
 
 
-def batch_asfs_mix_square_above_threshold(
+def select_csf_indices_by_ci_squared_cutoff(
     asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None = None,
-    threshold: float = 0.1,
-) -> dict[int, np.ndarray]:
-    """
-    批量处理多个块的混合系数数据，找出每个块中所有层级中超过阈值的系数索引
-
-    Args:
-        asfs_mix_data: Parsed block-based ASF mixing-coefficient data.
-        asfs_position: Optional selected ASF row indices for each block. Defaults
-            to each block's ``level_indices``.
-        threshold: 阈值(平方值比较)，默认0.1
-
-    Returns:
-        字典，键是block编号，值是该块中所有超过阈值的系数索引(已去重)
-        如果没有满足条件的索引，对应的值为空数组
-    """
+    *,
+    asf_row_indices: list[list[int]] | None = None,
+    ci_squared_cutoff: float = 0.1,
+) -> dict[int, NDArray[np.int64]]:
+    """Select the union of CSF columns above a CI-square cutoff per block."""
     result: dict[int, NDArray[np.int64]] = {}
 
-    normalized_positions = normalize_asf_positions(asfs_mix_data, asfs_position)
+    normalized_rows = normalize_asf_row_indices(asfs_mix_data, asf_row_indices)
 
-    for block, selected_positions in zip(
-        asfs_mix_data.blocks, normalized_positions, strict=True
+    for block, selected_rows in zip(
+        asfs_mix_data.blocks, normalized_rows, strict=True
     ):
-        block_data = block.mix_coefficients[selected_positions]
+        block_data = block.mix_coefficients[selected_rows]
 
         squared_scores = ci_squared(block_data)
         score_matrix = (
@@ -85,40 +63,12 @@ def batch_asfs_mix_square_above_threshold(
             else np.atleast_2d(squared_scores)
         )
 
-        above_threshold_mask = np.any(score_matrix > threshold, axis=0)
-        result[block.block_index] = np.where(above_threshold_mask)[0]
+        above_cutoff_mask = np.any(score_matrix > ci_squared_cutoff, axis=0)
+        result[block.block_index] = np.flatnonzero(above_cutoff_mask).astype(
+            np.int64, copy=False
+        )
 
     return result
-
-
-def CSFs_block_get_CSF(
-    CSFs_block: list[list[str]], CSf_idx: list[int] | np.ndarray
-) -> list[list[str]]:
-    """Select CSF records from a block by index.
-
-    Args:
-        CSFs_block: CSF records in one block.
-        CSf_idx: Indices of the CSF records to select.
-
-    Returns:
-        Selected CSF records in the same order as ``CSf_idx``.
-    """
-    return [CSFs_block[i] for i in CSf_idx]
-
-
-def union_lists_with_order(*lists: list[int | str]) -> list[int | str]:
-    """Return the ordered union of multiple lists.
-
-    Args:
-        *lists: Lists whose elements should be merged.
-
-    Returns:
-        De-duplicated list that preserves the first occurrence order.
-    """
-    all_elements: list[int | str] = []
-    for lst in lists:
-        all_elements.extend(lst)
-    return list(dict.fromkeys(all_elements))
 
 
 def sort_csfs_by_mix_coefficient(
@@ -166,25 +116,6 @@ def sort_csfs_by_mix_coefficient(
     return [csfs_block[int(idx)] for idx in sorted_idxs]
 
 
-def CSFs_sort_by_mix_coefficient(
-    CSFs_block: list[list[str]],
-    mix_coefficients: np.ndarray,
-    threshold: float | None = None,
-) -> list[list[str]]:
-    """Deprecated alias for :func:`sort_csfs_by_mix_coefficient`."""
-    warnings.warn(
-        "CSFs_sort_by_mix_coefficient is deprecated; use "
-        "sort_csfs_by_mix_coefficient with ci_coefficient_cutoff",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return sort_csfs_by_mix_coefficient(
-        CSFs_block,
-        mix_coefficients,
-        ci_coefficient_cutoff=threshold,
-    )
-
-
 def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
     """Generate unique random positive integers.
 
@@ -201,48 +132,57 @@ def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
 
 def random_choose_csfs(
     block_csfs_list: list[list[str]],
-    method: Literal["ratio", "quality"],
-    ratio_or_quality: float,
-    selected_csfs_idxs: list[int] | None = None,
     *,
+    ratio: float | None = None,
+    target_count: int | None = None,
+    selected_csf_indices: list[int] | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
     """Randomly choose additional CSFs from a block.
 
     Args:
         block_csfs_list: Candidate CSFs in one block.
-        method: Selection mode. ``"ratio"`` treats ``ratio_or_quality`` as a
-            fraction of the block size; ``"quality"`` treats it as an absolute
-            target count.
-        ratio_or_quality: Ratio or target count, depending on ``method``.
-        selected_csfs_idxs: Indices that have already been selected.
+        ratio: Fraction of the block to select, in ``[0, 1]``.
+        target_count: Absolute number of CSFs to select.
+        selected_csf_indices: Indices that have already been selected.
         rng: Optional NumPy generator for reproducible sampling.
 
     Returns:
         Tuple of selected CSF records, selected indices, and unselected indices.
 
     Raises:
-        ValueError: If ``method`` is not ``"ratio"`` or ``"quality"``.
+        ValueError: If exactly one target is not supplied or an input is invalid.
     """
-    if selected_csfs_idxs is None:
-        selected_csfs_idxs = []
+    if (ratio is None) == (target_count is None):
+        raise ValueError("exactly one of ratio or target_count must be provided")
     generator = rng or np.random.default_rng()
 
     block_csfs_num = len(block_csfs_list)
-    selected_csfs_num = len(selected_csfs_idxs)
-    if method == "ratio":
-        total_needed = math.ceil(block_csfs_num * ratio_or_quality)
-    elif method == "quality":
-        total_needed = math.ceil(ratio_or_quality)
+    if ratio is not None:
+        if not math.isfinite(ratio) or not 0 <= ratio <= 1:
+            raise ValueError("ratio must be finite and within [0, 1]")
+        total_needed = math.ceil(block_csfs_num * ratio)
     else:
-        raise ValueError(f"method 必须是 'ratio' 或 'quality': {method!r}")
+        if type(target_count) is not int or target_count < 0:
+            raise ValueError("target_count must be a non-negative integer")
+        total_needed = target_count
+    if total_needed > block_csfs_num:
+        raise ValueError("selection target cannot exceed the CSF block size")
+
+    selected_indices = validate_selection_idxs(
+        np.asarray(selected_csf_indices or [], dtype=np.int64),
+        row_count=block_csfs_num,
+    )
+    selected_csfs_num = int(selected_indices.size)
+    if selected_csfs_num > total_needed:
+        raise ValueError("preselected CSF count exceeds the selection target")
 
     choose_csfs_num = max(0, total_needed - selected_csfs_num)
 
     all_idxs = np.arange(block_csfs_num, dtype=np.int64)
 
     if selected_csfs_num > 0:
-        selected_set = set(selected_csfs_idxs)
+        selected_set = set(selected_indices.tolist())
         unselected_mask = ~np.isin(all_idxs, list(selected_set))
         unselected_idxs = all_idxs[unselected_mask]
 
@@ -251,10 +191,10 @@ def random_choose_csfs(
                 unselected_idxs, size=choose_csfs_num, replace=False
             )
             chosen_csfs_idxs = np.concatenate(
-                [np.asarray(selected_csfs_idxs, dtype=np.int64), random_idxs]
+                [selected_indices, random_idxs]
             )
         else:
-            chosen_csfs_idxs = np.array(selected_csfs_idxs, dtype=np.int64)
+            chosen_csfs_idxs = selected_indices
     else:
         chosen_csfs_idxs = generator.choice(
             all_idxs, size=total_needed, replace=False

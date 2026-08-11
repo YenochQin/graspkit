@@ -14,56 +14,8 @@ if str(SRC) not in sys.path:
 from graspkit.data_IO import (  # noqa: E402
     csfs_header_path_for_parquet,
     load_csfs_header_lines,
-    write_CSFs_pl_to_cfile,
     write_csfs_blocks_to_cfile,
-    write_sorted_CSFs_to_cfile,
 )
-
-
-def test_write_sorted_csfs_to_cfile_preserves_block_structure(
-    tmp_path: Path,
-) -> None:
-    output_file = tmp_path / "sorted.c"
-
-    write_sorted_CSFs_to_cfile(
-        ["header-1\n", "header-2\n", "header-3\n", "header-4\n"],
-        [
-            [["block-1-line-1\n", "block-1-line-2\n", "block-1-line-3\n"]],
-            [["block-2-line-1\n", "block-2-line-2\n", "block-2-line-3\n"]],
-        ],
-        output_file,
-    )
-
-    assert output_file.read_text() == (
-        "header-1\nheader-2\nheader-3\nheader-4\nCSF(s):\n"
-        "block-1-line-1\nblock-1-line-2\nblock-1-line-3\n *\n"
-        "block-2-line-1\nblock-2-line-2\nblock-2-line-3\n"
-    )
-
-
-def test_write_polars_csfs_to_cfile_writes_selected_columns(
-    tmp_path: Path,
-) -> None:
-    output_file = tmp_path / "polars.c"
-    dataframe = pl.DataFrame(
-        {
-            "line1": ["first-line"],
-            "line2": ["second-line"],
-            "line3": ["third-line"],
-            "ignored": ["not-written"],
-        }
-    )
-
-    write_CSFs_pl_to_cfile(
-        ["header-1", "header-2", "header-3", "header-4", "header-5"],
-        dataframe,
-        output_file,
-    )
-
-    assert output_file.read_text() == (
-        "header-1\nheader-2\nheader-3\nheader-4\nheader-5\n"
-        "first-line\nsecond-line\nthird-line\n"
-    )
 
 
 def test_write_csfs_blocks_to_cfile_writes_all_blocks_with_separator(
@@ -124,21 +76,11 @@ def test_write_csfs_blocks_to_cfile_does_not_clobber_existing_target_on_failure(
     assert leftover_temp_files == []
 
 
-def test_write_polars_csfs_to_cfile_does_not_clobber_existing_target_on_failure(
-    tmp_path: Path,
-) -> None:
-    output_file = tmp_path / "existing.c"
-    output_file.write_text("original contents\n", encoding="utf-8")
-    bad_dataframe = pl.DataFrame({"line1": ["a"], "oops": ["b"]})
+def test_raw_legacy_writer_names_are_not_public() -> None:
+    import graspkit.data_IO as data_io
 
-    with pytest.raises(Exception):
-        write_CSFs_pl_to_cfile(
-            ["h1", "h2", "h3", "h4", "h5"],
-            bad_dataframe,
-            output_file,
-        )
-
-    assert output_file.read_text(encoding="utf-8") == "original contents\n"
+    assert not hasattr(data_io, "write_sorted_CSFs_to_cfile")
+    assert not hasattr(data_io, "write_CSFs_pl_to_cfile")
 
 
 def test_csfs_header_path_for_parquet_derives_sidecar_name(tmp_path: Path) -> None:

@@ -66,7 +66,7 @@ A typical processing workflow uses explicit stable subpackage imports:
 ```python
 from graspkit.data_IO import EnergyFileLoader
 from graspkit.grasp_data_extractor import format_energy_configurations
-from graspkit.CSFs_processor import batch_asfs_mix_square_above_threshold
+from graspkit.CSFs_processor import select_csf_indices_by_ci_squared_cutoff
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 

@@ -14,9 +14,9 @@ from graspkit.grasp_data_extractor.rmix_data_processor import (
     sort_ci_scores,
 )
 from graspkit.CSFs_processor.selection import (
-    CSFs_sort_by_mix_coefficient,
-    batch_asfs_mix_square_above_threshold,
-    single_asf_mix_square_above_threshold,
+    select_csf_indices_above_ci_squared_cutoff,
+    select_csf_indices_by_ci_squared_cutoff,
+    sort_csfs_by_mix_coefficient,
 )
 from graspkit.CSFs_processor.coupling import (
     batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
@@ -30,6 +30,7 @@ def _mix_block(
     *,
     j_value: str = "0",
     parity: int = 1,
+    level_ids: np.ndarray | None = None,
 ) -> MixCoefficientBlock:
     coefficient_array = np.asarray(coefficients, dtype=np.float64)
     return MixCoefficientBlock(
@@ -39,7 +40,11 @@ def _mix_block(
         j_value_location=block_index + 1,
         j_value=j_value,
         parity=parity,
-        level_indices=np.arange(coefficient_array.shape[0], dtype=np.int64),
+        level_ids=(
+            np.arange(coefficient_array.shape[0], dtype=np.int64)
+            if level_ids is None
+            else np.asarray(level_ids, dtype=np.int64)
+        ),
         base_energy=float(block_index),
         level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64) * 0.1,
         mix_coefficients=coefficient_array,
@@ -167,20 +172,20 @@ def test_load_rmix_ci_squared_returns_selected_asf_square_data(
                         parity=1,
                     ),
                 ],
-                level_list=[0.0, 0.1],
+                sorted_level_energies=[0.0, 0.1],
             )
 
     monkeypatch.setattr(rmix_data_processor, "MixCoefLoader", DummyLoader)
 
     result = load_rmix_ci_squared(
         "/tmp/example.m",
-        select_asfs=[[1], [0]],
+        asf_row_indices=[[1], [0]],
     )
 
     assert loaded_paths == [Path("/tmp/example.m")]
     assert isinstance(result, RmixCiSquaredData)
     assert result.block_indices == [0, 1]
-    assert result.selected_asfs == [[1], [0]]
+    assert result.asf_row_indices == [[1], [0]]
     np.testing.assert_allclose(result.ci_squared_list[0], np.array([[0.0, 0.16, 0.01]]))
     np.testing.assert_allclose(result.ci_squared_list[1], np.array([[0.09, 0.16]]))
 
@@ -188,7 +193,7 @@ def test_load_rmix_ci_squared_returns_selected_asf_square_data(
 def test_rmix_ci_squared_data_methods_return_csf_index_selections() -> None:
     data = RmixCiSquaredData(
         block_indices=[0],
-        selected_asfs=[[0, 1]],
+        asf_row_indices=[[0, 1]],
         ci_squared_list=[
             np.array(
                 [
@@ -202,7 +207,7 @@ def test_rmix_ci_squared_data_methods_return_csf_index_selections() -> None:
     sorted_result = data.sort_ci_scores()
     assert isinstance(sorted_result, RmixCsfIndexSelection)
     assert sorted_result.block_indices == [0]
-    assert sorted_result.selected_asfs == [[0, 1]]
+    assert sorted_result.asf_row_indices == [[0, 1]]
     assert sorted_result.csf_indices_list == [[[0, 2, 1], [1, 2, 0]]]
 
     threshold_result = data.filter_ci_scores_by_threshold(0.03)
@@ -242,15 +247,17 @@ def test_removed_rmix_analysis_api_is_not_exported() -> None:
     assert not hasattr(extractor, "select_block_ci_scores")
 
 
-def test_legacy_single_asf_threshold_keeps_existing_tuple_index_shape() -> None:
+def test_single_asf_ci_squared_cutoff_returns_sorted_indices() -> None:
     coefficients = np.array([0.5, -0.2, 0.1])
 
-    result = single_asf_mix_square_above_threshold(coefficients, threshold=0.04)
+    result = select_csf_indices_above_ci_squared_cutoff(
+        coefficients, ci_squared_cutoff=0.0401
+    )
 
-    assert result == [(0,), (1,)]
+    np.testing.assert_array_equal(result, np.array([0]))
 
 
-def test_legacy_batch_threshold_returns_unique_indices_per_block() -> None:
+def test_batch_ci_squared_cutoff_returns_unique_indices_per_block() -> None:
     mix_data = MixCoefficientData(
         blocks=[
             _mix_block(
@@ -263,15 +270,17 @@ def test_legacy_batch_threshold_returns_unique_indices_per_block() -> None:
                 ),
             )
         ],
-        level_list=[0.0, 0.1],
+        sorted_level_energies=[0.0, 0.1],
     )
 
-    result = batch_asfs_mix_square_above_threshold(mix_data, threshold=0.04)
+    result = select_csf_indices_by_ci_squared_cutoff(
+        mix_data, ci_squared_cutoff=0.04
+    )
 
     np.testing.assert_array_equal(result[0], np.array([0, 1]))
 
 
-def test_batch_threshold_uses_blocks_and_nested_list_positions() -> None:
+def test_batch_ci_squared_cutoff_uses_asf_row_indices() -> None:
     mix_data = MixCoefficientData(
         blocks=[
             _mix_block(
@@ -293,18 +302,44 @@ def test_batch_threshold_uses_blocks_and_nested_list_positions() -> None:
                 ),
             ),
         ],
-        level_list=[0.0, 0.1, 1.0, 1.1],
+        sorted_level_energies=[0.0, 0.1, 1.0, 1.1],
     )
 
-    result = batch_asfs_mix_square_above_threshold(
+    result = select_csf_indices_by_ci_squared_cutoff(
         mix_data,
-        asfs_position=[[1], [0]],
-        threshold=0.04,
+        asf_row_indices=[[1], [0]],
+        ci_squared_cutoff=0.04,
     )
 
     assert set(result) == {10, 20}
     np.testing.assert_array_equal(result[10], np.array([1]))
     np.testing.assert_array_equal(result[20], np.array([1]))
+
+
+def test_batch_ci_squared_cutoff_does_not_treat_level_ids_as_rows() -> None:
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(
+                0,
+                np.array([[0.5, 0.0], [0.0, 0.6]]),
+                level_ids=np.array([2, 5]),
+            )
+        ],
+        sorted_level_energies=[0.0, 0.1],
+    )
+
+    all_rows = select_csf_indices_by_ci_squared_cutoff(
+        mix_data,
+        ci_squared_cutoff=0.04,
+    )
+    second_row = select_csf_indices_by_ci_squared_cutoff(
+        mix_data,
+        asf_row_indices=[[1]],
+        ci_squared_cutoff=0.04,
+    )
+
+    np.testing.assert_array_equal(all_rows[0], np.array([0, 1]))
+    np.testing.assert_array_equal(second_row[0], np.array([1]))
 
 
 def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
@@ -320,7 +355,7 @@ def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
                 ),
             )
         ],
-        level_list=[0.0, 0.1],
+        sorted_level_energies=[0.0, 0.1],
     )
     blocks_csfs = [
         [
@@ -333,7 +368,7 @@ def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
     result = batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
         blocks_CSFs_list=blocks_csfs,
         asfs_mix_data=mix_data,
-        asfs_position=[[1]],
+        asf_row_indices=[[1]],
         coupling_level=1,
     )
 
@@ -342,7 +377,7 @@ def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
     assert result[10][("J1",)]["sum_ci"] == [0.10]
 
 
-def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> None:
+def test_sort_by_mix_coefficient_preserves_sorted_csf_records() -> None:
     csfs_block = [["csf0"], ["csf1"], ["csf2"]]
     coefficients = np.array(
         [
@@ -351,19 +386,21 @@ def test_legacy_csf_sort_by_mix_coefficient_preserves_sorted_csf_records() -> No
         ]
     )
 
-    result = CSFs_sort_by_mix_coefficient(csfs_block, coefficients, threshold=0.2)
+    result = sort_csfs_by_mix_coefficient(
+        csfs_block, coefficients, ci_coefficient_cutoff=0.2
+    )
 
     assert result == [["csf0"], ["csf1"], ["csf2"]]
 
 
-def test_legacy_csf_sort_by_mix_coefficient_uses_direct_block_scores(
+def test_sort_by_mix_coefficient_uses_direct_block_scores(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import graspkit.CSFs_processor.selection as selection_module
 
     def fail_aggregate(*args: object, **kwargs: object) -> None:
         raise AssertionError(
-            "CSFs_sort_by_mix_coefficient should not aggregate via legacy helper"
+            "sort_csfs_by_mix_coefficient should not aggregate via legacy helper"
         )
 
     monkeypatch.setattr(
@@ -380,6 +417,8 @@ def test_legacy_csf_sort_by_mix_coefficient_uses_direct_block_scores(
         ]
     )
 
-    result = CSFs_sort_by_mix_coefficient(csfs_block, coefficients, threshold=0.2)
+    result = sort_csfs_by_mix_coefficient(
+        csfs_block, coefficients, ci_coefficient_cutoff=0.2
+    )
 
     assert result == [["csf0"], ["csf1"], ["csf2"]]

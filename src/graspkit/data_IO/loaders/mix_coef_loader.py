@@ -67,24 +67,24 @@ def _collect_level_metadata(
     blocks: list[MixCoefficientBlock],
 ) -> tuple[list[int], list[str], list[int], list[float]]:
     """Collect strongly typed level metadata from NumPy-backed blocks."""
-    positions: list[int] = []
+    level_ids: list[int] = []
     j_values: list[str] = []
     parity_indices: list[int] = []
     energies: list[float] = []
 
     for block in blocks:
-        block_positions = cast(list[int], block.level_indices.tolist())
-        for position in block_positions:
+        block_level_ids = cast(list[int], block.level_ids.tolist())
+        for row_index, level_id in enumerate(block_level_ids):
             level_energy = cast(
                 np.float64,
-                block.level_energies[position],
+                block.level_energies[row_index],
             ).item()
-            positions.append(position)
+            level_ids.append(level_id)
             j_values.append(block.j_value)
             parity_indices.append(block.parity)
             energies.append(block.base_energy + level_energy)
 
-    return positions, j_values, parity_indices, energies
+    return level_ids, j_values, parity_indices, energies
 
 
 def _sorted_level_order(energies: list[float]) -> list[int]:
@@ -111,11 +111,11 @@ class MixCoefLoader(BinaryFileLoader):
                 - block_energy_count_list: 每块的能级数量
                 - level_J_value_list: J值列表
                 - parity_list: 宇称列表
-                - block_levels_idx_list: 块中能级索引列表
+                - block_level_ids_list: 块中 GRASP 能级 ID 列表
                 - block_energy_list: 块能量列表
                 - block_level_energy_list: 块中能级能量列表
                 - mix_coefficient_list: 混合系数列表
-                - level_list: 能级列表
+                - sorted_level_energies: 排序后的绝对能级列表
 
         Raises:
             ValueError: 文件格式不正确
@@ -188,7 +188,7 @@ class MixCoefLoader(BinaryFileLoader):
                         j_value_location=iatjp,
                         j_value=_J_VALUE_LIST[iatjp - 1],
                         parity=iaspa,
-                        level_indices=ivec_array.astype(np.int64, copy=False),
+                        level_ids=ivec_array.astype(np.int64, copy=False),
                         base_energy=eav,
                         level_energies=evals,
                         mix_coefficients=evecs,
@@ -205,7 +205,7 @@ class MixCoefLoader(BinaryFileLoader):
             # 创建 MixCoefficientData 对象
             data = MixCoefficientData(
                 blocks=blocks,
-                level_list=level_energy_list,
+                sorted_level_energies=level_energy_list,
             )
 
             # 使用 rich 打印能级数据
@@ -282,7 +282,7 @@ def print_mix_coef_levels_rich(
 
     # 输出
     group = Group(
-        f"  Rydberg constant is  {Rydberg}  \n  Blocks: {data.block_num}  |  Total Levels: {len(data.level_list):,}",
+        f"  Rydberg constant is  {Rydberg}  \n  Blocks: {data.block_num}  |  Total Levels: {len(data.sorted_level_energies):,}",
         table
     )
     console.print(Align.left(renderable=group))
