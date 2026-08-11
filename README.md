@@ -37,7 +37,7 @@ When developing in the full workspace, use the environment owned by
 ```python
 from graspkit.data_IO import EnergyFileLoader, MixCoefLoader
 from graspkit.grasp_data_extractor import format_energy_configurations
-from graspkit.CSFs_processor import batch_asfs_mix_square_above_threshold
+from graspkit.CSFs_processor import select_csf_indices_by_ci_squared_cutoff
 from graspkit_plot import configure_matplotlib_for_publication
 ```
 

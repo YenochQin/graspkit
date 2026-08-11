@@ -68,9 +68,6 @@ class CsfDocument:
         return self.csfs_df.partition_by("block_id", maintain_order=True)
 
 
-SelectedCsfsBlock = CsfDocument
-
-
 def create_csf_document(
     *,
     header_lines: Sequence[str],
@@ -88,35 +85,6 @@ def create_csf_document(
             validated_header[3],
             validated_header[4],
         ),
-        csfs_df=csfs_df,
-        source_path=source_path,
-        label=label,
-    )
-
-
-def select_csfs_block(
-    *,
-    header_lines: Sequence[str],
-    csfs_df: pl.DataFrame,
-    source_path: Path,
-    label: str | None = None,
-) -> CsfDocument:
-    """Build a :class:`SelectedCsfsBlock` after validating its header.
-
-    Args:
-        header_lines: The 5-line GRASP header for ``csfs_df``'s source.
-        csfs_df: Already-selected CSF rows.
-        source_path: Path the rows were read from.
-        label: Optional caller-supplied label (e.g. a J value).
-
-    Returns:
-        A validated :class:`SelectedCsfsBlock`.
-
-    Raises:
-        ValueError: If ``header_lines`` is not exactly 5 strings.
-    """
-    return create_csf_document(
-        header_lines=header_lines,
         csfs_df=csfs_df,
         source_path=source_path,
         label=label,
@@ -158,18 +126,4 @@ def write_csf_documents(
         header_lines,
         [block for document in documents for block in document.blocks()],
         output_file,
-    )
-
-
-def merge_and_write_csfs_blocks(
-    blocks: Sequence[CsfDocument],
-    output_file: Path,
-    *,
-    extra_input_paths: Sequence[Path | None] = (),
-) -> None:
-    """Compatibility alias for :func:`write_csf_documents`."""
-    write_csf_documents(
-        blocks,
-        output_file,
-        extra_input_paths=extra_input_paths,
     )

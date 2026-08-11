@@ -9,7 +9,7 @@ from graspkit.data_IO.loaders.mix_coef_loader import MixCoefLoader
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
 
 
-def test_mix_coefficient_data_derives_legacy_lists_from_blocks() -> None:
+def test_mix_coefficient_data_derives_metadata_lists_from_blocks() -> None:
     block0 = MixCoefficientBlock(
         block_index=0,
         csf_count=3,
@@ -17,7 +17,7 @@ def test_mix_coefficient_data_derives_legacy_lists_from_blocks() -> None:
         j_value_location=1,
         j_value="0",
         parity=1,
-        level_indices=np.array([0, 1], dtype=np.int64),
+        level_ids=np.array([2, 5], dtype=np.int64),
         base_energy=0.5,
         level_energies=np.array([0.0, 0.1], dtype=np.float64),
         mix_coefficients=np.array(
@@ -35,7 +35,7 @@ def test_mix_coefficient_data_derives_legacy_lists_from_blocks() -> None:
         j_value_location=2,
         j_value="1/2",
         parity=2,
-        level_indices=np.array([0], dtype=np.int64),
+        level_ids=np.array([8], dtype=np.int64),
         base_energy=0.8,
         level_energies=np.array([0.05], dtype=np.float64),
         mix_coefficients=np.array([[0.3, 0.4]], dtype=np.float64),
@@ -43,7 +43,7 @@ def test_mix_coefficient_data_derives_legacy_lists_from_blocks() -> None:
 
     data = MixCoefficientData(
         blocks=[block0, block1],
-        level_list=[0.5, 0.6, 0.85],
+        sorted_level_energies=[0.5, 0.6, 0.85],
     )
 
     assert data.block_num == 2
@@ -53,12 +53,17 @@ def test_mix_coefficient_data_derives_legacy_lists_from_blocks() -> None:
     assert data.level_J_value_list == ["0", "1/2"]
     assert data.parity_list == [1, 2]
     assert data.block_energy_list == [0.5, 0.8]
-    np.testing.assert_array_equal(data.block_levels_idx_list[0], np.array([0, 1]))
+    np.testing.assert_array_equal(data.block_level_ids_list[0], np.array([2, 5]))
     np.testing.assert_allclose(data.block_level_energy_list[1], np.array([0.05]))
     np.testing.assert_allclose(
         data.mix_coefficient_list[0],
         np.array([[0.5, 0.1, 0.2], [0.0, 0.4, 0.1]]),
     )
+    np.testing.assert_array_equal(block0.asf_row_indices, np.array([0, 1]))
+    assert block0.row_for_level_id(2) == 0
+    assert block0.row_for_level_id(5) == 1
+    with pytest.raises(ValueError, match="level ID 3"):
+        block0.row_for_level_id(3)
 
 
 def test_mix_coef_loader_builds_blocks(
@@ -113,7 +118,7 @@ def test_mix_coef_loader_builds_blocks(
     assert block.j_value == "0"
     assert block.parity == 1
     assert block.base_energy == 0.5
-    np.testing.assert_array_equal(block.level_indices, np.array([0, 1]))
+    np.testing.assert_array_equal(block.level_ids, np.array([0, 1]))
     np.testing.assert_allclose(block.level_energies, np.array([0.0, 0.1]))
     np.testing.assert_allclose(
         block.mix_coefficients,
@@ -150,7 +155,7 @@ def test_print_mix_coef_levels_uses_block_j_values(
                 j_value_location=1,
                 j_value="0",
                 parity=1,
-                level_indices=np.array([0], dtype=np.int64),
+                level_ids=np.array([3], dtype=np.int64),
                 base_energy=0.0,
                 level_energies=np.array([0.0], dtype=np.float64),
                 mix_coefficients=np.array([[1.0]], dtype=np.float64),
@@ -162,13 +167,13 @@ def test_print_mix_coef_levels_uses_block_j_values(
                 j_value_location=2,
                 j_value="1/2",
                 parity=2,
-                level_indices=np.array([0], dtype=np.int64),
+                level_ids=np.array([7], dtype=np.int64),
                 base_energy=0.1,
                 level_energies=np.array([0.0], dtype=np.float64),
                 mix_coefficients=np.array([[1.0]], dtype=np.float64),
             ),
         ],
-        level_list=[0.0, 0.1],
+        sorted_level_energies=[0.0, 0.1],
     )
 
     from graspkit.data_IO.loaders.mix_coef_loader import print_mix_coef_levels_rich

@@ -15,9 +15,7 @@ from .loaders.transition_loader import TransitionLoader  # noqa: F401
 from .produced_data_writor import (
     csfs_header_path_for_parquet,
     load_csfs_header_lines,
-    write_CSFs_pl_to_cfile,
     write_csfs_blocks_to_cfile,
-    write_sorted_CSFs_to_cfile,
 )
 
 # 显式导出所有需要的函数
@@ -37,7 +35,5 @@ __all__ = [
     # produced_data_write
     "csfs_header_path_for_parquet",
     "load_csfs_header_lines",
-    "write_sorted_CSFs_to_cfile",
-    "write_CSFs_pl_to_cfile",
     "write_csfs_blocks_to_cfile",
 ]

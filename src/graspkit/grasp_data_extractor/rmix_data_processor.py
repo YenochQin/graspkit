@@ -38,14 +38,14 @@ class RmixCsfIndexSelection:
     ----------
     block_indices : list[int]
         rmix 文件中的 block 索引列表。
-    selected_asfs : list[list[int]]
-        每个 block 中参与处理的 ASF 索引列表。
+    asf_row_indices : list[list[int]]
+        每个 block 中参与处理的 ASF 矩阵行号列表。
     csf_indices_list : list[list[list[int]]]
         每个 block、每个 ASF 对应的 CSF 索引列表。
     """
 
     block_indices: list[int]
-    selected_asfs: list[list[int]]
+    asf_row_indices: list[list[int]]
     csf_indices_list: list[list[list[int]]]
 
 
@@ -57,15 +57,15 @@ class RmixCiSquaredData:
     ----------
     block_indices : list[int]
         rmix 文件中的 block 索引列表。
-    selected_asfs : list[list[int]]
-        每个 block 中参与处理的 ASF 索引列表。
+    asf_row_indices : list[list[int]]
+        每个 block 中参与处理的 ASF 矩阵行号列表。
     ci_squared_list : list[NDArray[np.float64]]
         每个 block 对应的 CI 系数平方矩阵列表，形状为
         ``(n_selected_asf, n_csf)``。
     """
 
     block_indices: list[int]
-    selected_asfs: list[list[int]]
+    asf_row_indices: list[list[int]]
     ci_squared_list: list[NDArray[np.float64]]
 
     def sort_ci_scores(self, descending: bool = True) -> RmixCsfIndexSelection:
@@ -83,7 +83,7 @@ class RmixCiSquaredData:
         """
         return RmixCsfIndexSelection(
             block_indices=self.block_indices,
-            selected_asfs=self.selected_asfs,
+            asf_row_indices=self.asf_row_indices,
             csf_indices_list=[
                 [
                     _int64_array_to_list(
@@ -116,7 +116,7 @@ class RmixCiSquaredData:
         """
         return RmixCsfIndexSelection(
             block_indices=self.block_indices,
-            selected_asfs=self.selected_asfs,
+            asf_row_indices=self.asf_row_indices,
             csf_indices_list=[
                 [
                     _int64_array_to_list(
@@ -163,7 +163,7 @@ class RmixCiSquaredData:
 
         return RmixCsfIndexSelection(
             block_indices=self.block_indices,
-            selected_asfs=self.selected_asfs,
+            asf_row_indices=self.asf_row_indices,
             csf_indices_list=block_csf_indices,
         )
 
@@ -323,7 +323,7 @@ def filter_sorted_ci_scores_by_cumulative(
 
 def _normalize_asf_indices(
     coefficients: NDArray[np.float64],
-    select_asfs: Sequence[int] | NDArray[np.integer] | None,
+    asf_row_indices: Sequence[int] | NDArray[np.integer] | None,
 ) -> NDArray[np.int64]:
     """规范化一个 block 中需要处理的 ASF 索引。
 
@@ -332,8 +332,8 @@ def _normalize_asf_indices(
     coefficients : NDArray[np.float64]
         一个 block 的 CI 系数数组，形状为 ``(n_csf,)`` 或
         ``(n_asf, n_csf)``。
-    select_asfs : Sequence[int] | NDArray[np.integer] | None
-        用户指定的 ASF 索引；为空时表示选择该 block 中全部 ASF。
+    asf_row_indices : Sequence[int] | NDArray[np.integer] | None
+        用户指定的 ASF 矩阵行号；为空时表示选择该 block 中全部 ASF。
 
     Returns
     -------
@@ -341,13 +341,13 @@ def _normalize_asf_indices(
         规范化后的一维 ASF 索引数组。
     """
     requested_asfs: NDArray[np.int64]
-    if select_asfs is None or len(select_asfs) == 0:
+    if asf_row_indices is None or len(asf_row_indices) == 0:
         requested_asfs = np.array([], dtype=np.int64)
     else:
-        requested_asfs = np.asarray(select_asfs, dtype=np.int64)
+        requested_asfs = np.asarray(asf_row_indices, dtype=np.int64)
 
     if requested_asfs.ndim != 1:
-        raise ValueError("select_asfs must be a 1D sequence of ASF indices")
+        raise ValueError("asf_row_indices must be a 1D sequence of matrix rows")
 
     requested_values = _int64_array_to_list(requested_asfs)
 
@@ -362,13 +362,13 @@ def _normalize_asf_indices(
         return np.arange(asf_count, dtype=np.int64)
 
     if any(index < 0 or index >= asf_count for index in requested_values):
-        raise ValueError("select_asfs contains an ASF index outside this block")
+        raise ValueError("asf_row_indices contains a row outside this block")
     return requested_asfs
 
 
 def load_rmix_ci_squared(
     rmix_path: str | Path,
-    select_asfs: list[list[int]] | None = None,
+    asf_row_indices: list[list[int]] | None = None,
 ) -> RmixCiSquaredData:
     """读取 rmix 文件并返回选中 ASF 的 CI 系数平方。
 
@@ -376,8 +376,8 @@ def load_rmix_ci_squared(
     ----------
     rmix_path : str | Path
         需要读取的 rmix 文件路径。
-    select_asfs : list[list[int]] | None
-        每个 block 中需要处理的 ASF 索引列表；为空或 None 时表示每个
+    asf_row_indices : list[list[int]] | None
+        每个 block 中需要处理的 ASF 矩阵行号列表；为空或 None 时表示每个
         block 中全部 ASF 都参与处理。
 
     Returns
@@ -386,32 +386,37 @@ def load_rmix_ci_squared(
         按 block 分组的选中 ASF 的 CI 系数平方数据。
     """
     mix_data = MixCoefLoader(Path(rmix_path)).load()
-    if select_asfs is not None and len(select_asfs) not in (0, mix_data.block_num):
-        raise ValueError("select_asfs length must match the number of rmix blocks")
+    if asf_row_indices is not None and len(asf_row_indices) not in (
+        0,
+        mix_data.block_num,
+    ):
+        raise ValueError(
+            "asf_row_indices length must match the number of rmix blocks"
+        )
 
-    selected_asfs: list[list[int]] = []
+    selected_asf_rows: list[list[int]] = []
     ci_squared_list: list[NDArray[np.float64]] = []
     for block_index, block in enumerate(mix_data.blocks):
         coefficient_array = _as_1d_or_2d_float_array(block.mix_coefficients, "coefficients")
-        block_select_asfs = (
-            select_asfs[block_index]
-            if select_asfs is not None and len(select_asfs) > 0
+        block_asf_rows = (
+            asf_row_indices[block_index]
+            if asf_row_indices is not None and len(asf_row_indices) > 0
             else None
         )
         selected_asf_indices = _normalize_asf_indices(
             coefficient_array,
-            block_select_asfs,
+            block_asf_rows,
         )
         selected_coefficients = (
             coefficient_array[np.newaxis, :]
             if coefficient_array.ndim == 1
             else coefficient_array[selected_asf_indices]
         )
-        selected_asfs.append(_int64_array_to_list(selected_asf_indices))
+        selected_asf_rows.append(_int64_array_to_list(selected_asf_indices))
         ci_squared_list.append(ci_squared(selected_coefficients))
 
     return RmixCiSquaredData(
         block_indices=[block.block_index for block in mix_data.blocks],
-        selected_asfs=selected_asfs,
+        asf_row_indices=selected_asf_rows,
         ci_squared_list=ci_squared_list,
     )

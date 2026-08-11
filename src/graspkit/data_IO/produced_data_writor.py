@@ -41,52 +41,6 @@ def _atomic_write(
         raise
 
 
-def write_sorted_CSFs_to_cfile(
-    CSFs_file_info: list[str],
-    sorted_CSFs_data_list: list[list[list[str]]],
-    output_file: str | Path,
-) -> None:
-    """Write block-grouped CSF records to a GRASP ``.c`` file.
-
-    The write is atomic: on failure, ``output_file`` is left untouched.
-    """
-    if len(CSFs_file_info) != 4:
-        raise ValueError("CSFs file header info error!")
-    blocks_num = len(sorted_CSFs_data_list)
-
-    def _write(file: TextIO) -> None:
-        file.writelines(CSFs_file_info)
-        file.write("CSF(s):\n")
-        for idx, block in enumerate(sorted_CSFs_data_list):
-            for csf in block:
-                file.writelines(csf)
-            if idx != blocks_num - 1:
-                file.write(" *\n")
-
-    _atomic_write(output_file, _write)
-
-
-def write_CSFs_pl_to_cfile(
-    CSFs_file_info: list[str],
-    CSFs_data_df: pl.DataFrame,
-    output_file: str | Path,
-) -> None:
-    """Write CSF records from a Polars DataFrame to a GRASP ``.c`` file.
-
-    The write is atomic: on failure, ``output_file`` is left untouched.
-    """
-    if len(CSFs_file_info) != CSF_HEADER_LINE_COUNT:
-        raise ValueError("CSFs file header info error!")
-
-    def _write(file: TextIO) -> None:
-        for line in CSFs_file_info:
-            file.write(f"{line}\n")
-        for row in CSFs_data_df.select(["line1", "line2", "line3"]).iter_rows():
-            file.write("\n".join(row) + "\n")
-
-    _atomic_write(output_file, _write)
-
-
 def write_csfs_blocks_to_cfile(
     header_lines: list[str],
     blocks: Sequence[pl.DataFrame],
