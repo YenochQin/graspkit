@@ -6,7 +6,6 @@ import pytest
 from graspkit.CSFs_processor.validation import (
     load_selection_idxs,
     validate_coupling_level,
-    validate_csf_records,
     validate_header_lines,
     validate_headers_match,
     validate_output_path_disjoint,
@@ -201,12 +200,3 @@ def test_validate_coupling_level_accepts_positive_int() -> None:
 def test_validate_coupling_level_rejects_non_positive(bad_level: int) -> None:
     with pytest.raises(ValueError, match="正整数"):
         validate_coupling_level(bad_level)
-
-
-def test_validate_csf_records_accepts_three_line_records() -> None:
-    validate_csf_records([["a", "b", "c"], ["d", "e", "f"]])
-
-
-def test_validate_csf_records_rejects_wrong_line_count_with_context() -> None:
-    with pytest.raises(ValueError, match="block=2 row=1"):
-        validate_csf_records([["a", "b", "c"], ["d", "e"]], block_index=2)

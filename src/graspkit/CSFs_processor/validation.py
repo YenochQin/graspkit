@@ -151,14 +151,14 @@ def validate_headers_match(
             return str(labels[index])
         return f"#{index}"
 
-    first = validate_header_lines(all_header_lines[0])
+    reference_header = validate_header_lines(all_header_lines[0])
     for index, header_lines in enumerate(all_header_lines[1:], start=1):
-        candidate = validate_header_lines(header_lines)
-        if candidate != first:
+        current_header = validate_header_lines(header_lines)
+        if current_header != reference_header:
             raise ValueError(
                 f"多个 CSFs 来源的 header 不一致: {_label(0)} 与 {_label(index)} 的 header_lines 不同"
             )
-    return first
+    return reference_header
 
 
 def validate_output_path_disjoint(
@@ -198,20 +198,20 @@ def normalize_asf_row_indices(
 ) -> list[list[int]]:
     """Normalize and validate ASF matrix row indices for every rmix block."""
     if asf_row_indices is None:
-        normalized = [
+        normalized_row_indices = [
             block.asf_row_indices.tolist()
             for block in asfs_mix_data.blocks
         ]
     else:
-        normalized = [
+        normalized_row_indices = [
             [int(row_index) for row_index in block] for block in asf_row_indices
         ]
-    if len(normalized) != len(asfs_mix_data.blocks):
+    if len(normalized_row_indices) != len(asfs_mix_data.blocks):
         raise ValueError(
             "asf_row_indices 第一层长度与 mixing coefficient block 数量不一致"
         )
 
-    for block, row_indices in zip(asfs_mix_data.blocks, normalized, strict=True):
+    for block, row_indices in zip(asfs_mix_data.blocks, normalized_row_indices, strict=True):
         if not row_indices:
             raise ValueError(f"Block {block.block_index}: asf_row_indices 不能为空")
         if len(row_indices) != len(set(row_indices)):
@@ -227,23 +227,4 @@ def normalize_asf_row_indices(
             for row_index in row_indices
         ):
             raise ValueError(f"Block {block.block_index}: asf_row_indices 越界")
-    return normalized
-
-
-def validate_csf_records(
-    block_csfs: Sequence[Sequence[str]],
-    *,
-    block_index: int | None = None,
-) -> None:
-    """Validate that every CSF record in a block has exactly 3 lines.
-
-    Raises:
-        ValueError: If any record does not have exactly 3 elements, reporting
-            the offending block/row for easy lookup.
-    """
-    block_label = "" if block_index is None else f" block={block_index}"
-    for row_index, record in enumerate(block_csfs):
-        if len(record) != 3:
-            raise ValueError(
-                f"CSF 记录必须是 3 行{block_label} row={row_index}: 实际 {len(record)} 行"
-            )
+    return normalized_row_indices
