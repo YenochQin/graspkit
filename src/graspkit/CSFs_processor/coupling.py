@@ -1,12 +1,9 @@
 # -*- encoding: utf-8 -*-
-"""Polars coupling-signature analysis with legacy raw-line compatibility."""
+"""Polars coupling-signature analysis for rCSFs DataFrames."""
 
 from __future__ import annotations
 
-import logging
-from collections import Counter
 from fractions import Fraction
-from typing import TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -16,10 +13,7 @@ from ..utils.data_modules import MixCoefficientData
 from .validation import (
     normalize_asf_row_indices,
     validate_coupling_level,
-    validate_csf_records,
 )
-
-logger = logging.getLogger(__name__)
 
 _COUPLING_SIGNATURE_COLUMN = "coupling_signature"
 _SELECTED_COUPLING_COLUMN = "_selected_coupling"
@@ -331,46 +325,6 @@ def summarize_coupling_ci_squared(
     )
 
 
-class CouplingJInfo(TypedDict):
-    """Summary for CSFs sharing the same final coupling-J pattern.
-
-    Attributes:
-        count: Number of CSFs that match the coupling pattern.
-        idxs: CSF indices in the source block.
-    """
-
-    count: int
-    idxs: list[int]
-
-
-class CouplingJInfoWithSumCi(TypedDict):
-    """Coupling-J summary with one accumulated CI-square contribution.
-
-    Attributes:
-        count: Number of CSFs that match the coupling pattern.
-        idxs: CSF indices in the source block.
-        sum_ci: Sum of squared CI coefficients for the matching CSFs.
-    """
-
-    count: int
-    idxs: list[int]
-    sum_ci: float
-
-
-class CouplingJInfoWithSumCiList(TypedDict):
-    """Coupling-J summary with CI-square contributions for multiple ASFs.
-
-    Attributes:
-        count: Number of CSFs that match the coupling pattern.
-        idxs: CSF indices in the source block.
-        sum_ci: Per-selected-ASF sums of squared CI coefficients.
-    """
-
-    count: int
-    idxs: list[int]
-    sum_ci: list[float]
-
-
 def select_csfs_by_coupling_theme(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
@@ -432,206 +386,3 @@ def select_csfs_by_coupling_theme(
         )
 
     return csfs_df[np.asarray(sorted(selected_row_positions), dtype=np.int64)]
-
-
-def single_block_csfs_final_coupling_J_collector(
-    block_csfs: list[list[str]], coupling_level: int | None = None
-) -> dict[tuple[str, ...], CouplingJInfo]:
-    """Collect whitespace tokens from legacy raw ``line3`` CSF records.
-
-    Prefer :func:`collect_coupling_groups` for DataFrames produced by rCSFs.
-    This compatibility function does not perform GRASP fixed-width coupling
-    parsing and therefore cannot recover the complete coupling signature.
-
-    Args:
-        block_csfs: CSF records whose third line contains whitespace-separated
-            coupling tokens.
-        coupling_level: Number of trailing coupling tokens to keep. If None,
-            all tokens are used. Shorter CSF records fall back to all tokens.
-
-    Returns:
-        Mapping from coupling-token pattern to its occurrence count and CSF
-        indices.
-
-    Raises:
-        ValueError: If ``coupling_level`` is not ``None`` or positive, or a
-            CSF record does not have exactly 3 lines.
-    """
-    coupling_level = validate_coupling_level(coupling_level)
-    validate_csf_records(block_csfs)
-    selected_tokens = [
-        tuple(csf[2].lstrip().split())[-coupling_level:]
-        if coupling_level is not None
-        else tuple(csf[2].lstrip().split())
-        for csf in block_csfs
-    ]
-    counts = Counter(selected_tokens)
-    groups: dict[tuple[str, ...], CouplingJInfo] = {
-        pattern: {"count": count, "idxs": []} for pattern, count in counts.items()
-    }
-    for index, pattern in enumerate(selected_tokens):
-        groups[pattern]["idxs"].append(index)
-    return groups
-
-
-def batch_blocks_csfs_final_coupling_J_collection(
-    blocks_csfs_list: list[list[list[str]]], coupling_level: int | None = None
-) -> dict[int, dict[tuple[str, ...], CouplingJInfo]]:
-    """Collect final coupling-J patterns for every CSF block.
-
-    Args:
-        blocks_csfs_list: CSF blocks, where each block contains three-line CSF
-            records.
-        coupling_level: Number of trailing coupling tokens to keep for each
-            CSF pattern.
-
-    Returns:
-        Dictionary keyed by block index with per-pattern coupling summaries.
-    """
-    blocks_coupling_J_collection: dict[int, dict[tuple[str, ...], CouplingJInfo]] = {}
-    for block, block_csfs in enumerate(blocks_csfs_list):
-        logger.info(f"Block {block + 1}: 包含 {len(block_csfs)} 个 CSF")
-        block_coupling_J_collection = single_block_csfs_final_coupling_J_collector(
-            block_csfs, coupling_level
-        )
-        blocks_coupling_J_collection[block] = block_coupling_J_collection
-    return blocks_coupling_J_collection
-
-
-def single_asf_csfs_final_coupling_J_mix_coefficient_sum(
-    block_csfs_coupling_J_collection_dict: dict[tuple[str, ...], CouplingJInfo],
-    mix_coefficient_list: list[float] | np.ndarray,
-) -> dict[tuple[str, ...], CouplingJInfoWithSumCi]:
-    """Sum squared CI coefficients for each coupling-J pattern in one ASF.
-
-    Args:
-        block_csfs_coupling_J_collection_dict: Coupling summaries for a CSF
-            block.
-        mix_coefficient_list: CI coefficients aligned with the CSFs in the
-            same block.
-
-    Returns:
-        Coupling summaries augmented with the summed squared CI contribution.
-    """
-    coeff_array = np.asarray(mix_coefficient_list)
-    result: dict[tuple[str, ...], CouplingJInfoWithSumCi] = {}
-    for pattern, info in block_csfs_coupling_J_collection_dict.items():
-        idxs = info["idxs"]
-        sum_ci = float(np.sum(coeff_array[idxs] ** 2))
-        logger.debug(f"{pattern=}  count={info['count']}  sum_ci={sum_ci}")
-        result[pattern] = {"count": info["count"], "idxs": idxs, "sum_ci": sum_ci}
-    return result
-
-
-def single_block_batch_asfs_CSFs_final_coupling_J_collection(
-    block_CSFs: list[list[str]],
-    block_asfs_mix_coefficient_list: list[np.ndarray] | np.ndarray,
-    asf_row_indices: list[int] | np.ndarray | None = None,
-    coupling_level: int | None = None,
-) -> dict[tuple[str, ...], CouplingJInfoWithSumCiList]:
-    """Collect coupling-J contributions for selected ASFs in one CSF block.
-
-    Args:
-        block_CSFs: CSF records for a single block.
-        block_asfs_mix_coefficient_list: Matrix-like ASF by CSF CI
-            coefficients for the block.
-        asf_row_indices: ASF matrix row indices to include. If None, all ASFs are
-            included.
-        coupling_level: Number of trailing coupling tokens used to define each
-            coupling pattern.
-
-    Returns:
-        Mapping from coupling pattern to counts, CSF indices, and
-        per-selected-ASF summed squared CI coefficients.
-    """
-    normalized_positions: NDArray[np.int64]
-    if asf_row_indices is None:
-        normalized_positions = np.arange(
-            len(block_asfs_mix_coefficient_list), dtype=np.int64
-        )
-    else:
-        normalized_positions = np.asarray(asf_row_indices, dtype=np.int64)
-
-    coeff_matrix: NDArray[np.float64] = np.asarray(
-        block_asfs_mix_coefficient_list, dtype=np.float64
-    )
-
-    base_coupling_dict = single_block_csfs_final_coupling_J_collector(
-        block_CSFs, coupling_level
-    )
-    result: dict[tuple[str, ...], CouplingJInfoWithSumCiList] = {}
-    for pattern, info in base_coupling_dict.items():
-        idxs: NDArray[np.int64] = np.asarray(info["idxs"], dtype=np.int64)
-        sum_ci_list: list[float] = []
-        for asf_idx in normalized_positions:
-            asf_coeff = coeff_matrix[int(asf_idx)]
-            sum_ci_list.append(float(np.sum(asf_coeff[idxs] ** 2, dtype=np.float64)))
-        result[pattern] = {
-            "count": info["count"],
-            "idxs": info["idxs"],
-            "sum_ci": sum_ci_list,
-        }
-
-    return result
-
-
-def batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
-    blocks_CSFs_list: list[list[list[str]]],
-    asfs_mix_data: MixCoefficientData,
-    asf_row_indices: list[list[int]] | None = None,
-    coupling_level: int | None = None,
-) -> dict[int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]]:
-    """Collect coupling-J CI-square summaries for all CSF blocks.
-
-    Args:
-        blocks_CSFs_list: CSF blocks aligned with ``asfs_mix_data``.
-        asfs_mix_data: Parsed ASF mixing-coefficient data.
-        asf_row_indices: Optional selected ASF matrix row indices for each
-            block. Defaults to all matrix rows.
-        coupling_level: Number of trailing coupling tokens used to define each
-            coupling pattern.
-
-    Returns:
-        Nested dictionary keyed first by block index and then by coupling
-        pattern.
-
-    Raises:
-        ValueError: If ASF positions are inconsistent with the mixing data or
-            CSF and coefficient lengths do not match.
-    """
-    normalized_positions = normalize_asf_row_indices(
-        asfs_mix_data,
-        asf_row_indices,
-    )
-
-    if len(blocks_CSFs_list) != len(asfs_mix_data.blocks):
-        raise ValueError(
-            f"blocks_CSFs_list 长度 {len(blocks_CSFs_list)} 与 mix blocks {len(asfs_mix_data.blocks)} 不一致。"
-        )
-
-    blocks_asfs_coupling_J_sum_ci: dict[
-        int, dict[tuple[str, ...], CouplingJInfoWithSumCiList]
-    ] = {}
-    for block_csfs, mix_block, selected_positions in (
-        zip(blocks_CSFs_list, asfs_mix_data.blocks, normalized_positions, strict=True)
-    ):
-        logger.info(
-            f"Block {mix_block.block_index + 1}: 包含 {len(mix_block.mix_coefficients)} 个 ASF"
-        )
-        if any(
-            len(asf_mix) != len(block_csfs) for asf_mix in mix_block.mix_coefficients
-        ):
-            raise ValueError(
-                f"Block {mix_block.block_index}: block_CSFs 长度 {len(block_csfs)} 与 block_asfs_mix_coefficient 长度不匹配。"
-            )
-
-        blocks_asfs_coupling_J_sum_ci[mix_block.block_index] = (
-            single_block_batch_asfs_CSFs_final_coupling_J_collection(
-                block_CSFs=block_csfs,
-                block_asfs_mix_coefficient_list=mix_block.mix_coefficients,
-                asf_row_indices=selected_positions,
-                coupling_level=coupling_level,
-            )
-        )
-
-    return blocks_asfs_coupling_J_sum_ci

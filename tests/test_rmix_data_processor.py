@@ -18,9 +18,6 @@ from graspkit.CSFs_processor.selection import (
     select_csf_indices_by_ci_squared_cutoff,
     sort_csfs_by_mix_coefficient,
 )
-from graspkit.CSFs_processor.coupling import (
-    batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum,
-)
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
 
 
@@ -340,41 +337,6 @@ def test_batch_ci_squared_cutoff_does_not_treat_level_ids_as_rows() -> None:
 
     np.testing.assert_array_equal(all_rows[0], np.array([0, 1]))
     np.testing.assert_array_equal(second_row[0], np.array([1]))
-
-
-def test_batch_coupling_sum_uses_blocks_and_nested_list_positions() -> None:
-    mix_data = MixCoefficientData(
-        blocks=[
-            _mix_block(
-                10,
-                np.array(
-                    [
-                        [0.5, 0.1, 0.0],
-                        [0.0, 0.3, 0.1],
-                    ]
-                ),
-            )
-        ],
-        sorted_level_energies=[0.0, 0.1],
-    )
-    blocks_csfs = [
-        [
-            ["line1", "line2", "a b J0"],
-            ["line1", "line2", "a b J1"],
-            ["line1", "line2", "a b J1"],
-        ]
-    ]
-
-    result = batch_blocks_CSFs_final_coupling_J_mix_coefficient_sum(
-        blocks_CSFs_list=blocks_csfs,
-        asfs_mix_data=mix_data,
-        asf_row_indices=[[1]],
-        coupling_level=1,
-    )
-
-    assert set(result) == {10}
-    assert result[10][("J0",)]["sum_ci"] == [0.0]
-    assert result[10][("J1",)]["sum_ci"] == [0.10]
 
 
 def test_sort_by_mix_coefficient_preserves_sorted_csf_records() -> None:
