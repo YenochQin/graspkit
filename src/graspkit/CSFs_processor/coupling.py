@@ -67,11 +67,15 @@ def _with_selected_coupling(
     csfs_df: pl.DataFrame,
     coupling_level: int | None,
 ) -> pl.DataFrame:
-    """Add block-local row indices and the requested trailing signature."""
+    """Add block-local row indices and the requested intermediate coupling."""
     coupling_level = validate_coupling_level(coupling_level)
     selected_coupling = pl.col(_COUPLING_SIGNATURE_COLUMN)
     if coupling_level is not None:
-        selected_coupling = selected_coupling.list.slice(-coupling_level)
+        intermediate_coupling = selected_coupling.list.slice(
+            0,
+            selected_coupling.list.len() - 1,
+        )
+        selected_coupling = intermediate_coupling.list.tail(coupling_level)
 
     return csfs_df.with_columns(
         pl.int_range(pl.len(), dtype=pl.UInt64).over("block_id").alias("block_csf_idx"),
@@ -88,8 +92,10 @@ def collect_coupling_groups(
     Args:
         csfs_df: DataFrame returned by ``rcsfs.read_csfs`` with both
             ``include_block_id`` and ``include_coupling_signature`` enabled.
-        coupling_level: Number of trailing coupling ``2J`` values used as the
-            grouping pattern. ``None`` retains the complete signature.
+        coupling_level: Number of trailing intermediate-coupling ``2J`` values
+            used as the grouping pattern. The signature's final total J value
+            is excluded before counting. ``None`` retains the complete
+            signature, including total J.
 
     Returns:
         One row per block and coupling pattern with columns ``block_id``,
@@ -339,8 +345,9 @@ def select_csfs_by_coupling_theme(
     CI-square exceeds ``ci_squared_cutoff`` and every member of the dominant coupling
     group for each selected ASF.
 
-    ``coupling_level`` is the positive number of trailing integer ``2J`` values
-    retained from the rCSFs fixed-width coupling signature.
+    ``coupling_level`` is the positive number of trailing intermediate-coupling
+    integer ``2J`` values retained from the rCSFs fixed-width coupling
+    signature. The final total J value is excluded before counting.
     """
     validate_coupling_level(coupling_level)
     if type(ci_squared_cutoff) not in (int, float):
