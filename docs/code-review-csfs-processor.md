@@ -37,7 +37,7 @@ coeff_lengths = {len(coeff) for coeff in mix_coefficients}
 
 **建议**：在 `ci_squared(np.asarray(mix_coefficients))` 之前，先用 `np.atleast_2d` 归一化，复用函数内已有的 2D 处理路径。
 
-### 2. `radom_choose_csfs` 类型标注与实际用法矛盾，非法输入处理不完整
+### 2. `random_choose_csfs` 类型标注与实际用法矛盾，非法输入处理不完整
 
 `CSFs_choosing.py:504-565`
 
@@ -271,7 +271,7 @@ block.mix_coefficients[selected_positions]
 | 区域 | 备注 |
 |------|------|
 | `parse_csf_2_descriptor` / `batch_process_csfs_to_descriptors` / `batch_process_csfs_parquet_to_descriptors` | 无任何测试，且含 High Priority #4 的静默失败路径 |
-| `radom_choose_csfs` | 无测试，且含 High Priority #2 的两个缺陷 |
+| `random_choose_csfs` | 无测试，且含 High Priority #2 的两个缺陷 |
 | `CSFs_sort_by_mix_coefficient` 的 1D 单 ASF 分支 | 已有 2D 测试，但未覆盖 High Priority #1 的崩溃路径 |
 | `extract_from_config` 两套 TOML schema 分支 | 无测试 |
 | `_rmix_selected_local_ci_idxs` 的 block-offset 累加 | 无测试，索引运算复杂，回归风险高 |
@@ -288,7 +288,7 @@ block.mix_coefficients[selected_positions]
 ## 建议整改路线图（分阶段）
 
 **阶段一 · 低风险修正缺陷**（不改变公开签名）
-修复 #1、#3、#6、#22、#23；`radom_choose_csfs`（#2）改为 `None` 默认值 + 补 `else` 分支；删除 #7 的死判断；删除 #11 的两个死函数和 #12 的通配符导入。
+修复 #1、#3、#6、#22、#23；`random_choose_csfs`（#2）改为 `None` 默认值 + 补 `else` 分支；删除 #7 的死判断；删除 #11 的两个死函数和 #12 的通配符导入。
 
 **阶段二 · 健壮性**
 优先修复数据契约 #19、#20、#21；`CSFs_compress_extract.py` 全面 `print → logger`（#8）；为 #4 定一个明确的失败策略（收集失败项、超阈值报错，而非静默 `continue`）；4 处 `zip()` 加 `strict=True`（#10）；#5 的合并前 header 校验；#9 的 `rcsfs` 可选依赖声明或友好报错；提取写入改为原子提交并防止覆盖输入（#25）。
