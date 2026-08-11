@@ -14,6 +14,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from ..utils.data_modules import MixCoefficientData
+
 
 def validate_selection_idxs(
     idxs: np.ndarray,
@@ -188,6 +190,47 @@ def validate_coupling_level(coupling_level: int | None) -> int | None:
     ):
         raise ValueError(f"coupling_level 必须是 None 或正整数: {coupling_level}")
     return coupling_level
+
+
+def normalize_asf_positions(
+    asfs_mix_data: MixCoefficientData,
+    asfs_position: Sequence[Sequence[int]] | None,
+) -> list[list[int]]:
+    """Normalize and validate ASF matrix row positions for every rmix block."""
+    if asfs_position is None:
+        normalized = [
+            block.level_indices.astype(np.int64).tolist()
+            for block in asfs_mix_data.blocks
+        ]
+    else:
+        normalized = [
+            [int(position) for position in block] for block in asfs_position
+        ]
+    if len(normalized) != len(asfs_mix_data.blocks):
+        raise ValueError(
+            "asfs_position 第一层长度与 mixing coefficient block 数量不一致"
+        )
+
+    for block, positions in zip(asfs_mix_data.blocks, normalized, strict=True):
+        if not positions:
+            raise ValueError(f"Block {block.block_index}: asfs_position 不能为空")
+        if len(positions) != len(set(positions)):
+            raise ValueError(f"Block {block.block_index}: asfs_position 包含重复值")
+        allowed = set(block.level_indices.astype(np.int64).tolist())
+        if not set(positions).issubset(allowed):
+            raise ValueError(
+                f"Block {block.block_index}: asfs_position 不是 block.level_indices 的子集"
+            )
+        if block.mix_coefficients.ndim != 2:
+            raise ValueError(
+                f"Block {block.block_index}: mixing coefficients 必须是二维矩阵"
+            )
+        if any(
+            position < 0 or position >= block.mix_coefficients.shape[0]
+            for position in positions
+        ):
+            raise ValueError(f"Block {block.block_index}: asfs_position 越界")
+    return normalized
 
 
 def validate_csf_records(

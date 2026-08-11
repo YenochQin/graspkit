@@ -4,8 +4,20 @@ import pytest
 from graspkit.CSFs_processor.selection import (
     CSFs_sort_by_mix_coefficient,
     radom_choose_csfs,
+    random_choose_csfs,
     rmix_cumulative_selected_row_idxs,
+    sort_csfs_by_mix_coefficient,
 )
+
+
+def test_sort_csfs_by_mix_coefficient_names_coefficient_cutoff_explicitly() -> None:
+    result = sort_csfs_by_mix_coefficient(
+        [["csf0"], ["csf1"], ["csf2"]],
+        np.array([0.1, 0.5, -0.2]),
+        ci_coefficient_cutoff=0.3,
+    )
+
+    assert result == [["csf1"]]
 from graspkit.grasp_data_extractor.rmix_data_processor import RmixCiSquaredData
 
 
@@ -85,6 +97,34 @@ def test_radom_choose_csfs_rejects_invalid_method() -> None:
         radom_choose_csfs(
             [["csf0"]],
             method="bogus",  # type: ignore[arg-type]
+            ratio_or_quality=1,
+        )
+
+
+def test_random_choose_csfs_accepts_reproducible_generator() -> None:
+    block_csfs = [["csf0"], ["csf1"], ["csf2"], ["csf3"]]
+
+    first = random_choose_csfs(
+        block_csfs,
+        method="quality",
+        ratio_or_quality=2,
+        rng=np.random.default_rng(42),
+    )
+    second = random_choose_csfs(
+        block_csfs,
+        method="quality",
+        ratio_or_quality=2,
+        rng=np.random.default_rng(42),
+    )
+
+    np.testing.assert_array_equal(first[1], second[1])
+
+
+def test_radom_choose_csfs_warns_as_deprecated() -> None:
+    with pytest.warns(DeprecationWarning, match="random_choose_csfs"):
+        radom_choose_csfs(
+            [["csf0"]],
+            method="quality",
             ratio_or_quality=1,
         )
 

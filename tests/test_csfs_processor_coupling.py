@@ -76,7 +76,7 @@ def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() ->
         _csfs_df(),
         mix_data,
         asfs_position=[[0, 1], [0]],
-        cutoff_value=0.25,
+        ci_squared_cutoff=0.25,
         coupling_level=3,
     )
 
@@ -96,7 +96,7 @@ def test_select_csfs_by_coupling_theme_uses_signature_not_raw_line3() -> None:
     result = select_csfs_by_coupling_theme(
         csfs_df,
         mix_data,
-        cutoff_value=0.5,
+        ci_squared_cutoff=0.5,
         coupling_level=3,
     )
 
@@ -113,7 +113,7 @@ def test_select_csfs_by_coupling_theme_rejects_block_count_mismatch() -> None:
         select_csfs_by_coupling_theme(
             _csfs_df(),
             mix_data,
-            cutoff_value=0.1,
+            ci_squared_cutoff=0.1,
             coupling_level=1,
         )
 
@@ -134,7 +134,7 @@ def test_select_csfs_by_coupling_theme_rejects_non_positive_level(
         select_csfs_by_coupling_theme(
             _csfs_df(),
             mix_data,
-            cutoff_value=0.1,
+            ci_squared_cutoff=0.1,
             coupling_level=bad_level,
         )
 

@@ -12,7 +12,11 @@ from numpy.typing import NDArray
 import polars as pl
 
 from ..utils.data_modules import MixCoefficientData
-from .validation import validate_coupling_level, validate_csf_records
+from .validation import (
+    normalize_asf_positions,
+    validate_coupling_level,
+    validate_csf_records,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,35 +124,13 @@ def collect_coupling_groups(
     )
 
 
-def _normalize_asf_positions(
-    asfs_mix_data: MixCoefficientData,
-    asfs_position: list[list[int]] | None,
-) -> list[list[int]]:
-    if asfs_position is None:
-        normalized = [
-            block.level_indices.astype(np.int64).tolist()
-            for block in asfs_mix_data.blocks
-        ]
-    else:
-        normalized = [
-            [int(position) for position in block_positions]
-            for block_positions in asfs_position
-        ]
-
-    if len(normalized) != len(asfs_mix_data.blocks):
-        raise ValueError(
-            "asfs_position 第一层长度与 mixing coefficient block 数量不一致"
-        )
-    return normalized
-
-
 def _selected_block_coefficients(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
     asfs_position: list[list[int]] | None,
 ) -> list[tuple[int, list[int], NDArray[np.float64]]]:
     """Validate block alignment and return selected ASF coefficient matrices."""
-    normalized_positions = _normalize_asf_positions(
+    normalized_positions = normalize_asf_positions(
         asfs_mix_data,
         asfs_position,
     )
@@ -183,21 +165,6 @@ def _selected_block_coefficients(
             raise ValueError(
                 f"Block {mix_block.block_index}: rmix CSF 数量 {coefficient_matrix.shape[1]} 与 CSF DataFrame {dataframe_csf_count} 不一致"
             )
-
-        allowed_positions = set(mix_block.level_indices.astype(np.int64).tolist())
-        if len(selected_positions) != len(set(selected_positions)):
-            raise ValueError(f"Block {mix_block.block_index}: asfs_position 包含重复值")
-        if not selected_positions:
-            raise ValueError(f"Block {mix_block.block_index}: asfs_position 不能为空")
-        if not set(selected_positions).issubset(allowed_positions):
-            raise ValueError(
-                f"Block {mix_block.block_index}: asfs_position 不是 block.level_indices 的子集"
-            )
-        if any(
-            position < 0 or position >= coefficient_matrix.shape[0]
-            for position in selected_positions
-        ):
-            raise ValueError(f"Block {mix_block.block_index}: asfs_position 越界")
 
         selected_blocks.append(
             (
@@ -361,7 +328,7 @@ def select_csfs_by_coupling_theme(
     asfs_mix_data: MixCoefficientData,
     *,
     asfs_position: list[list[int]] | None = None,
-    cutoff_value: float,
+    ci_squared_cutoff: float,
     coupling_level: int,
 ) -> pl.DataFrame:
     """Select rCSFs rows by CI-square threshold and dominant coupling theme.
@@ -369,18 +336,18 @@ def select_csfs_by_coupling_theme(
     The input must be returned by :func:`rcsfs.read_csfs` with both
     ``include_block_id`` and ``include_coupling_signature`` enabled. For every
     block, the result is the source-ordered union of CSFs whose selected-ASF
-    CI-square exceeds ``cutoff_value`` and every member of the dominant coupling
+    CI-square exceeds ``ci_squared_cutoff`` and every member of the dominant coupling
     group for each selected ASF.
 
     ``coupling_level`` is the positive number of trailing integer ``2J`` values
     retained from the rCSFs fixed-width coupling signature.
     """
     validate_coupling_level(coupling_level)
-    if type(cutoff_value) not in (int, float):
-        raise ValueError("cutoff_value must be a finite non-negative number")
-    cutoff = float(cutoff_value)
+    if type(ci_squared_cutoff) not in (int, float):
+        raise ValueError("ci_squared_cutoff must be a finite non-negative number")
+    cutoff = float(ci_squared_cutoff)
     if not np.isfinite(cutoff) or cutoff < 0:
-        raise ValueError("cutoff_value must be a finite non-negative number")
+        raise ValueError("ci_squared_cutoff must be a finite non-negative number")
 
     coupling_groups = collect_coupling_groups(csfs_df, coupling_level)
     groups_by_block: dict[int, list[NDArray[np.int64]]] = {}
