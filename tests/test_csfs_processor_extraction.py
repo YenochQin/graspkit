@@ -4,9 +4,12 @@ import polars as pl
 import pytest
 
 from graspkit.CSFs_processor.extraction import (
+    CsfDocument,
     SelectedCsfsBlock,
+    create_csf_document,
     merge_and_write_csfs_blocks,
     select_csfs_block,
+    write_csf_documents,
 )
 
 HEADER = ["h1", "h2", "h3", "h4", "h5"]
@@ -22,6 +25,55 @@ def _df(label: str) -> pl.DataFrame:
     )
 
 
+def test_create_csf_document_normalizes_header_and_validates_rows() -> None:
+    document = create_csf_document(
+        header_lines=HEADER,
+        csfs_df=_df("a"),
+        source_path=Path("a.parquet"),
+        label="0",
+    )
+
+    assert isinstance(document, CsfDocument)
+    assert document.header_lines == tuple(HEADER)
+    assert document.label == "0"
+
+
+def test_csf_document_rejects_missing_row_columns() -> None:
+    with pytest.raises(ValueError, match="line3"):
+        create_csf_document(
+            header_lines=HEADER,
+            csfs_df=_df("a").drop("line3"),
+            source_path=Path("a.parquet"),
+        )
+
+
+def test_write_csf_documents_partitions_a_multiblock_frame(tmp_path: Path) -> None:
+    frame = pl.DataFrame(
+        {
+            "block_id": [0, 1],
+            "line1": ["a1", "b1"],
+            "line2": ["a2", "b2"],
+            "line3": ["a3", "b3"],
+        },
+        schema_overrides={"block_id": pl.UInt32},
+    )
+    document = create_csf_document(
+        header_lines=HEADER,
+        csfs_df=frame,
+        source_path=tmp_path / "source.c",
+    )
+    output = tmp_path / "selected.c"
+
+    write_csf_documents([document], output)
+
+    assert output.read_text(encoding="utf-8") == (
+        "h1\nh2\nh3\nh4\nh5\n"
+        "a1\na2\na3\n"
+        " *\n"
+        "b1\nb2\nb3\n"
+    )
+
+
 def test_select_csfs_block_validates_header() -> None:
     block = select_csfs_block(
         header_lines=HEADER,
@@ -30,7 +82,7 @@ def test_select_csfs_block_validates_header() -> None:
         label="0",
     )
 
-    assert block.header_lines == HEADER
+    assert block.header_lines == tuple(HEADER)
     assert block.label == "0"
 
 

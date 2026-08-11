@@ -6,6 +6,7 @@ from __future__ import annotations
 import math
 import random
 from typing import Literal
+import warnings
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,7 +19,7 @@ from ..grasp_data_extractor.rmix_data_processor import (
     sort_ci_scores,
 )
 from ..utils.data_modules import MixCoefficientData
-from .validation import validate_selection_idxs
+from .validation import normalize_asf_positions, validate_selection_idxs
 
 
 def single_asf_mix_square_above_threshold(
@@ -70,32 +71,11 @@ def batch_asfs_mix_square_above_threshold(
     """
     result: dict[int, NDArray[np.int64]] = {}
 
-    if not asfs_position:
-        normalized_positions: list[list[int]] = [
-            block.level_indices.astype(np.int64).tolist()
-            for block in asfs_mix_data.blocks
-        ]
-    else:
-        normalized_positions = [
-            [int(pos) for pos in block_positions]
-            for block_positions in asfs_position
-        ]
-
-    if len(normalized_positions) != len(asfs_mix_data.blocks):
-        raise ValueError(
-            f"asfs_position 第一层长度({len(normalized_positions)}) 与 blocks({len(asfs_mix_data.blocks)}) 不一致。"
-        )
+    normalized_positions = normalize_asf_positions(asfs_mix_data, asfs_position)
 
     for block, selected_positions in zip(
         asfs_mix_data.blocks, normalized_positions, strict=True
     ):
-        allowed_positions = set(block.level_indices.astype(np.int64).tolist())
-        selected_set = {int(pos) for pos in selected_positions}
-        if not selected_set.issubset(allowed_positions):
-            raise ValueError(
-                f"asfs_position 元素 {sorted(selected_set)} 不是 block.level_indices {sorted(allowed_positions)} 的子集。"
-            )
-
         block_data = block.mix_coefficients[selected_positions]
 
         squared_scores = ci_squared(block_data)
@@ -141,19 +121,19 @@ def union_lists_with_order(*lists: list[int | str]) -> list[int | str]:
     return list(dict.fromkeys(all_elements))
 
 
-def CSFs_sort_by_mix_coefficient(
-    CSFs_block: list[list[str]],
+def sort_csfs_by_mix_coefficient(
+    csfs_block: list[list[str]],
     mix_coefficients: np.ndarray,
-    threshold: float | None = None
+    ci_coefficient_cutoff: float | None = None,
 ) -> list[list[str]]:
     """Sort CSFs by the summed square of their mixing coefficients.
 
     Args:
-        CSFs_block: CSF records in one block.
+        csfs_block: CSF records in one block.
         mix_coefficients: 1D (single ASF) or 2D (multiple ASFs) coefficient
-            array whose last axis matches ``CSFs_block``.
-        threshold: Optional coefficient cutoff. When provided, only CSFs whose
-            combined squared coefficient is above ``threshold ** 2`` are kept.
+            array whose last axis matches ``csfs_block``.
+        ci_coefficient_cutoff: Optional CI coefficient cutoff. When provided,
+            only CSFs whose combined CI-square is above its square are kept.
 
     Returns:
         CSF records sorted by descending combined squared coefficient.
@@ -162,11 +142,11 @@ def CSFs_sort_by_mix_coefficient(
         ValueError: If the CSF block or coefficient array is empty, or if their
             lengths do not match.
     """
-    if len(CSFs_block) == 0 or len(mix_coefficients) == 0:
+    if len(csfs_block) == 0 or len(mix_coefficients) == 0:
         raise ValueError("CSFs_block和mix_coefficients不能为空")
 
     coeff_array = np.atleast_2d(np.asarray(mix_coefficients))
-    if coeff_array.shape[-1] != len(CSFs_block):
+    if coeff_array.shape[-1] != len(csfs_block):
         raise ValueError("mix_coefficients长度必须与CSFs_block匹配")
 
     squared_coefficients = ci_squared(coeff_array)
@@ -176,11 +156,33 @@ def CSFs_sort_by_mix_coefficient(
     )
     sorted_idxs, _ = sort_ci_scores(combined_coeff)
 
-    if threshold is not None:
-        threshold_idxs = filter_ci_scores_by_threshold(combined_coeff, threshold**2)
+    if ci_coefficient_cutoff is not None:
+        threshold_idxs = filter_ci_scores_by_threshold(
+            combined_coeff,
+            ci_coefficient_cutoff**2,
+        )
         sorted_idxs = sorted_idxs[np.isin(sorted_idxs, threshold_idxs)]
 
-    return [CSFs_block[int(idx)] for idx in sorted_idxs]
+    return [csfs_block[int(idx)] for idx in sorted_idxs]
+
+
+def CSFs_sort_by_mix_coefficient(
+    CSFs_block: list[list[str]],
+    mix_coefficients: np.ndarray,
+    threshold: float | None = None,
+) -> list[list[str]]:
+    """Deprecated alias for :func:`sort_csfs_by_mix_coefficient`."""
+    warnings.warn(
+        "CSFs_sort_by_mix_coefficient is deprecated; use "
+        "sort_csfs_by_mix_coefficient with ci_coefficient_cutoff",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return sort_csfs_by_mix_coefficient(
+        CSFs_block,
+        mix_coefficients,
+        ci_coefficient_cutoff=threshold,
+    )
 
 
 def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
@@ -197,11 +199,13 @@ def generate_unique_random_numbers(max_num: int, count: int) -> list[int]:
     return number
 
 
-def radom_choose_csfs(
+def random_choose_csfs(
     block_csfs_list: list[list[str]],
     method: Literal["ratio", "quality"],
     ratio_or_quality: float,
     selected_csfs_idxs: list[int] | None = None,
+    *,
+    rng: np.random.Generator | None = None,
 ) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
     """Randomly choose additional CSFs from a block.
 
@@ -212,6 +216,7 @@ def radom_choose_csfs(
             target count.
         ratio_or_quality: Ratio or target count, depending on ``method``.
         selected_csfs_idxs: Indices that have already been selected.
+        rng: Optional NumPy generator for reproducible sampling.
 
     Returns:
         Tuple of selected CSF records, selected indices, and unselected indices.
@@ -221,6 +226,7 @@ def radom_choose_csfs(
     """
     if selected_csfs_idxs is None:
         selected_csfs_idxs = []
+    generator = rng or np.random.default_rng()
 
     block_csfs_num = len(block_csfs_list)
     selected_csfs_num = len(selected_csfs_idxs)
@@ -241,7 +247,7 @@ def radom_choose_csfs(
         unselected_idxs = all_idxs[unselected_mask]
 
         if choose_csfs_num > 0:
-            random_idxs = np.random.choice(
+            random_idxs = generator.choice(
                 unselected_idxs, size=choose_csfs_num, replace=False
             )
             chosen_csfs_idxs = np.concatenate(
@@ -250,7 +256,7 @@ def radom_choose_csfs(
         else:
             chosen_csfs_idxs = np.array(selected_csfs_idxs, dtype=np.int64)
     else:
-        chosen_csfs_idxs = np.random.choice(
+        chosen_csfs_idxs = generator.choice(
             all_idxs, size=total_needed, replace=False
         )
 
@@ -259,6 +265,26 @@ def radom_choose_csfs(
     chosen_csfs: list[list[str]] = [block_csfs_list[idx] for idx in chosen_csfs_idxs]
 
     return chosen_csfs, chosen_csfs_idxs, unselected_idxs
+
+
+def radom_choose_csfs(
+    block_csfs_list: list[list[str]],
+    method: Literal["ratio", "quality"],
+    ratio_or_quality: float,
+    selected_csfs_idxs: list[int] | None = None,
+) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
+    """Deprecated misspelled alias for :func:`random_choose_csfs`."""
+    warnings.warn(
+        "radom_choose_csfs is deprecated; use random_choose_csfs",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return random_choose_csfs(
+        block_csfs_list,
+        method,
+        ratio_or_quality,
+        selected_csfs_idxs,
+    )
 
 
 def select_csfs_rows(
