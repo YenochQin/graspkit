@@ -1,9 +1,10 @@
 import numpy as np
 import pytest
 
+import graspkit.CSFs_processor as csfs_processor
+
 from graspkit.CSFs_processor.selection import (
     CSFs_sort_by_mix_coefficient,
-    radom_choose_csfs,
     random_choose_csfs,
     rmix_cumulative_selected_row_idxs,
     sort_csfs_by_mix_coefficient,
@@ -49,10 +50,10 @@ def test_csfs_sort_by_mix_coefficient_rejects_length_mismatch() -> None:
         CSFs_sort_by_mix_coefficient([["csf0"], ["csf1"]], np.array([0.1, 0.2, 0.3]))
 
 
-def test_radom_choose_csfs_defaults_to_no_preselected_indices() -> None:
+def test_random_choose_csfs_defaults_to_no_preselected_indices() -> None:
     block_csfs = [["csf0"], ["csf1"], ["csf2"], ["csf3"]]
 
-    chosen_csfs, chosen_idxs, unselected_idxs = radom_choose_csfs(
+    chosen_csfs, chosen_idxs, unselected_idxs = random_choose_csfs(
         block_csfs,
         method="quality",
         ratio_or_quality=2,
@@ -64,10 +65,10 @@ def test_radom_choose_csfs_defaults_to_no_preselected_indices() -> None:
     assert set(chosen_idxs.tolist()).isdisjoint(set(unselected_idxs.tolist()))
 
 
-def test_radom_choose_csfs_ratio_method_computes_target_from_block_size() -> None:
+def test_random_choose_csfs_ratio_method_computes_target_from_block_size() -> None:
     block_csfs = [["csf0"], ["csf1"], ["csf2"], ["csf3"]]
 
-    chosen_csfs, chosen_idxs, _unselected = radom_choose_csfs(
+    chosen_csfs, chosen_idxs, _unselected = random_choose_csfs(
         block_csfs,
         method="ratio",
         ratio_or_quality=0.5,
@@ -77,10 +78,10 @@ def test_radom_choose_csfs_ratio_method_computes_target_from_block_size() -> Non
     assert chosen_idxs.shape == (2,)
 
 
-def test_radom_choose_csfs_tops_up_around_preselected_indices() -> None:
+def test_random_choose_csfs_tops_up_around_preselected_indices() -> None:
     block_csfs = [["csf0"], ["csf1"], ["csf2"], ["csf3"]]
 
-    chosen_csfs, chosen_idxs, unselected_idxs = radom_choose_csfs(
+    chosen_csfs, chosen_idxs, unselected_idxs = random_choose_csfs(
         block_csfs,
         method="quality",
         ratio_or_quality=3,
@@ -92,9 +93,9 @@ def test_radom_choose_csfs_tops_up_around_preselected_indices() -> None:
     assert set(chosen_idxs.tolist()) | set(unselected_idxs.tolist()) == {0, 1, 2, 3}
 
 
-def test_radom_choose_csfs_rejects_invalid_method() -> None:
+def test_random_choose_csfs_rejects_invalid_method() -> None:
     with pytest.raises(ValueError, match="method"):
-        radom_choose_csfs(
+        random_choose_csfs(
             [["csf0"]],
             method="bogus",  # type: ignore[arg-type]
             ratio_or_quality=1,
@@ -120,13 +121,8 @@ def test_random_choose_csfs_accepts_reproducible_generator() -> None:
     np.testing.assert_array_equal(first[1], second[1])
 
 
-def test_radom_choose_csfs_warns_as_deprecated() -> None:
-    with pytest.warns(DeprecationWarning, match="random_choose_csfs"):
-        radom_choose_csfs(
-            [["csf0"]],
-            method="quality",
-            ratio_or_quality=1,
-        )
+def test_misspelled_random_selection_name_is_removed() -> None:
+    assert not hasattr(csfs_processor, "radom_choose_csfs")
 
 
 def test_rmix_cumulative_selected_row_idxs_offsets_across_blocks() -> None:

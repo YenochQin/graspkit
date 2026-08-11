@@ -267,26 +267,6 @@ def random_choose_csfs(
     return chosen_csfs, chosen_csfs_idxs, unselected_idxs
 
 
-def radom_choose_csfs(
-    block_csfs_list: list[list[str]],
-    method: Literal["ratio", "quality"],
-    ratio_or_quality: float,
-    selected_csfs_idxs: list[int] | None = None,
-) -> tuple[list[list[str]], NDArray[np.int64], NDArray[np.int64]]:
-    """Deprecated misspelled alias for :func:`random_choose_csfs`."""
-    warnings.warn(
-        "radom_choose_csfs is deprecated; use random_choose_csfs",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return random_choose_csfs(
-        block_csfs_list,
-        method,
-        ratio_or_quality,
-        selected_csfs_idxs,
-    )
-
-
 def select_csfs_rows(
     csfs_df: pl.DataFrame,
     idxs: np.ndarray,
