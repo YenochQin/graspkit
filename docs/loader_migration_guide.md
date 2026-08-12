@@ -33,11 +33,11 @@ csf = loader.load_csf_data("path/to/file.c")
 from graspkit.data_IO.loaders import (
     RWFNFileLoader,
     MixCoefLoader,
-    CSFLoader,
     EnergyFileLoader,
     TransitionLoader,
     LSJCompLoader,
 )
+from rcsfs import read_csfs
 
 # 每种文件类型有专用的加载器
 rwfn_loader = RWFNFileLoader("path/to/file.w")
@@ -75,17 +75,20 @@ csf_data = loader.load_csf_data("path/to/file.c")
 # 返回格式不明确，需要查看源码
 ```
 
-#### 新方式
+#### 新方式（rcsfs）
 ```python
-from graspkit.data_IO.loaders import CSFLoader
+from rcsfs import read_csfs
 
-csf_loader = CSFLoader("path/to/file.c")
-csf_data = csf_loader.load()
-# 返回类型明确：CSFs
+header, csfs_df = read_csfs("path/to/file.c", include_block_id=True)
+# 返回类型明确：CsfHeaderData 字典 + Polars DataFrame
 
-# 访问特定块
-block_data = csf_loader.get_block_data(block_idx=0)
-total_count = csf_loader.get_total_csfs_count()
+# 块信息
+block_lengths = header["block_info"]["block_lengths"]  # 替代 CSFs_block_length
+block_count = header["block_info"]["block_count"]      # 替代 block_num
+
+# 按块过滤数据
+import polars as pl
+block_0_df = csfs_df.filter(pl.col("block_id") == 0)   # 替代 CSFs_block_data[0]
 ```
 
 ### 径向波函数加载
@@ -183,11 +186,11 @@ from graspkit.data_IO import GraspFileLoad
 from graspkit.data_IO.loaders import (
     RWFNFileLoader,  # 替代 load_rwfn_bin
     MixCoefLoader,              # 替代 load_rmix_data
-    CSFLoader,                  # 替代 load_csf_data
     EnergyFileLoader,           # 替代 EnergyFile2csv
     TransitionLoader,           # 新增：跃迁数据
     LSJCompLoader,                  # 新增：LSJ 耦合数据
 )
+from rcsfs import read_csfs     # 替代 load_csf_data
 ```
 
 ### 步骤 3：更新实例化代码
@@ -289,21 +292,27 @@ print(f"Total blocks: {csf_data['block_num']}")
 print(f"Total CSFs: {sum(csf_data['CSFs_block_length'])}")
 ```
 
-#### 新代码
+#### 新代码（rcsfs）
 ```python
-from graspkit.data_IO.loaders import CSFLoader
+from rcsfs import read_csfs
 
-csf_loader = CSFLoader("path/to/file.c")
-csf_data = csf_loader.load()
+header, csfs_df = read_csfs("path/to/file.c", include_block_id=True)
+block_info = header["block_info"]
 
-# 使用专用方法，更清晰
-print(f"Total blocks: {csf_loader.get_blocks_count()}")
-print(f"Total CSFs: {csf_loader.get_total_csfs_count()}")
-print(f"Peel subshells: {csf_loader.get_peel_subshells()}")
+# 块信息
+print(f"Total blocks: {block_info['block_count']}")
+print(f"Total CSFs: {sum(block_info['block_lengths'])}")
+
+# 电子层轨道
+header_lines = header["header_info"]["header_lines"]
+peel_line = header_lines[3].strip()
+peel_subshells = [s.strip() for s in peel_line.split() if s.strip()]
+print(f"Peel subshells: {peel_subshells}")
 
 # 访问特定块
-block_data = csf_loader.get_block_data(block_idx=0)
-print(f"First block has {len(block_data)} CSFs")
+import polars as pl
+block_0_df = csfs_df.filter(pl.col("block_id") == 0)
+print(f"First block has {block_0_df.height} CSFs")
 ```
 
 ### 示例 3：混合系数分析
@@ -339,21 +348,18 @@ print(f"Block 0 evec shape: {block_data['evec'].shape}")
 
 ## API 参考
 
-### CSFLoader
+### CSF 读取（rcsfs）
 
-加载 GRASP2018 CSF 配置文件（.c）。
+加载 GRASP2018 CSF 配置文件（.c），由 `rcsfs` 提供 Rust 加速的解析。
 
 ```python
-from graspkit.data_IO.loaders import CSFLoader
+from rcsfs import read_csfs
 
-loader = CSFLoader("path/to/file.c")
-csf_data = loader.load()
+header, csfs_df = read_csfs("path/to/file.c", include_block_id=True)
 
-# 方法
-loader.get_block_data(block_idx: int) -> list[list[str]]
-loader.get_total_csfs_count() -> int
-loader.get_blocks_count() -> int
-loader.get_peel_subshells() -> list[str]
+# header["block_info"]["block_count"]   — 块数量
+# header["block_info"]["block_lengths"] — 每块 CSF 数
+# csfs_df                                — Polars DataFrame (idx, line1, line2, line3, block_id)
 ```
 
 ### RWFNFileLoader

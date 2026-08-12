@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 """Lightweight utility exports for core graspkit consumers."""
 
-from .data_modules import CSFs, MixCoefficientData
+from .data_modules import MixCoefficientData
 from .environment_config import (
     get_environment_config,
     is_debug_mode,
@@ -18,7 +18,6 @@ from .tool_function import (
 
 __all__ = [
     "MixCoefficientData",
-    "CSFs",
     "str_subshell_2_kappa",
     "doubleJ_to_J",
     "chunk_string",

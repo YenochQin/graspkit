@@ -8,7 +8,6 @@ graspkit 加载器模块
 
 from .base_loader import BaseLoader
 from .binary_file_loader import BinaryFileLoader
-from .csf_loader import CSFLoader
 from .energy_file_loader import EnergyFileLoader
 from .gj_factor_loader import GJFactorLoader
 from .hyperfine_structure_loader import HyperfineStructureLoader, NuclearParameters
@@ -26,7 +25,6 @@ __all__ = [
     "NuclearParameters",
     "MixCoefLoader",
     "LSJCompLoader",
-    "CSFLoader",
     "TransitionLoader",
     "RWFNFileLoader",
 ]
