@@ -177,15 +177,13 @@ def _selected_block_coefficients(
         )
         if len(csf_two_j_values) != 1:
             raise ValueError(
-                f"Block {mix_block.block_index}: CSF DataFrame 包含多个总 J: "
-                f"2J={csf_two_j_values}"
+                f"Block {mix_block.block_index}: CSF DataFrame 包含多个总 J: 2J={csf_two_j_values}"
             )
         rmix_two_j = _twice_j_value(mix_j_value, block_index=mix_block.block_index)
         csf_two_j = int(csf_two_j_values[0])
         if csf_two_j != rmix_two_j:
             raise ValueError(
-                f"Block {mix_block.block_index}: CSF J={_format_twice_j(csf_two_j)} "
-                f"与 rmix J={mix_j_value} 不一致"
+                f"Block {mix_block.block_index}: CSF J={_format_twice_j(csf_two_j)} 与 rmix J={mix_j_value} 不一致"
             )
 
         selected_blocks.append(
