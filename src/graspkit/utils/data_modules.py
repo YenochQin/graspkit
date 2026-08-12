@@ -1,6 +1,5 @@
 # -*- encoding: utf-8 -*-
 from dataclasses import dataclass
-from typing import TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -104,66 +103,3 @@ class MixCoefficientData:
     @property
     def mix_coefficient_list(self) -> list[NDArray[np.float64]]:
         return [block.mix_coefficients for block in self.blocks]
-
-
-class CSFsDict(TypedDict, total=False):
-    """Dictionary representation of parsed CSF file data.
-
-    Attributes:
-        subshell_info_raw: Raw header lines describing subshells.
-        CSFs_block_j_value: J values grouped by CSF block.
-        parity: Parity label for the CSF data.
-        CSFs_block_data: Three-line CSF records grouped by block.
-        CSFs_block_length: Number of CSFs in each block.
-        block_num: Number of CSF blocks.
-    """
-
-    subshell_info_raw: list[str]
-    CSFs_block_j_value: list[str]
-    parity: str
-    CSFs_block_data: list[list[list[str]]]
-    CSFs_block_length: list[int]
-    block_num: int
-
-
-@dataclass
-class CSFs:
-    """Structured CSF file data grouped by symmetry block.
-
-    Attributes:
-        subshell_info_raw: Raw header lines describing subshells.
-        CSFs_block_j_value: J values grouped by CSF block.
-        parity: Parity label for the CSF data.
-        CSFs_block_data: Three-line CSF records grouped by block.
-        CSFs_block_length: Number of CSFs in each block.
-        block_num: Number of CSF blocks.
-    """
-
-    subshell_info_raw: list[str]
-    CSFs_block_j_value: list[str]
-    parity: str
-    CSFs_block_data: list[
-        list[list[str]]
-    ]  # list of blocks, each block is list of CSFs (3 lines each)
-    CSFs_block_length: list[int]
-    block_num: int
-
-    @classmethod
-    def from_dict(cls, data: CSFsDict) -> "CSFs":
-        """Build a CSFs instance from a dictionary representation.
-
-        Args:
-            data: Partial or complete CSF dictionary returned by legacy
-                loaders.
-
-        Returns:
-            CSFs instance with missing fields filled by safe defaults.
-        """
-        return cls(
-            subshell_info_raw=data.get("subshell_info_raw", []),
-            CSFs_block_j_value=data.get("CSFs_block_j_value", []),
-            parity=data.get("parity", ""),
-            CSFs_block_data=data.get("CSFs_block_data", []),
-            CSFs_block_length=data.get("CSFs_block_length", []),
-            block_num=data.get("block_num", 0),
-        )
