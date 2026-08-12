@@ -8,12 +8,14 @@ Import explicitly from here when publication-quality figures are needed::
 """
 
 from .fig_settings import *  # noqa: F403
+from .mid_coupling import *  # noqa: F403
 from .plot_functions import *  # noqa: F403
 
 __all__ = [
     "FIGURE_SIZES",
     "JOURNAL_COLOR_SCHEMES",
     "LEGEND_SIZE_PRESETS",
+    "MidCouplingPlotSeries",
     "PlotMode",
     "SAVE_FORMATS",
     "SUBPLOT_LAYOUTS",
@@ -27,6 +29,7 @@ __all__ = [
     "configure_for_latex",
     "configure_matplotlib_for_publication",
     "configure_subplot_grid",
+    "build_mid_coupling_plot_series",
     "create_multi_subplot_figure",
     "create_publication_figure",
     "create_shared_colorbar",
@@ -39,6 +42,7 @@ __all__ = [
     "inter_coupling_channel_bar",
     "optimize_for_multi_subplot",
     "optimize_for_plot_type",
+    "plot_mid_coupling_contribution",
     "resolve_transformed_xscale",
     "rwfn_plot",
     "rwfns_compare_plot",
