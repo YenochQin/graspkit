@@ -16,7 +16,7 @@ The package root exposes metadata only. Import functionality from explicit subpa
 
 ## Development
 
-Use the `graspkit-tools/.venv` environment for workspace integration tests because Tools installs this repository editable:
+Use only `../graspkit-tools/.venv` for every Python command in this repository. It is created and synchronized by `uv` in `graspkit-tools/`, which installs this repository editable. Do not run `uv sync` here or create/use `graspkit/.venv`.
 
 ```bash
 cd ../graspkit-tools
@@ -24,10 +24,10 @@ uv sync
 uv run pytest ../graspkit/tests
 ```
 
-Standalone development is also supported:
+From `graspkit/`, activate the shared environment and run the repository checks normally:
 
 ```bash
-uv sync --extra dev
+source ../graspkit-tools/.venv/bin/activate
 pytest tests/
 ruff check .
 basedpyright src/
