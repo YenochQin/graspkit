@@ -9,7 +9,10 @@ from .loaders.hyperfine_structure_loader import (  # noqa: F401
 )
 from .loaders.lsj_comp_loader import LSJCompLoader  # noqa: F401
 from .loaders.mix_coef_loader import MixCoefLoader  # noqa: F401
-from .loaders.radial_wavefunction_loader import RWFNFileLoader  # noqa: F401
+from .loaders.radial_wavefunction_loader import (  # noqa: F401
+    RWFNFileLoader,
+    RWFNOrbitalData,
+)
 from .loaders.transition_loader import TransitionLoader  # noqa: F401
 from .produced_data_writor import (
     csfs_header_path_for_parquet,
@@ -29,6 +32,7 @@ __all__ = [
     "LSJCompLoader",
     "MixCoefLoader",
     "RWFNFileLoader",
+    "RWFNOrbitalData",
     "TransitionLoader",
     # produced_data_write
     "csfs_header_path_for_parquet",

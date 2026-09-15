@@ -21,6 +21,12 @@ from .rmix_data_processor import (
     load_rmix_ci_squared,
     sort_ci_scores,
 )
+from .radial_wavefunction_processor import (
+    count_radial_nodes,
+    mean_radial_radius,
+    radial_norm,
+    radial_overlap_proxy,
+)
 
 __all__ = [
     # asfs_data_processor
@@ -42,4 +48,9 @@ __all__ = [
     "filter_sorted_ci_scores_by_cumulative",
     "load_rmix_ci_squared",
     "sort_ci_scores",
+    # radial_wavefunction_processor
+    "count_radial_nodes",
+    "mean_radial_radius",
+    "radial_norm",
+    "radial_overlap_proxy",
 ]
