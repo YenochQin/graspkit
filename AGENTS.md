@@ -13,17 +13,18 @@ Core package code lives under `src/` and is split across several packages:
 Tests are split across `test/` for legacy script-style checks and `tests/` for pytest-style tests and fixtures. Supporting docs and change notes live in `docs/` and `modify_logs/`.
 
 ## Build, Test, and Development Commands
-This repository can be tested directly, but day-to-day pipeline debugging from the full workspace should usually use the `graspkit-tools/.venv` environment because Tools installs this package editable and includes `rcsfs` plus pipeline dependencies.
+All Python work in this repository must use `../graspkit-tools/.venv`, the workspace's single environment created and synchronized by running `uv sync` in `graspkit-tools/`. Do not run `uv venv` or `uv sync` here, and do not create, activate, or use `graspkit/.venv`. Tools installs this package editable and includes `rcsfs` plus the shared pipeline and development dependencies.
 
 ```bash
-uv venv
+cd ../graspkit-tools
+uv sync
 source .venv/bin/activate
-uv sync --extra dev
+cd ../graspkit
 ```
 
-Windows activation is `.venv\Scripts\activate`. GPU and PyTorch environments are owned by `graspkit-tools`, not this repository.
+Keep the shared environment activated while working here; for a single non-interactive Python command, call `../graspkit-tools/.venv/bin/python` directly. Do not use `uv run` from this repository because uv may select or create a local project environment. On Windows activate `..\graspkit-tools\.venv\Scripts\activate`. GPU, PyTorch, and all other Python dependencies are owned by `graspkit-tools`, not this repository.
 
-- `uv pip install -e .`: legacy editable installation.
+- Do not run a local editable install; `uv sync` in `graspkit-tools/` installs this repository editable.
 - `python build_package.py --clean`: clean cross-platform package build.
 - `./build_package.sh --clean`: Unix-like package build wrapper.
 - `build_package.bat --clean`: Windows package build wrapper.
@@ -76,4 +77,4 @@ When changing code used by `graspkit-tools`, remember that the Tools uv environm
 Recent history includes short messages such as `update` and `bug fixed`, but prefer clear scoped subjects such as `data_IO: fix binary loader index bounds`. Keep commits focused and atomic. PRs should include purpose, key changes, test commands, linked issues if available, and before/after output snippets for behavior changes in loaders or processing workflows.
 
 ## Security & Configuration Tips
-Do not commit secrets, local datasets, generated artifacts, virtual environments, or cluster-specific paths. Use virtual environments and align with the Python requirement in `pyproject.toml` (`>=3.14`). Treat GRASP input/output paths as environment-specific unless they are stable fixtures.
+Do not commit secrets, local datasets, generated artifacts, virtual environments, or cluster-specific paths. Use only the shared `graspkit-tools/.venv` and align with the Python requirement in `pyproject.toml` (`>=3.14`). Treat GRASP input/output paths as environment-specific unless they are stable fixtures.
