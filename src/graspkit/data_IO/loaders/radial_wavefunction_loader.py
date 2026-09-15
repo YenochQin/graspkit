@@ -1,15 +1,32 @@
 # -*- encoding: utf-8 -*-
 import struct
+from dataclasses import dataclass
+from typing import override
 
 import numpy as np
 import polars as pl
 from numpy import bytes_
 from numpy.typing import NDArray
-from typing import override
 
 from .binary_file_loader import BinaryFileLoader
 
-def align_2d_list_columns(two_dimensional_list: list[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
+
+@dataclass(frozen=True)
+class RWFNOrbitalData:
+    """One orbital from a G92RWF file, with its native radial grid."""
+
+    n: int
+    kappa: int
+    energy: float
+    a0: float
+    p: NDArray[np.float64]
+    q: NDArray[np.float64]
+    r: NDArray[np.float64]
+
+
+def align_2d_list_columns(
+    two_dimensional_list: list[NDArray[np.float64]],
+) -> list[NDArray[np.float64]]:
     """Pad one-dimensional arrays to the longest column length.
 
     Args:
@@ -39,6 +56,7 @@ def align_2d_list_columns(two_dimensional_list: list[NDArray[np.float64]]) -> li
 
     return aligned_list
 
+
 def int_nl_2_str_nl(n: int, kappa: int) -> str:
     r"""
     Convert integer quantum numbers to a GRASP orbital label.
@@ -67,6 +85,7 @@ def int_nl_2_str_nl(n: int, kappa: int) -> str:
 
     return str_nl
 
+
 class RWFNFileLoader(BinaryFileLoader):
     """径向波函数二进制文件加载器 (.w文件）
 
@@ -78,6 +97,67 @@ class RWFNFileLoader(BinaryFileLoader):
         write (3) a0, (pg(j,i), j=1, npts), (qg(j,i), j=1, npts)
         write (3) (rg(j,i), j=1, npts)
     """
+
+    def load_orbitals(self) -> dict[tuple[int, int], RWFNOrbitalData]:
+        """Load orbitals without discarding kappa or per-orbital grids."""
+
+        orbitals: dict[tuple[int, int], RWFNOrbitalData] = {}
+        with open(file=self.file_path, mode="rb") as binary_file:
+            # 读取文件头标识（G92RWF 前后的记录标记）
+            header: NDArray[bytes_] = self.read_fortran_record(binary_file, "S1", 6)
+            g92rwf: str = b"".join(header).decode(encoding="utf-8").strip()
+
+            if g92rwf != "G92RWF":
+                raise ValueError(f"Not a radial wavefunction file: {g92rwf}")
+
+            # Read three Fortran records per orbital.  Probe for EOF before
+            # reading metadata so malformed records are not mistaken for EOF.
+            while True:
+                position = binary_file.tell()
+                if not binary_file.read(1):
+                    break
+                binary_file.seek(position)
+                nn, laky, energy, npts = self.read_mixed_scalars(
+                    file=binary_file, field_specs=["i", "i", "d", "i"]
+                )
+                orbital_n = int(nn)
+                orbital_kappa = int(laky)
+                point_count = int(npts)
+                if point_count <= 0:
+                    raise ValueError(
+                        f"Invalid radial point count for {orbital_n},{orbital_kappa}: "
+                        f"{point_count}"
+                    )
+
+                a0_data, pg, qg = self.read_mixed_arrays(
+                    file=binary_file,
+                    field_specs=[
+                        ("d", 1),
+                        ("d", point_count),
+                        ("d", point_count),
+                    ],
+                )
+                (rg,) = self.read_mixed_arrays(
+                    file=binary_file, field_specs=[("d", point_count)]
+                )
+                key = (orbital_n, orbital_kappa)
+                if key in orbitals:
+                    raise ValueError(
+                        f"Duplicate orbital in radial wavefunction: {key}"
+                    )
+                orbitals[key] = RWFNOrbitalData(
+                    n=orbital_n,
+                    kappa=orbital_kappa,
+                    energy=float(energy),
+                    a0=float(a0_data[0]),
+                    p=np.asarray(pg, dtype=np.float64),
+                    q=np.asarray(qg, dtype=np.float64),
+                    r=np.asarray(rg, dtype=np.float64),
+                )
+
+        if not orbitals:
+            raise ValueError(f"No orbitals in radial wavefunction: {self.file_path}")
+        return orbitals
 
     @override
     def load(self) -> pl.DataFrame:
@@ -93,67 +173,24 @@ class RWFNFileLoader(BinaryFileLoader):
             ValueError: 文件格式不正确
             IOError: 读取错误
         """
-        nn_list: list[int] = []
-        laky_list: list[int] = []
-        energy_list: list[float] = []
-        npts_list: list[int] = []
-        a0_list: list[float] = []
-        pg_list: list[NDArray[np.float64]] = []
-        qg_list: list[NDArray[np.float64]] = []
-        rg_list: list[NDArray[np.float64]] = []
-
-        with open(file=self.file_path, mode="rb") as binary_file:
-            # 读取文件头标识（G92RWF 前后的记录标记）
-            header: NDArray[bytes_] = self.read_fortran_record(binary_file, "S1", 6)
-            g92rwf: str = b"".join(header).decode(encoding="utf-8").strip()
-
-            if g92rwf != "G92RWF":
-                raise ValueError(f"Not a radial wavefunction file: {g92rwf}")
-
-            # 读取轨道数据（每个轨道有三条 Fortran 记录）
-            while True:
-                try:
-                    # 第一条记录: read (3) nn, laky, energy, npts
-                    # 4字节整数 + 4字节整数 + 8字节浮点数 + 4字节整数 = 20字节
-                    nn, laky, energy, npts = self.read_mixed_scalars(
-                        file=binary_file, field_specs=["i", "i", "d", "i"]
-                    )
-                    nn_list.append(int(nn))
-                    laky_list.append(int(laky))
-                    energy_list.append(float(energy))
-                    npts_list.append(int(npts))
-
-                except (ValueError, struct.error):
-                    # 读取失败，说明到达文件末尾或格式错误
-                    break
-
-                # 第二条记录: read (3) a0, (pg(j,i), j=1, npts), (qg(j,i), j=1, npts)
-                # 8字节浮点数 + npts*8字节 + npts*8字节
-                a0_data, pg, qg = self.read_mixed_arrays(
-                    file=binary_file, field_specs=[("d", 1), ("d", int(npts)), ("d", int(npts))]
-                )
-                a0_list.append(float(a0_data[0]))
-                pg_list.append(np.array(pg, dtype=np.float64))
-                qg_list.append(np.array(qg, dtype=np.float64))
-
-                # 第三条记录: read (3) (rg(j,i), j=1, npts)
-                # npts*8字节
-                rg = self.read_mixed_arrays(file=binary_file, field_specs=[("d", int(npts))])[0]
-                rg_list.append(np.array(rg, dtype=np.float64))
+        orbitals = list(self.load_orbitals().values())
+        pg_list = [orbital.p for orbital in orbitals]
+        qg_list = [orbital.q for orbital in orbitals]
 
         # 对齐所有列表的列数
-        rg_list_len = [len(rg_list[i]) for i in range(len(rg_list))]
-        max_rg_idx = rg_list_len.index(max(rg_list_len))
+        max_grid_orbital = max(orbitals, key=lambda orbital: len(orbital.r))
         pg_aligned_list = align_2d_list_columns(two_dimensional_list=pg_list)
         qg_aligned_list = align_2d_list_columns(two_dimensional_list=qg_list)
 
         # 收集所有列到字典中，避免 DataFrame 碎片化
-        columns_data: dict[str, NDArray[np.float64]] = {"r(a.u)": rg_list[max_rg_idx]}
+        columns_data: dict[str, NDArray[np.float64]] = {
+            "r(a.u)": max_grid_orbital.r
+        }
 
-        for n in range(len(nn_list)):
-            str_nl: str = int_nl_2_str_nl(n=nn_list[n], kappa=laky_list[n])
-            columns_data[f"P({str_nl})"] = pg_aligned_list[n]
-            columns_data[f"Q({str_nl})"] = qg_aligned_list[n]
+        for index, orbital in enumerate(orbitals):
+            str_nl = int_nl_2_str_nl(n=orbital.n, kappa=orbital.kappa)
+            columns_data[f"P({str_nl})"] = pg_aligned_list[index]
+            columns_data[f"Q({str_nl})"] = qg_aligned_list[index]
 
         # 一次性创建 Polars DataFrame
         rwfn_df: pl.DataFrame = pl.DataFrame(data=columns_data)

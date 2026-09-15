@@ -13,7 +13,7 @@ from .gj_factor_loader import GJFactorLoader
 from .hyperfine_structure_loader import HyperfineStructureLoader, NuclearParameters
 from .lsj_comp_loader import LSJCompLoader
 from .mix_coef_loader import MixCoefLoader
-from .radial_wavefunction_loader import RWFNFileLoader
+from .radial_wavefunction_loader import RWFNFileLoader, RWFNOrbitalData
 from .transition_loader import TransitionLoader
 
 __all__ = [
@@ -27,4 +27,5 @@ __all__ = [
     "LSJCompLoader",
     "TransitionLoader",
     "RWFNFileLoader",
+    "RWFNOrbitalData",
 ]
