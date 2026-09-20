@@ -1,5 +1,4 @@
 # -*- encoding: utf-8 -*-
-import struct
 from dataclasses import dataclass
 from typing import override
 
