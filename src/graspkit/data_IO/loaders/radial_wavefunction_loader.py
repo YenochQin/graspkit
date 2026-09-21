@@ -124,8 +124,7 @@ class RWFNFileLoader(BinaryFileLoader):
                 point_count = int(npts)
                 if point_count <= 0:
                     raise ValueError(
-                        f"Invalid radial point count for {orbital_n},{orbital_kappa}: "
-                        f"{point_count}"
+                        f"Invalid radial point count for {orbital_n},{orbital_kappa}: {point_count}"
                     )
 
                 a0_data, pg, qg = self.read_mixed_arrays(
