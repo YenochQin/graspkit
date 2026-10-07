@@ -12,53 +12,6 @@ from ...utils.data_modules import MixCoefficientBlock, MixCoefficientData
 from .binary_file_loader import BinaryFileLoader
 
 # 能级显示相关的常量
-_J_VALUE_LIST: list[str] = [
-    "0",
-    "1/2",
-    "1",
-    "3/2",
-    "2",
-    "5/2",
-    "3",
-    "7/2",
-    "4",
-    "9/2",
-    "5",
-    "11/2",
-    "6",
-    "13/2",
-    "7",
-    "15/2",
-    "8",
-    "17/2",
-    "9",
-    "19/2",
-    "10",
-    "21/2",
-    "11",
-    "23/2",
-    "12",
-    "25/2",
-    "13",
-    "27/2",
-    "14",
-    "29/2",
-    "15",
-    "31/2",
-    "16",
-    "33/2",
-    "17",
-    "35/2",
-    "18",
-    "37/2",
-    "19",
-    "39/2",
-    "20",
-    "41/2",
-    "21",
-    "43/2",
-    "22",
-]
 _PARITY_LIST: list[str] = ["+", "-"]
 _RYDBERG_CONSTANT: float = 109737.31568508
 
@@ -100,8 +53,11 @@ class MixCoefLoader(BinaryFileLoader):
     """
 
     @override
-    def load(self) -> MixCoefficientData:
+    def load(self, *, show_levels: bool = True) -> MixCoefficientData:
         """加载混合系数数据
+
+        Args:
+            show_levels: 是否打印能级表；CLI 批处理可设为 False。
 
         Returns:
             MixCoefficientData对象，包含：
@@ -133,12 +89,15 @@ class MixCoefLoader(BinaryFileLoader):
             # READ (nfmix) nelec, ncftot, nw, nvectot, nvecsiz, nblock
             # nelec -> num_electron, ncftot -> total_num_configuration,
             # nw -> nw, ncmin -> ncmin, nvecsiz -> nvecsiz, nblock -> num_block
-            _nelec, _ncftot, _nw, _ncmin, _nvecsiz, nblock = tuple[int, ...](
-                int(x) for x in self.read_mixed_scalars(
-                    file=binary_file,
-                    field_specs=["i", "i", "i", "i", "i", "i"]
+            nelec, _ncftot, nw, _ncmin, _nvecsiz, nblock = tuple[int, ...](
+                int(x)
+                for x in self.read_mixed_scalars(
+                    file=binary_file, field_specs=["i", "i", "i", "i", "i", "i"]
                 )
             )
+
+            if nelec < 0 or nw < 0 or nblock < 0:
+                raise ValueError("Negative count in mix coefficient file header")
 
             blocks: list[MixCoefficientBlock] = []
 
@@ -146,9 +105,9 @@ class MixCoefLoader(BinaryFileLoader):
             for jblock in range(1, nblock + 1):
                 # READ (nfmix) nb, ncfblk, nevblk, iatjp, iaspa
                 nb, ncfblk, nevblk, iatjp, iaspa = tuple[int, ...](
-                    int(x) for x in self.read_mixed_scalars(
-                        file=binary_file,
-                        field_specs=["i", "i", "i", "i", "i"]
+                    int(x)
+                    for x in self.read_mixed_scalars(
+                        file=binary_file, field_specs=["i", "i", "i", "i", "i"]
                     )
                 )
 
@@ -157,23 +116,31 @@ class MixCoefLoader(BinaryFileLoader):
                 if jblock != nb:
                     raise ValueError(f"jblock ({jblock}) != nb ({nb})")
 
-                # READ (nfmix) ivec
-                ivec: NDArray[np.int32] = self.read_fortran_record(file=binary_file, dtype="int32", count=nevblk)
+                if ncfblk < 1 or nevblk < 0 or iatjp < 1 or iaspa not in (1, 2):
+                    raise ValueError(f"Invalid mix coefficient block {nb} header")
 
-                ivec_array: NDArray[np.int32] = (
-                    np.array(ivec) - 1
-                )  # use python idx method not fortran idx method
-
-                # READ (nfmix) eav, (eval(i+ncountState), i = 1, nevblk)
-                eva_evals: NDArray[np.float64] = self.read_fortran_record(file=binary_file, dtype="float64", count=nevblk + 1)
-
-                eav: float = cast(np.float64, eva_evals[0]).item()
-                evals: NDArray[np.float64] = eva_evals[1:]
-
-                # READ (nfmix) (evec, i = 1, ncfblk*nevblk)
-                evecsblock: NDArray[np.float64] = self.read_fortran_record(file=binary_file, dtype="float64", count=nevblk * ncfblk)
-
-                evecs: ndarray[tuple[int, int], dtype[np.float64]] = evecsblock.reshape(nevblk, ncfblk)
+                # GRASP omits all three data records when nevblk == 0.
+                if nevblk:
+                    ivec: NDArray[np.int32] = self.read_fortran_record(
+                        file=binary_file, dtype="int32", count=nevblk
+                    )
+                    ivec_array = ivec.astype(np.int64) - 1
+                    eva_evals: NDArray[np.float64] = self.read_fortran_record(
+                        file=binary_file, dtype="float64", count=nevblk + 1
+                    )
+                    eav = cast(np.float64, eva_evals[0]).item()
+                    evals = eva_evals[1:]
+                    evecsblock: NDArray[np.float64] = self.read_fortran_record(
+                        file=binary_file, dtype="float64", count=nevblk * ncfblk
+                    )
+                    evecs: ndarray[tuple[int, int], dtype[np.float64]] = (
+                        evecsblock.reshape(nevblk, ncfblk)
+                    )
+                else:
+                    ivec_array = np.empty(0, dtype=np.int64)
+                    eav = 0.0
+                    evals = np.empty(0, dtype=np.float64)
+                    evecs = np.empty((0, ncfblk), dtype=np.float64)
 
                 if ncfblk != evecs.shape[1]:
                     raise ValueError(
@@ -186,7 +153,11 @@ class MixCoefLoader(BinaryFileLoader):
                         csf_count=ncfblk,
                         level_count=nevblk,
                         j_value_location=iatjp,
-                        j_value=_J_VALUE_LIST[iatjp - 1],
+                        j_value=(
+                            str((iatjp - 1) // 2)
+                            if (iatjp - 1) % 2 == 0
+                            else f"{iatjp - 1}/2"
+                        ),
                         parity=iaspa,
                         level_ids=ivec_array.astype(np.int64, copy=False),
                         base_energy=eav,
@@ -206,13 +177,15 @@ class MixCoefLoader(BinaryFileLoader):
             data = MixCoefficientData(
                 blocks=blocks,
                 sorted_level_energies=level_energy_list,
+                electron_count=nelec,
+                orbital_count=nw,
             )
 
             # 使用 rich 打印能级数据
-            print_mix_coef_levels_rich(data)
+            if show_levels:
+                print_mix_coef_levels_rich(data)
 
             return data
-
 
     def get_block_count(self) -> int:
         """获取块数量
@@ -257,7 +230,7 @@ def print_mix_coef_levels_rich(
     level_order = _sorted_level_order(temp_energy)
 
     # 填充表格
-    base_energy = temp_energy[level_order[0]]
+    base_energy = temp_energy[level_order[0]] if level_order else 0.0
 
     for number, index in enumerate(level_order, start=1):
         pos = temp_pos[index]
@@ -283,6 +256,6 @@ def print_mix_coef_levels_rich(
     # 输出
     group = Group(
         f"  Rydberg constant is  {Rydberg}  \n  Blocks: {data.block_num}  |  Total Levels: {len(data.sorted_level_energies):,}",
-        table
+        table,
     )
     console.print(Align.left(renderable=group))

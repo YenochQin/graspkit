@@ -33,9 +33,7 @@ class MixCoefficientBlock:
         if self.level_energies.shape != (self.level_count,):
             raise ValueError("level_energies shape must match level_count")
         if self.mix_coefficients.shape != (self.level_count, self.csf_count):
-            raise ValueError(
-                "mix_coefficients shape must be (level_count, csf_count)"
-            )
+            raise ValueError("mix_coefficients shape must be (level_count, csf_count)")
 
     @property
     def asf_row_indices(self) -> NDArray[np.int64]:
@@ -46,9 +44,7 @@ class MixCoefficientBlock:
         """Resolve one GRASP level ID to its ASF matrix row."""
         matches = np.flatnonzero(self.level_ids == level_id)
         if matches.size == 0:
-            raise ValueError(
-                f"Block {self.block_index}: unknown level ID {level_id}"
-            )
+            raise ValueError(f"Block {self.block_index}: unknown level ID {level_id}")
         return int(matches[0])
 
 
@@ -59,10 +55,14 @@ class MixCoefficientData:
     Attributes:
         blocks: Parsed block-level rmix data.
         sorted_level_energies: Absolute level energies sorted ascending.
+        electron_count: Electron count from the file header, when available.
+        orbital_count: Orbital count from the file header, when available.
     """
 
     blocks: list[MixCoefficientBlock]
     sorted_level_energies: list[float]
+    electron_count: int | None = None
+    orbital_count: int | None = None
 
     @property
     def block_num(self) -> int:

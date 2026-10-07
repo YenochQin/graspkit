@@ -67,3 +67,15 @@ def test_binary_loader_rejects_truncated_float64_field(tmp_path: Path) -> None:
     with binary_file.open("rb") as file:
         with pytest.raises(ValueError, match="Expected 8 bytes for float64"):
             _ = loader.read_mixed_scalars(file, ["d"])
+
+
+def test_binary_loader_rejects_matching_markers_with_wrong_record_size(
+    tmp_path: Path,
+) -> None:
+    binary_file = tmp_path / "wrong_size.bin"
+    # Both markers match, but neither describes the requested int32 payload.
+    binary_file.write_bytes(struct.pack("=3i", 0, 0, 0))
+    loader = ConcreteBinaryFileLoader(binary_file)
+    with binary_file.open("rb") as file:
+        with pytest.raises(ValueError, match="expected 4 bytes, got 0 bytes"):
+            loader.read_fortran_record(file, np.int32, count=1)
