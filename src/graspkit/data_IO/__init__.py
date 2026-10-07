@@ -14,6 +14,7 @@ from .loaders.radial_wavefunction_loader import (  # noqa: F401
     RWFNOrbitalData,
 )
 from .loaders.transition_loader import TransitionLoader  # noqa: F401
+from .mix_coef_writer import write_mix_coefficient_block
 from .produced_data_writor import (
     csfs_header_path_for_parquet,
     load_csfs_header_lines,
@@ -34,6 +35,7 @@ __all__ = [
     "RWFNFileLoader",
     "RWFNOrbitalData",
     "TransitionLoader",
+    "write_mix_coefficient_block",
     # produced_data_write
     "csfs_header_path_for_parquet",
     "load_csfs_header_lines",

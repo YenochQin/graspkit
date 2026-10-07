@@ -37,10 +37,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
     """
 
     def read_fortran_record(
-        self,
-        file: IO[bytes],
-        dtype: type[_T] | np.dtype[_T] | str,
-        count: int = 1
+        self, file: IO[bytes], dtype: type[_T] | np.dtype[_T] | str, count: int = 1
     ) -> NDArray[_T]:
         """读取 Fortran 格式的二进制记录（单类型数组）
 
@@ -72,6 +69,14 @@ class BinaryFileLoader(BaseLoader[object], ABC):
             raise ValueError("Unexpected end of file while reading record length")
 
         record_len = _unpack_int32(record_len_bytes)
+
+        if count < 0:
+            raise ValueError("Record item count must be non-negative")
+        expected_size = np.dtype(dtype).itemsize * count
+        if record_len != expected_size:
+            raise ValueError(
+                f"Record length mismatch: expected {expected_size} bytes, got {record_len} bytes"
+            )
 
         # 读取实际数据
         data: NDArray[_T] = np.fromfile(file, dtype=dtype, count=count)
@@ -258,9 +263,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
 
         return result
 
-    def write_mixed_scalars(
-        self, file: IO[bytes], values: list[int | float]
-    ) -> None:
+    def write_mixed_scalars(self, file: IO[bytes], values: list[int | float]) -> None:
         """写入 Fortran 格式的二进制记录（标量序列）
 
         适用于写入类似 Fortran 语句：
@@ -338,9 +341,7 @@ class BinaryFileLoader(BaseLoader[object], ABC):
         # 写入记录结束标记（4字节）
         _ = file.write(struct.pack("i", data_size))
 
-    def write_fortran_record(
-        self, file: IO[bytes], data: NDArray[np.number]
-    ) -> None:
+    def write_fortran_record(self, file: IO[bytes], data: NDArray[np.number]) -> None:
         """写入 Fortran 格式的二进制记录（单类型数组）
 
         适用于写入类似 Fortran 语句：
