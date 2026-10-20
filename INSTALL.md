@@ -1,38 +1,51 @@
 # Installation
 
-`graspkit` requires Python 3.14 or newer.
+`grasp-kit` requires Python 3.14 or newer. It provides the `graspkit` and
+`graspkit_plot` import packages.
 
-## Standalone development
+## Install a prepared release
 
-```bash
-uv venv
-source .venv/bin/activate
-uv sync --extra dev
-```
-
-On Windows, activate with `.venv\Scripts\activate`.
-
-Verify the installation:
+Use the exact wheel filename supplied with the release:
 
 ```bash
-python -c "import graspkit; print(graspkit.__version__)"
-python -c "from graspkit.data_IO import EnergyFileLoader; print(EnergyFileLoader)"
+python -m pip install /path/to/grasp_kit-3.4.0-py3-none-any.whl
 ```
+
+Once the package has been published on PyPI:
+
+```bash
+python -m pip install grasp-kit
+```
+
+A standalone source checkout also supports `python -m pip install .`.
+Pip installs the declared runtime dependencies; Rust and the GRASP executables
+are not needed to install this Python library. Reading calculation results
+requires the corresponding GRASP data files.
 
 ## Full workspace development
 
-For changes consumed by `graspkit-tools`, use the Tools environment:
+Use the environment owned by Tools. Run setup from `graspkit-tools/` only:
 
 ```bash
 cd ../graspkit-tools
-uv sync
-uv run python -c "import graspkit; print(graspkit.__version__)"
+uv sync --extra cpu
+source .venv/bin/activate
+python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-The Tools project installs `../graspkit` as an editable dependency, so Python
-source changes are visible immediately.
+Select `--extra gpu` instead on a CUDA host. On Windows activate
+`.venv\Scripts\activate` after syncing. Tools installs GraspKit as an editable
+path dependency; ordinary Python edits are immediately visible. Do not install
+release wheels into this shared environment for testing: the release checker
+loads an unpacked wheel in a disposable directory instead.
 
-## ML dependencies
+## Verification
 
-PyTorch, scikit-learn, ML configuration models, and training code are not part
-of this package. Install and run them through `graspkit-tools`.
+```bash
+python -c "from graspkit.data_IO import EnergyFileLoader; print(EnergyFileLoader)"
+python -c "import graspkit_plot; print(graspkit_plot.__file__)"
+```
+
+For builds and artifact tests, see [the release guide](docs/releasing.md).
+PyTorch, scikit-learn and training workflows belong to `graspkit-tools` and
+are not dependencies of this library.

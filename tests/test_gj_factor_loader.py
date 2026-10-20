@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
@@ -59,20 +57,29 @@ Nuclear electric quadrupole moment   0.000000000000000D+00 barns
     assert loader.get_number_of_levels() == 2
 
 
-def test_gj_factor_loader_parses_real_sample_file() -> None:
-    gj_file = Path("/Users/yiqin/Downloads/e1_vv3as2.gj")
-    if not gj_file.is_file():
-        pytest.skip(f"Real sample file is not available: {gj_file}")
-
+def test_gj_factor_loader_parses_repository_fixture() -> None:
+    """Read a small GRASP-format sample shipped with the test suite."""
+    gj_file = Path(__file__).parent / "fixtures" / "gj_factors.gj"
     loader = GJFactorLoader(gj_file)
     df = loader.get_gj_factors()
 
-    assert df.shape == (29, 6)
-    assert df.row(0, named=True) == {
-        "Level": 1,
-        "J": "1",
-        "Parity": "+",
-        "g_J": 1.4996344866,
-        "delta_g_J": 0.0011599984508,
-        "total_g_J": 1.500794485,
-    }
+    assert df.shape == (2, 6)
+    assert loader.get_number_of_levels() == 2
+    assert df.rows(named=True) == [
+        {
+            "Level": 1,
+            "J": "1",
+            "Parity": "+",
+            "g_J": 1.4996344866,
+            "delta_g_J": 0.0011599984508,
+            "total_g_J": 1.500794485,
+        },
+        {
+            "Level": 3,
+            "J": "1",
+            "Parity": "-",
+            "g_J": 0.50155075076,
+            "delta_g_J": -0.0011553889073,
+            "total_g_J": 0.50039536186,
+        },
+    ]

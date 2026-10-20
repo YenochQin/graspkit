@@ -1,3 +1,3 @@
-# version.py
-# __version__ = "2.9.1"
-__version__ = "3.4.dev1"
+"""Package version, also read by Hatchling when building distributions."""
+
+__version__ = "3.4.0"

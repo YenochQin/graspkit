@@ -20,10 +20,10 @@ graspkit-tools/ml_CSFs_selection_scripts/ml_csf_choosing/
 
 ## 安装
 
-需要 Python 3.14 或更新版本。
+需要 Python 3.14 或更新版本。从源码目录安装：
 
 ```bash
-uv sync --extra dev
+python -m pip install .
 ```
 
 在完整 workspace 中开发时，推荐使用 `graspkit-tools` 所属的 uv 环境；该环境会以 editable 方式安装本仓库。
@@ -57,9 +57,21 @@ python -X utf8 -c "from graspkit.data_IO import MixCoefLoader; MixCoefLoader(r'p
 
 ## 开发检查
 
+在完整工作区中，先激活共享环境：
+
 ```bash
+source ../graspkit-tools/.venv/bin/activate
 pytest tests/
 ruff check .
-mypy src/
+basedpyright src/
 python -m build
 ```
+
+## 发布准备
+
+构建与验证步骤见[发布指南](docs/releasing.md)。正式发布到 PyPI 后，
+可使用 `python -m pip install grasp-kit` 安装。
+
+## 许可证
+
+GNU GPL 第 3 版（`GPL-3.0-only`），见 [LICENSE](LICENSE)。

@@ -23,10 +23,10 @@ or iterative pipeline state. Those live under
 
 ## Installation
 
-Python 3.14 or newer is required.
+Python 3.14 or newer is required. From a source checkout:
 
 ```bash
-uv sync --extra dev
+python -m pip install .
 ```
 
 When developing in the full workspace, use the environment owned by
@@ -62,11 +62,24 @@ files are parsed.
 
 ## Development
 
+In the full workspace, activate the shared environment first:
+
 ```bash
+source ../graspkit-tools/.venv/bin/activate
 pytest tests/
 ruff check .
-mypy src/
+basedpyright src/
 python -m build
 ```
 
 See [INSTALL.md](INSTALL.md) for installation details.
+
+## Release preparation
+
+See [the release guide](docs/releasing.md) for local wheel/source builds and
+artifact validation. Once published on PyPI, the installation command is
+`python -m pip install grasp-kit`.
+
+## License
+
+GNU GPL version 3 (`GPL-3.0-only`). See [LICENSE](LICENSE).

@@ -1,50 +1,10 @@
-#!/bin/bash
-# graspkit Package Build Script for Unix-like systems
-# This script builds the graspkit package and moves the generated packages
-# to ../graspkit-tools/package directory.
-# Works with UV or traditional pip environments.
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "============================================================"
-echo "graspkit Package Build Script"
-echo "============================================================"
-echo
-
-# Check which environment manager is being used
-if [ -f "uv.lock" ]; then
-    echo "Detected UV environment"
-    if [ ! -f ".venv/bin/python" ]; then
-        echo "Error: UV virtual environment not found in .venv folder"
-        echo "Please set up the environment first using:"
-        echo "  uv venv"
-        echo "  source .venv/bin/activate"
-        echo "  uv pip install -e ."
-        exit 1
-    fi
-    PYTHON_CMD=".venv/bin/python"
-elif [ -f ".venv/bin/python" ]; then
-    echo "Detected traditional pip environment"
-    PYTHON_CMD=".venv/bin/python"
-else
-    echo "Error: No supported virtual environment found"
-    echo "Please set up an environment first using one of:"
-    echo "  UV: uv venv && source .venv/bin/activate && uv pip install -e ."
-    echo "  Pip: python -m venv .venv && source .venv/bin/activate && pip install -e ."
+project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+python_cmd="$project_root/../graspkit-tools/.venv/bin/python"
+if [[ ! -x "$python_cmd" ]]; then
+    echo "Set up the shared environment from graspkit-tools with uv sync --extra cpu." >&2
     exit 1
 fi
-
-echo "Using Python command: $PYTHON_CMD"
-echo
-
-# Run the Python build script
-$PYTHON_CMD build_package.py "$@"
-
-if [ $? -ne 0 ]; then
-    echo
-    echo "Build failed! Check the error messages above."
-    exit 1
-fi
-
-echo
-echo "Build completed successfully!"
-echo "Packages are available in: ../graspkit-tools/package"
-echo
+exec "$python_cmd" "$project_root/build_package.py" "$@"

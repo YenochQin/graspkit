@@ -1,0 +1,11 @@
+Nuclear spin                         0.000000000000000D+00 au
+Nuclear magnetic dipole moment       0.000000000000000D+00 n.m.
+Nuclear electric quadrupole moment   0.000000000000000D+00 barns
+
+
+ Interaction constants:
+
+ Level1  J Parity           g_J              delta g_J           total g_J
+
+   1        1 +      1.4996344866D+00    1.1599984508D-03    1.5007944850D+00
+   3        1 -      5.0155075076D-01   -1.1553889073D-03    5.0039536186D-01

@@ -1,0 +1,44 @@
+name: Build release artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["codex/release-build-check-*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MPLBACKEND: Agg
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install packaging tools
+        run: python -m pip install 'build>=1.4' 'twine>=6.2'
+      - name: Build wheel from source archive
+        run: python -m build
+      - name: Install wheel and runtime dependencies
+        run: |
+          python -m pip install --only-binary=:all: dist/*.whl
+      - name: Check archives and exercise extracted wheel
+        run: |
+          python -m twine check --strict dist/*
+          python scripts/check_release.py dist --smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grasp-kit-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error

@@ -15,14 +15,14 @@ def _unpack_int32(data: bytes) -> int:
     """Unpack one native-endian signed 32-bit integer."""
     if len(data) != 4:
         raise ValueError(f"Expected 4 bytes for int32, got {len(data)}")
-    return cast(int, struct.unpack("i", data)[0])
+    return struct.unpack("i", data)[0]
 
 
 def _unpack_float64(data: bytes) -> float:
     """Unpack one native-endian 64-bit floating-point value."""
     if len(data) != 8:
         raise ValueError(f"Expected 8 bytes for float64, got {len(data)}")
-    return cast(float, struct.unpack("d", data)[0])
+    return struct.unpack("d", data)[0]
 
 
 class BinaryFileLoader(BaseLoader[object], ABC):

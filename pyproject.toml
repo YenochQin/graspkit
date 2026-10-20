@@ -1,13 +1,25 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "grasp-kit"
-version = "3.4.dev1"
-# version = '2.9.1'
+dynamic = ["version"]
 description = "Stable data I/O, processing, and plotting for GRASP calculations"
 keywords = ["GRASP", "atomic physics", "data processing", "plotting"]
+readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Yi (Yenoch) Qin", email = "yenochqin@hotmail.com" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Intended Audience :: Science/Research",
+]
 
 requires-python = ">= 3.14"
 
@@ -54,29 +66,23 @@ url = "https://mirrors.aliyun.com/pypi/simple/"
 [tool.hatch.version]
 path = "src/graspkit/version.py"
 
-readme = "README.md"
-license = { file = "LICENSE" }
-authors = [
-    { name="Yi(Yenoch) Qin", email="yenochqin@hotmail.com" }
+[tool.hatch.build.targets.sdist]
+# Ship only the standalone library and its public installation/release docs.
+only-include = [
+    "src/graspkit",
+    "src/graspkit_plot",
+    "pyproject.toml",
+    "LICENSE",
+    "README.md",
+    "README_zh.md",
+    "INSTALL.md",
+    "docs/releasing.md",
+    "build_package.py",
+    "scripts/check_release.py",
 ]
 
-classifiers = [
-    # How mature is this project? Common values are
-    #   3 - Alpha
-    #   4 - Beta
-    # "Development Status :: 5 - Production/Stable",
-    "Development Status :: 4 - Beta",
-
-    # Specify the Python versions you support here.
-    "Programming Language :: Python :: 3",
-
-    # Topic classification
-    "Topic :: Scientific/Engineering :: Physics",
-    "Intended Audience :: Science/Research",
-
-    # Environment
-    "Environment :: Console",
-]
+[tool.hatch.build]
+exclude = ["**/__pycache__", "**/*.pyc"]
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -106,4 +112,6 @@ reportMissingTypeStubs = false
 
 
 [project.urls]
-Homepage = "https://github.com/YenochQin/graspkit.git"
+Homepage = "https://github.com/YenochQin/graspkit"
+Source = "https://github.com/YenochQin/graspkit"
+Issues = "https://github.com/YenochQin/graspkit/issues"
