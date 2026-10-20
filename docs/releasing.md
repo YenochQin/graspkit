@@ -2,8 +2,8 @@
 
 The prepared stable version is **3.4.0**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
-These instructions build and validate files locally. They do not upload to
-TestPyPI or PyPI, create tags, commit, or push.
+The local build commands below do not upload files or create Git tags.
+The separate manual publishing workflow is described near the end of this guide.
 
 ## Local build in the paired workspace
 
@@ -55,7 +55,8 @@ The existing GPLv3 license is recorded as `GPL-3.0-only`.
 ## Build-only CI
 
 `.github/workflows/build-release.yml` runs by manual dispatch or by an explicit
-push to a `codex/release-build-check-*` branch. It builds
+push to a `codex/release-build-check-*` branch. It is also reusable through
+`workflow_call`, so the publishing workflow builds the same commit. It builds
 and checks on Linux, Windows and macOS using Python 3.14, and stores GitHub
 Actions artifacts. It has no PyPI credentials, OIDC publishing permission,
 publish job or tag-triggered upload. CI uses an ephemeral standalone runner;
@@ -86,10 +87,66 @@ with a branch selector. Review all three platform jobs before using the artifact
    metadata require access to that repository; provide accessible public docs
    or change visibility deliberately if external users need them.
 4. Test installation from TestPyPI only when an upload is explicitly authorized.
-5. Configure a separate publishing workflow with PyPI Trusted Publishing when
-   ready. Keep the build job separate and publish only reviewed artifacts.
+5. Configure the Trusted Publisher described below and run the manual
+   publishing workflow only when the upload is authorized.
 6. Tag the approved commit and record the version/release notes. A later commit
    request also covers the parent gitlink update; this preparation creates no tag.
 
 References: [PyPA packaging](https://packaging.python.org/en/latest/tutorials/packaging-projects/),
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/).
+
+## Manual PyPI publishing
+
+`.github/workflows/publish.yml` is named **Publish to PyPI** in GitHub Actions.
+It has only a `workflow_dispatch` trigger. Pushing commits, tags, or completing
+an ordinary build does not start it. It accepts two inputs:
+
+- `version`: the exact version in the source, currently `3.4.0`.
+- `publish`: a checkbox, **false by default**. Leave it unchecked for a dry run.
+
+Only `main` is accepted. Preflight checks the requested version before the
+existing three-platform build matrix runs. The assembler validates every
+platform's package name, filename/metadata version and Python/platform tags,
+then retains one canonical Linux source archive. GraspKit keeps only the Linux
+copy of its universal wheel; rCSFs keeps all three platform wheels. This avoids
+silently overwriting duplicate filenames from different runners.
+
+The prepared archives are stored in the **pypi-distributions** Actions artifact;
+the job summary lists their SHA-256 hashes and source commit. Preparation and
+build jobs have no OIDC permission. Only the final, separately gated `publish`
+job uses the `pypi` environment and `id-token: write`. That job downloads the
+prepared artifact and invokes `pypa/gh-action-pypi-publish`; it does not rebuild.
+When `publish` is false, the upload job is skipped entirely. The workflow group
+serializes publication attempts. It neither bumps versions nor creates tags.
+
+### Configure authorization in the browser
+
+1. In this GitHub repository, open **Settings → Environments → New environment**
+   and create an environment named exactly **pypi**. No PyPI token or environment
+   secret is needed. You can restrict its deployment branches to `main`.
+2. Log in to [PyPI Publishing](https://pypi.org/manage/account/publishing/).
+   Under **Add a new pending publisher**, choose **GitHub** and enter:
+
+   | PyPI field | Value |
+   | --- | --- |
+   | PyPI Project Name | `grasp-kit` |
+   | Owner | `YenochQin` |
+   | Repository name | `graspkit` |
+   | Workflow name | `publish.yml` |
+   | Environment name | `pypi` |
+
+   Enter only `publish.yml`, without `.github/workflows/`. The owner is the
+   GitHub account name, not the PyPI username. Add the pending publisher. This
+   does not upload files, create the project or reserve its name; the project
+   is created on the first successful publication. If you already own an
+   existing project with this name, add the publisher in that project's
+   Publishing settings instead.
+3. For a rehearsal, choose **Actions → Publish to PyPI → Run workflow**, select
+   `main`, enter `3.4.0` and leave **publish unchecked**. All builds and
+   package checks run, and the upload job is skipped. A dry run does not test
+   the PyPI OIDC exchange because it never enters the publishing job.
+4. Only when publication is authorized, run the same workflow from `main` with
+   the exact version and **publish checked**. Then install that version from
+   PyPI to verify it. TestPyPI is not a destination in this production workflow.
+
+The pending-publisher setup follows the [PyPI guide](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
