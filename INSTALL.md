@@ -9,7 +9,7 @@ before its first PyPI publication; existing import statements need no changes.
 Use the exact wheel filename supplied with the release:
 
 ```bash
-python -m pip install /path/to/grasp_atomic_kit-3.4.0-py3-none-any.whl
+python -m pip install /path/to/grasp_atomic_kit-3.4.1-py3-none-any.whl
 ```
 
 Once the package has been published on PyPI:
