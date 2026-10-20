@@ -61,7 +61,7 @@ def test_complete_matrix_selects_canonical_source_without_overwriting(
 ) -> None:
     artifacts = matrix(tmp_path, publisher)
     paths = publisher.prepare(artifacts, tmp_path / "dist", "1.0.0")
-    expected_wheels = 1 if publisher.NAME == "grasp-kit" else 3
+    expected_wheels = 1 if publisher.NAME == "grasp-atomic-kit" else 3
     assert len(paths) == expected_wheels + 1
     (source,) = [path for path in paths if path.name.endswith(".tar.gz")]
     assert source.read_text() == f"source from {publisher.CANONICAL_ARTIFACT}"

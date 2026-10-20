@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "grasp-kit"
+name = "grasp-atomic-kit"
 dynamic = ["version"]
 description = "Stable data I/O, processing, and plotting for GRASP calculations"
 keywords = ["GRASP", "atomic physics", "data processing", "plotting"]
@@ -50,7 +50,7 @@ dev = [
     "twine>=6.2.0",
 ]
 all = [
-    'grasp-kit[dev]',
+    'grasp-atomic-kit[dev]',
     # Install with: uv sync --all-extras
 ]
 

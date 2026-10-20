@@ -2,7 +2,7 @@
 
 ## Ownership and interfaces
 
-`grasp-kit` is the stable GRASP processing library. The wheel contains `src/graspkit/` and `src/graspkit_plot/`; tests are under `tests/` and documentation under `docs/`.
+`grasp-atomic-kit` is the stable GRASP processing library. The wheel contains `src/graspkit/` and `src/graspkit_plot/`; tests are under `tests/` and documentation under `docs/`.
 
 - Use `data_IO/` for loaders and stable CSF persistence, `CSFs_processor/` for deterministic CSF algorithms, and `grasp_data_extractor/` for ASF, transition, and orbital post-processing.
 - Shared models and environment detection belong in `utils/`; plotting belongs in `graspkit_plot/`.

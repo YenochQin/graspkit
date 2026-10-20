@@ -1,20 +1,21 @@
 # Installation
 
-`grasp-kit` requires Python 3.14 or newer. It provides the `graspkit` and
-`graspkit_plot` import packages.
+`grasp-atomic-kit` requires Python 3.14 or newer. It provides the `graspkit` and
+`graspkit_plot` import packages. The distribution was renamed from `grasp-kit`
+before its first PyPI publication; existing import statements need no changes.
 
 ## Install a prepared release
 
 Use the exact wheel filename supplied with the release:
 
 ```bash
-python -m pip install /path/to/grasp_kit-3.4.0-py3-none-any.whl
+python -m pip install /path/to/grasp_atomic_kit-3.4.0-py3-none-any.whl
 ```
 
 Once the package has been published on PyPI:
 
 ```bash
-python -m pip install grasp-kit
+python -m pip install grasp-atomic-kit
 ```
 
 A standalone source checkout also supports `python -m pip install .`.

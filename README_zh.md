@@ -20,6 +20,7 @@ graspkit-tools/ml_CSFs_selection_scripts/ml_csf_choosing/
 
 ## 安装
 
+分发包名为 `grasp-atomic-kit`，Python 导入名仍为 `graspkit` 和 `graspkit_plot`。
 需要 Python 3.14 或更新版本。从源码目录安装：
 
 ```bash
@@ -70,7 +71,7 @@ python -m build
 ## 发布准备
 
 构建与验证步骤见[发布指南](docs/releasing.md)。正式发布到 PyPI 后，
-可使用 `python -m pip install grasp-kit` 安装。
+可使用 `python -m pip install grasp-atomic-kit` 安装。
 
 ## 许可证
 

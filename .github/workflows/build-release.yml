@@ -40,6 +40,6 @@ jobs:
           python scripts/check_release.py dist --smoke
       - uses: actions/upload-artifact@v4
         with:
-          name: grasp-kit-${{ matrix.os }}
+          name: grasp-atomic-kit-${{ matrix.os }}
           path: dist/*
           if-no-files-found: error

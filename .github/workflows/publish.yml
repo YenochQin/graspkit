@@ -41,7 +41,7 @@ jobs:
           expected = runpy.run_path("src/graspkit/version.py")["__version__"]
           if os.environ["RELEASE_VERSION"] != expected:
               raise SystemExit(f"Requested version must match the source version: {expected}")
-          print(f"Preparing grasp-kit {expected} from {os.environ['GITHUB_SHA']}")
+          print(f"Preparing grasp-atomic-kit {expected} from {os.environ['GITHUB_SHA']}")
           PYTHON
 
   build:
@@ -58,7 +58,7 @@ jobs:
           python-version: "3.14"
       - uses: actions/download-artifact@v4
         with:
-          pattern: grasp-kit-*
+          pattern: grasp-atomic-kit-*
           path: artifacts
           merge-multiple: false
       - name: Install validation tools
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-22.04
     environment:
       name: pypi
-      url: https://pypi.org/project/grasp-kit/
+      url: https://pypi.org/project/grasp-atomic-kit/
     permissions:
       contents: read
       id-token: write

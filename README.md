@@ -23,7 +23,9 @@ or iterative pipeline state. Those live under
 
 ## Installation
 
-Python 3.14 or newer is required. From a source checkout:
+The distribution name is `grasp-atomic-kit`; the Python imports remain
+`graspkit` and `graspkit_plot`. Python 3.14 or newer is required.
+From a source checkout:
 
 ```bash
 python -m pip install .
@@ -78,7 +80,7 @@ See [INSTALL.md](INSTALL.md) for installation details.
 
 See [the release guide](docs/releasing.md) for local wheel/source builds and
 artifact validation. Once published on PyPI, the installation command is
-`python -m pip install grasp-kit`.
+`python -m pip install grasp-atomic-kit`.
 
 ## License
 

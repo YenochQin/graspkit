@@ -22,7 +22,7 @@ from packaging.tags import sys_tags
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
 
-NAME = "grasp-kit"
+NAME = "grasp-atomic-kit"
 LICENSE = "GPL-3.0-only"
 WHEEL_ROOTS = {"graspkit", "graspkit_plot"}
 WHEEL_REQUIRED = {
