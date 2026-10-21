@@ -1,6 +1,6 @@
 # Preparing a graspkit-atomic release
 
-The prepared stable version is **3.4.2**. Its single source is
+The prepared stable version is **3.4.3**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
 The local build commands below do not upload files or create Git tags.
 The separate manual publishing workflow is described near the end of this guide.
@@ -23,8 +23,8 @@ The obsolete `--dev` option is removed; edit the version source deliberately.
 `--clean` removes only matching graspkit-atomic archives from the selected output
 folder. Unknown files cause an error instead of being deleted.
 
-Output: `dist/graspkit_atomic-3.4.2.tar.gz` and
-`dist/graspkit_atomic-3.4.2-py3-none-any.whl`. An optional `--outdir PATH` selects an
+Output: `dist/graspkit_atomic-3.4.3.tar.gz` and
+`dist/graspkit_atomic-3.4.3-py3-none-any.whl`. An optional `--outdir PATH` selects an
 empty output folder. The shell/batch wrappers select the shared Tools Python.
 
 Equivalent individual checks:
@@ -79,7 +79,7 @@ with a branch selector. Review all three platform jobs before using the artifact
 ## Before a later publication
 
 1. Review the exact source commit and release changes; rerun the workflow on it.
-2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.4.2
+2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.4.3
    has not already been published. A missing public project page alone does
    not prove that a name is available.
 3. Inspect the actual archives and hashes. Publishing makes their contents
@@ -103,7 +103,7 @@ completing a build does not start a publication. Its inputs are:
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `version` | Required | Exact source version, currently `3.4.2`. |
+| `version` | Required | Exact source version, currently `3.4.3`. |
 | `publish_pypi` | Off | Upload the validated packages to PyPI. |
 | `github_release` | Off | Create a GitHub Release using the same packages. |
 | `draft` | On | Keep the GitHub Release as a draft; turn off only for formal publication. |
@@ -119,7 +119,7 @@ source version, and select the destinations you intend to use:
 | On | On | Build and validate once, then upload the same files to both destinations. |
 
 A prior dry run is optional. No separate workflow, run ID or tag input is
-needed. The GitHub tag is derived as `v{version}`, for example `v3.4.2`.
+needed. The GitHub tag is derived as `v{version}`, for example `v3.4.3`.
 The `draft` option has no effect when `github_release` is off.
 
 ### One build, two independent destinations

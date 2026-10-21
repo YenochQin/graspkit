@@ -38,7 +38,7 @@ For an existing uv project using Python 3.14 or newer, run `uv add graspkit-atom
 in its directory. This records the dependency in `pyproject.toml`, updates
 `uv.lock`, and installs it in the project's `.venv`. Use `uv run python analysis.py`
 to run your own analysis script; manual environment activation is not required.
-To pin a particular release, use `uv add "graspkit-atomic==3.4.2"`.
+To pin a particular release, use `uv add "graspkit-atomic==3.4.3"`.
 
 You can also add the dependency to an existing `pyproject.toml` manually:
 
@@ -48,7 +48,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "graspkit-atomic==3.4.2",
+    "graspkit-atomic==3.4.3",
 ]
 ```
 
