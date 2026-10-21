@@ -1,6 +1,6 @@
 # Preparing a graspkit-atomic release
 
-The prepared stable version is **3.4.1**. Its single source is
+The prepared stable version is **3.4.2**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
 The local build commands below do not upload files or create Git tags.
 The separate manual publishing workflow is described near the end of this guide.
@@ -23,8 +23,8 @@ The obsolete `--dev` option is removed; edit the version source deliberately.
 `--clean` removes only matching graspkit-atomic archives from the selected output
 folder. Unknown files cause an error instead of being deleted.
 
-Output: `dist/graspkit_atomic-3.4.1.tar.gz` and
-`dist/graspkit_atomic-3.4.1-py3-none-any.whl`. An optional `--outdir PATH` selects an
+Output: `dist/graspkit_atomic-3.4.2.tar.gz` and
+`dist/graspkit_atomic-3.4.2-py3-none-any.whl`. An optional `--outdir PATH` selects an
 empty output folder. The shell/batch wrappers select the shared Tools Python.
 
 Equivalent individual checks:
@@ -79,7 +79,7 @@ with a branch selector. Review all three platform jobs before using the artifact
 ## Before a later publication
 
 1. Review the exact source commit and release changes; rerun the workflow on it.
-2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.4.1
+2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.4.2
    has not already been published. A missing public project page alone does
    not prove that a name is available.
 3. Inspect the actual archives and hashes. Publishing makes their contents
@@ -101,7 +101,7 @@ References: [PyPA packaging](https://packaging.python.org/en/latest/tutorials/pa
 It has only a `workflow_dispatch` trigger. Pushing commits, tags, or completing
 an ordinary build does not start it. It accepts two inputs:
 
-- `version`: the exact version in the source, currently `3.4.1`.
+- `version`: the exact version in the source, currently `3.4.2`.
 - `publish`: a checkbox, **false by default**. Leave it unchecked for a dry run.
 
 Only `main` is accepted. Preflight checks the requested version before the
@@ -146,7 +146,7 @@ for the new name below. The repository and Python import names stay unchanged.
    existing project with this name, add the publisher in that project's
    Publishing settings instead.
 3. For a rehearsal, choose **Actions → Publish to PyPI → Run workflow**, select
-   `main`, enter `3.4.1` and leave **publish unchecked**. All builds and
+   `main`, enter `3.4.2` and leave **publish unchecked**. All builds and
    package checks run, and the upload job is skipped. A dry run does not test
    the PyPI OIDC exchange because it never enters the publishing job.
 4. Only when publication is authorized, run the same workflow from `main` with
@@ -159,7 +159,7 @@ The pending-publisher setup follows the [PyPI guide](https://docs.pypi.org/trust
 
 Open **Actions → Draft GitHub Release → Run workflow** and select `main`.
 Fill in `run_id` with the numeric ID from a successful **Publish to PyPI**
-rehearsal URL (`/actions/runs/NUMBER`), and `tag` with `v3.4.1` (or the
+rehearsal URL (`/actions/runs/NUMBER`), and `tag` with `v3.4.2` (or the
 version of that rehearsal). The selected run must have `publish` unchecked:
 `preflight`, all three builds and `prepare` must pass, and `publish` must be
 skipped. Runs from forks, other workflows or branches are rejected.

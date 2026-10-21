@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Exact package version to publish (3.4.1)"
+        description: "Exact package version to publish (3.4.2)"
         required: true
         type: string
       publish:
