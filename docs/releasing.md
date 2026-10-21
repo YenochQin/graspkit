@@ -1,4 +1,4 @@
-# Preparing a grasp-atomic-kit release
+# Preparing a graspkit-atomic release
 
 The prepared stable version is **3.4.1**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
@@ -20,11 +20,11 @@ from that archive, runs `twine check --strict`, checks the file manifest and
 metadata, and runs a wheel smoke test. Build isolation supplies Hatchling.
 It never installs tools into the runtime or copies files to the Tools repo.
 The obsolete `--dev` option is removed; edit the version source deliberately.
-`--clean` removes only matching grasp-atomic-kit archives from the selected output
+`--clean` removes only matching graspkit-atomic archives from the selected output
 folder. Unknown files cause an error instead of being deleted.
 
-Output: `dist/grasp_atomic_kit-3.4.1.tar.gz` and
-`dist/grasp_atomic_kit-3.4.1-py3-none-any.whl`. An optional `--outdir PATH` selects an
+Output: `dist/graspkit_atomic-3.4.1.tar.gz` and
+`dist/graspkit_atomic-3.4.1-py3-none-any.whl`. An optional `--outdir PATH` selects an
 empty output folder. The shell/batch wrappers select the shared Tools Python.
 
 Equivalent individual checks:
@@ -79,7 +79,7 @@ with a branch selector. Review all three platform jobs before using the artifact
 ## Before a later publication
 
 1. Review the exact source commit and release changes; rerun the workflow on it.
-2. Confirm PyPI ownership/availability of `grasp-atomic-kit`, and that version 3.4.1
+2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.4.1
    has not already been published. A missing public project page alone does
    not prove that a name is available.
 3. Inspect the actual archives and hashes. Publishing makes their contents
@@ -121,6 +121,10 @@ serializes publication attempts. It neither bumps versions nor creates tags.
 
 ### Configure authorization in the browser
 
+This rename creates a new PyPI project, `graspkit-atomic`. Authorization for the
+previous `grasp-atomic-kit` project does not carry over; configure the publisher
+for the new name below. The repository and Python import names stay unchanged.
+
 1. In this GitHub repository, open **Settings → Environments → New environment**
    and create an environment named exactly **pypi**. No PyPI token or environment
    secret is needed. You can restrict its deployment branches to `main`.
@@ -129,7 +133,7 @@ serializes publication attempts. It neither bumps versions nor creates tags.
 
    | PyPI field | Value |
    | --- | --- |
-   | PyPI Project Name | `grasp-atomic-kit` |
+   | PyPI Project Name | `graspkit-atomic` |
    | Owner | `YenochQin` |
    | Repository name | `graspkit` |
    | Workflow name | `publish.yml` |

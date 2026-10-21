@@ -15,11 +15,11 @@ from packaging.version import Version
 from check_release import NAME, check_archive
 
 ARTIFACTS = {
-    "grasp-atomic-kit-ubuntu-22.04": "any",
-    "grasp-atomic-kit-windows-2022": "any",
-    "grasp-atomic-kit-macos-14": "any",
+    "graspkit-atomic-ubuntu-22.04": "any",
+    "graspkit-atomic-windows-2022": "any",
+    "graspkit-atomic-macos-14": "any",
 }
-CANONICAL_ARTIFACT = "grasp-atomic-kit-ubuntu-22.04"
+CANONICAL_ARTIFACT = "graspkit-atomic-ubuntu-22.04"
 
 
 def prepare(artifacts: Path, outdir: Path, version: str) -> list[Path]:

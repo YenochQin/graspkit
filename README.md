@@ -23,16 +23,50 @@ or iterative pipeline state. Those live under
 
 ## Installation
 
-The distribution name is `grasp-atomic-kit`; the Python imports remain
-`graspkit` and `graspkit_plot`. Python 3.14 or newer is required.
-From a source checkout:
+Install [graspkit-atomic from PyPI](https://pypi.org/project/graspkit-atomic/)
+with Python 3.14 or newer. The distribution name is `graspkit-atomic`;
+its Python import packages are `graspkit` and `graspkit_plot`.
+
+### With pip
+
+> The new PyPI name is prepared for publication. The installation commands below
+> apply after the first `graspkit-atomic` release.
+
+```bash
+python -m pip install graspkit-atomic
+```
+
+To reproduce the current release exactly:
+
+```bash
+python -m pip install "graspkit-atomic==3.4.1"
+```
+
+### In pyproject.toml
+
+Add the dependency to your own project's existing `[project].dependencies`.
+A minimal example is:
+
+```toml
+[project]
+name = "atomic-analysis"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "graspkit-atomic==3.4.1",
+]
+```
+
+From your consuming project's directory, install the project and its dependencies:
 
 ```bash
 python -m pip install .
 ```
 
-When developing in the full workspace, use the environment owned by
-`graspkit-tools`; it installs this repository as an editable dependency.
+Both installation methods provide the same Python API. If your project also uses
+rCSFs, add `"rcsfs==1.3.1"` to the same dependency list. GraspKit's package includes
+the plotting API; ML training and workflow orchestration belong to `graspkit-tools`.
+See [INSTALL.md](INSTALL.md) for local-wheel and contributor installation details.
 
 ## Imports
 
@@ -79,8 +113,7 @@ See [INSTALL.md](INSTALL.md) for installation details.
 ## Release preparation
 
 See [the release guide](docs/releasing.md) for local wheel/source builds and
-artifact validation. Once published on PyPI, the installation command is
-`python -m pip install grasp-atomic-kit`.
+artifact validation and the manual publishing workflow.
 
 ## License
 

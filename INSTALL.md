@@ -1,27 +1,54 @@
 # Installation
 
-`grasp-atomic-kit` requires Python 3.14 or newer. It provides the `graspkit` and
-`graspkit_plot` import packages. The distribution was renamed from `grasp-kit`
-before its first PyPI publication; existing import statements need no changes.
+`graspkit-atomic` requires Python 3.14 or newer. It provides the `graspkit` and
+`graspkit_plot` import packages. The distribution name is changing from `grasp-atomic-kit` to `graspkit-atomic`;
+existing import statements need no changes. The commands below apply after the
+first release under the new name. For existing projects, replace the old
+dependency rather than declaring both distributions, which provide the same
+Python packages.
 
-## Install a prepared release
-
-Use the exact wheel filename supplied with the release:
-
-```bash
-python -m pip install /path/to/grasp_atomic_kit-3.4.1-py3-none-any.whl
-```
-
-Once the package has been published on PyPI:
+## Install from PyPI
 
 ```bash
-python -m pip install grasp-atomic-kit
+python -m pip install graspkit-atomic
 ```
 
-A standalone source checkout also supports `python -m pip install .`.
+For a fixed release:
+
+```bash
+python -m pip install "graspkit-atomic==3.4.1"
+```
+
+## Declare a project dependency
+
+Add `"graspkit-atomic==3.4.1"` to the existing `[project].dependencies` list in
+your own `pyproject.toml`. A minimal example:
+
+```toml
+[project]
+name = "atomic-analysis"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = ["graspkit-atomic==3.4.1"]
+```
+
+Install your consuming project and its dependencies from its directory with
+`python -m pip install .`. Add `"rcsfs==1.3.1"` to the dependency list separately
+if your application also needs the Rust CSF library.
+
 Pip installs the declared runtime dependencies; Rust and the GRASP executables
 are not needed to install this Python library. Reading calculation results
 requires the corresponding GRASP data files.
+
+## Local wheel or source installation
+
+To install a downloaded wheel, use its exact filename:
+
+```bash
+python -m pip install /path/to/graspkit_atomic-3.4.1-py3-none-any.whl
+```
+
+A standalone source checkout also supports `python -m pip install .`.
 
 ## Full workspace development
 

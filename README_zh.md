@@ -20,14 +20,46 @@ graspkit-tools/ml_CSFs_selection_scripts/ml_csf_choosing/
 
 ## 安装
 
-分发包名为 `grasp-atomic-kit`，Python 导入名仍为 `graspkit` 和 `graspkit_plot`。
-需要 Python 3.14 或更新版本。从源码目录安装：
+使用 Python 3.14 或更新版本，从 [PyPI 安装 graspkit-atomic](https://pypi.org/project/graspkit-atomic/)。
+分发包名为 `graspkit-atomic`，Python 导入名为 `graspkit` 和 `graspkit_plot`。
+
+### 使用 pip
+
+> 新 PyPI 名称尚待首次发布，以下安装命令在 `graspkit-atomic` 发布后生效。
+
+```bash
+python -m pip install graspkit-atomic
+```
+
+需要固定为当前发布版本时：
+
+```bash
+python -m pip install "graspkit-atomic==3.4.1"
+```
+
+### 在 pyproject.toml 中声明依赖
+
+将依赖加入你自己项目已有的 `[project].dependencies`。最小示例如下：
+
+```toml
+[project]
+name = "atomic-analysis"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "graspkit-atomic==3.4.1",
+]
+```
+
+在你的使用项目目录中安装项目及其依赖：
 
 ```bash
 python -m pip install .
 ```
 
-在完整 workspace 中开发时，推荐使用 `graspkit-tools` 所属的 uv 环境；该环境会以 editable 方式安装本仓库。
+两种安装方式使用相同的 Python API。如果项目同时使用 rCSFs，可在上述依赖列表中
+另加 `"rcsfs==1.3.1"`。绘图 API 已包含在本包中；ML 训练和工作流编排由
+`graspkit-tools` 提供。本地 wheel 安装和贡献者开发环境见 [INSTALL.md](INSTALL.md)。
 
 ## 导入示例
 
@@ -70,8 +102,7 @@ python -m build
 
 ## 发布准备
 
-构建与验证步骤见[发布指南](docs/releasing.md)。正式发布到 PyPI 后，
-可使用 `python -m pip install grasp-atomic-kit` 安装。
+构建、验证和手动发布工作流见[发布指南](docs/releasing.md)。
 
 ## 许可证
 

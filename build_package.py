@@ -15,13 +15,13 @@ def main() -> None:
     parser.add_argument(
         "--clean",
         action="store_true",
-        help="Remove previous grasp-atomic-kit archives in outdir",
+        help="Remove previous graspkit-atomic archives in outdir",
     )
     args = parser.parse_args()
     outdir: Path = args.outdir.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     if args.clean:
-        for pattern in ("grasp_atomic_kit-*.whl", "grasp_atomic_kit-*.tar.gz"):
+        for pattern in ("graspkit_atomic-*.whl", "graspkit_atomic-*.tar.gz"):
             for archive in outdir.glob(pattern):
                 archive.unlink()
     if any(outdir.iterdir()):
