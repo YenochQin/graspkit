@@ -3,8 +3,7 @@
 English | [简体中文](README_zh.md)
 
 `graspkit` is the stable foundation for reading, processing, and plotting
-GRASP atomic-structure calculation results. Machine-learning workflow code is
-owned by the sibling `graspkit-tools` repository.
+GRASP atomic-structure calculation results.
 
 ## Package structure
 
@@ -17,35 +16,31 @@ owned by the sibling `graspkit-tools` repository.
   quantum-number helpers.
 - `graspkit_plot`: plotting and publication-style helpers.
 
-The package deliberately does not contain ML models, training configuration,
-or iterative pipeline state. Those live under
-`graspkit-tools/ml_CSFs_selection_scripts/ml_csf_choosing/`.
-
 ## Installation
 
 Install [graspkit-atomic from PyPI](https://pypi.org/project/graspkit-atomic/)
 with Python 3.14 or newer. The distribution name is `graspkit-atomic`;
 its Python import packages are `graspkit` and `graspkit_plot`.
 
-### With pip
+### With uv
 
-> The new PyPI name is prepared for publication. The installation commands below
-> apply after the first `graspkit-atomic` release.
-
-```bash
-python -m pip install graspkit-atomic
-```
-
-To reproduce the current release exactly:
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/) to manage the
+environment and dependencies of your own analysis project. For a new project:
 
 ```bash
-python -m pip install "graspkit-atomic==3.4.1"
+uv init --python 3.14 atomic-analysis
+cd atomic-analysis
+uv add graspkit-atomic
+uv run python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-### In pyproject.toml
+For an existing uv project using Python 3.14 or newer, run `uv add graspkit-atomic`
+in its directory. This records the dependency in `pyproject.toml`, updates
+`uv.lock`, and installs it in the project's `.venv`. Use `uv run python analysis.py`
+to run your own analysis script; manual environment activation is not required.
+To pin a particular release, use `uv add "graspkit-atomic==3.4.1"`.
 
-Add the dependency to your own project's existing `[project].dependencies`.
-A minimal example is:
+You can also add the dependency to an existing `pyproject.toml` manually:
 
 ```toml
 [project]
@@ -57,16 +52,21 @@ dependencies = [
 ]
 ```
 
-From your consuming project's directory, install the project and its dependencies:
+Then run `uv sync` in that project's directory to resolve dependencies and
+synchronize its environment. Commit `pyproject.toml` and `uv.lock` alongside
+your analysis code to record the dependency choices.
+
+### With pip
+
+To install into an existing Python environment:
 
 ```bash
-python -m pip install .
+python -m pip install graspkit-atomic
 ```
 
-Both installation methods provide the same Python API. If your project also uses
-rCSFs, add `"rcsfs==1.3.1"` to the same dependency list. GraspKit's package includes
-the plotting API; ML training and workflow orchestration belong to `graspkit-tools`.
-See [INSTALL.md](INSTALL.md) for local-wheel and contributor installation details.
+Both methods provide the same Python API, including plotting. If your project
+also uses rCSFs, add it separately with `uv add rcsfs`.
+See [INSTALL.md](INSTALL.md) for local-wheel installation details.
 
 ## Imports
 
@@ -95,20 +95,6 @@ python -X utf8 -c "from graspkit.data_IO import MixCoefLoader; MixCoefLoader(r'p
 
 This option changes terminal text encoding only; it does not change how GRASP
 files are parsed.
-
-## Development
-
-In the full workspace, activate the shared environment first:
-
-```bash
-source ../graspkit-tools/.venv/bin/activate
-pytest tests/
-ruff check .
-basedpyright src/
-python -m build
-```
-
-See [INSTALL.md](INSTALL.md) for installation details.
 
 ## Release preparation
 
