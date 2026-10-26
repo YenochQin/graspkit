@@ -31,7 +31,7 @@ uv run python -c "import graspkit; print(graspkit.__version__)"
 已有 uv 项目使用 Python 3.14 或更新版本时，直接在其目录运行 `uv add graspkit-atomic`。
 该命令会将依赖写入 `pyproject.toml`，更新 `uv.lock`，并安装到项目的 `.venv` 中。
 运行自己的分析脚本时使用 `uv run python analysis.py`，无需手动激活环境。
-需要固定版本时，使用 `uv add "graspkit-atomic==3.4.3"`。
+需要固定版本时，使用 `uv add "graspkit-atomic==3.4.4"`。
 
 也可以手动将依赖加入已有的 `pyproject.toml`：
 
@@ -41,7 +41,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "graspkit-atomic==3.4.3",
+    "graspkit-atomic==3.4.4",
 ]
 ```
 

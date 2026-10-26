@@ -73,7 +73,7 @@ def test_mix_coef_loader_builds_blocks(
     records = iter(
         [
             np.frombuffer(b"G92MIX", dtype="S1"),
-            np.array([2, 3, 4, 5, 6, 1], dtype=np.int32),
+            np.array([2, 3, 4, 2, 6, 1], dtype=np.int32),
             np.array([1, 3, 2, 1, 1], dtype=np.int32),
             np.array([1, 2], dtype=np.int32),
             np.array([0.5, 0.0, 0.1], dtype=np.float64),
@@ -105,7 +105,8 @@ def test_mix_coef_loader_builds_blocks(
     )
 
     mix_path = tmp_path / "example.m"
-    mix_path.write_bytes(b"dummy")
+    # Mock record readers consume the logical payload; leave no trailing bytes.
+    mix_path.write_bytes(b"")
 
     result = MixCoefLoader(mix_path).load()
 

@@ -87,3 +87,42 @@ def test_empty_mix_file_prints_and_writes_no_level_records(
             output, data.blocks[0], electron_count=-1, orbital_count=7
         )
     assert output.read_bytes() == b"old output"
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "total_csfs",
+        "total_levels",
+        "total_size",
+        "trailing",
+        "negative_id",
+        "truncated",
+        "marker",
+    ],
+)
+def test_loader_rejects_inconsistent_or_incomplete_file(
+    tmp_path: Path, fault: str
+) -> None:
+    totals = [2, 1, 1, 1, 1, 1]
+    if fault.startswith("total_"):
+        totals[{"total_csfs": 1, "total_levels": 3, "total_size": 4}[fault]] = 2
+    records = [
+        b"G92MIX",
+        struct.pack("=6i", *totals),
+        struct.pack("=5i", 1, 1, 1, 1, 1),
+        struct.pack("=i", 0 if fault == "negative_id" else 1),
+        struct.pack("=2d", -1, 0),
+        struct.pack("=d", 1),
+    ]
+    content = _records(records)
+    if fault == "trailing":
+        content += b"extra"
+    elif fault == "truncated":
+        content = content[:-1]
+    elif fault == "marker":
+        content = content[:-4] + struct.pack("=i", 7)
+    path = tmp_path / "bad.m"
+    path.write_bytes(content)
+    with pytest.raises(ValueError):
+        MixCoefLoader(path).load(show_levels=False)

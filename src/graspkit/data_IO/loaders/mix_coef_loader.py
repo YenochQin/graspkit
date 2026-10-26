@@ -89,14 +89,14 @@ class MixCoefLoader(BinaryFileLoader):
             # READ (nfmix) nelec, ncftot, nw, nvectot, nvecsiz, nblock
             # nelec -> num_electron, ncftot -> total_num_configuration,
             # nw -> nw, ncmin -> ncmin, nvecsiz -> nvecsiz, nblock -> num_block
-            nelec, _ncftot, nw, _ncmin, _nvecsiz, nblock = tuple[int, ...](
+            nelec, ncftot, nw, ncmin, nvecsiz, nblock = tuple[int, ...](
                 int(x)
                 for x in self.read_mixed_scalars(
                     file=binary_file, field_specs=["i", "i", "i", "i", "i", "i"]
                 )
             )
 
-            if nelec < 0 or nw < 0 or nblock < 0:
+            if min(nelec, ncftot, nw, ncmin, nvecsiz, nblock) < 0:
                 raise ValueError("Negative count in mix coefficient file header")
 
             blocks: list[MixCoefficientBlock] = []
@@ -125,6 +125,8 @@ class MixCoefLoader(BinaryFileLoader):
                         file=binary_file, dtype="int32", count=nevblk
                     )
                     ivec_array = ivec.astype(np.int64) - 1
+                    if np.any(ivec_array < 0):
+                        raise ValueError("GRASP level IDs must be positive")
                     eva_evals: NDArray[np.float64] = self.read_fortran_record(
                         file=binary_file, dtype="float64", count=nevblk + 1
                     )
@@ -165,6 +167,16 @@ class MixCoefLoader(BinaryFileLoader):
                         mix_coefficients=evecs,
                     )
                 )
+
+            if (
+                sum(block.csf_count for block in blocks) != ncftot
+                or sum(block.level_count for block in blocks) != ncmin
+                or sum(block.csf_count * block.level_count for block in blocks)
+                != nvecsiz
+            ):
+                raise ValueError("Mix header totals disagree with block dimensions")
+            if binary_file.read(1):
+                raise ValueError("Unexpected trailing data in mix coefficient file")
 
             # 收集能级能量
             temp_energy = _collect_level_metadata(blocks)[3]
