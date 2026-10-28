@@ -12,7 +12,7 @@
 
 ## Environment and checks
 
-Use only `../graspkit-tools/.venv`. Setup and dependency synchronization happen in Tools with the selected `cpu` or `gpu` extra; do not run `uv venv`, `uv sync`, or `uv run` here. Tools installs this package editable, so normal source edits require no reinstall.
+Use only `../graspkit-tools/.venv` with Python 3.15. Setup and dependency synchronization happen in Tools with the selected `cpu` or `gpu` extra; do not run `uv venv`, `uv sync`, or `uv run` here. Tools normally resolves the released library from PyPI; install this checkout explicitly into that environment when testing source changes.
 
 From this repository, activate the shared environment before invoking tools:
 
@@ -30,6 +30,6 @@ Use realistic GRASP inputs and edge cases for loader, parser, and CSF regression
 
 ## Conventions
 
-Use Python 3.14-compatible code, explicit public type hints, `pathlib.Path`, and the Ruff/type settings in `pyproject.toml`. Reuse the actual models in `utils/data_modules.py` and environment behavior in `utils/environment_config.py` when relevant. Consult source for available helpers rather than adding aliases for obsolete APIs.
+Use Python 3.15-compatible code, explicit public type hints, `pathlib.Path`, and the Ruff/type settings in `pyproject.toml`. Reuse the actual models in `utils/data_modules.py` and environment behavior in `utils/environment_config.py` when relevant. Consult source for available helpers rather than adding aliases for obsolete APIs.
 
 Keep generated artifacts, environments, private datasets, secrets, and cluster paths out of commits. Follow the workspace's separate submodule/parent commit workflow when a commit is requested.

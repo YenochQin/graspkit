@@ -14,7 +14,9 @@
 
 ## 安装
 
-使用 Python 3.14 或更新版本，从 [PyPI 安装 graspkit-atomic](https://pypi.org/project/graspkit-atomic/)。
+Python 3.15 / Polars 2.1 兼容修改尚未发布，请暂用源码版本。
+
+使用 Python 3.15 或更新版本，从 [PyPI 安装 graspkit-atomic](https://pypi.org/project/graspkit-atomic/)。
 分发包名为 `graspkit-atomic`，Python 导入名为 `graspkit` 和 `graspkit_plot`。
 
 ### 使用 uv 管理项目
@@ -22,16 +24,16 @@
 可以用 [uv](https://docs.astral.sh/uv/getting-started/installation/) 管理你自己的分析项目环境和依赖。新建项目时：
 
 ```bash
-uv init --python 3.14 atomic-analysis
+uv init --python 3.15 atomic-analysis
 cd atomic-analysis
 uv add graspkit-atomic
 uv run python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-已有 uv 项目使用 Python 3.14 或更新版本时，直接在其目录运行 `uv add graspkit-atomic`。
+已有 uv 项目使用 Python 3.15 或更新版本时，直接在其目录运行 `uv add graspkit-atomic`。
 该命令会将依赖写入 `pyproject.toml`，更新 `uv.lock`，并安装到项目的 `.venv` 中。
 运行自己的分析脚本时使用 `uv run python analysis.py`，无需手动激活环境。
-需要固定版本时，使用 `uv add "graspkit-atomic==3.4.5"`。
+需要固定版本时，使用 `uv add "graspkit-atomic==3.5.1"`。
 
 也可以手动将依赖加入已有的 `pyproject.toml`：
 
@@ -39,9 +41,9 @@ uv run python -c "import graspkit; print(graspkit.__version__)"
 [project]
 name = "atomic-analysis"
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.4.5",
+    "graspkit-atomic==3.5.1",
 ]
 ```
 

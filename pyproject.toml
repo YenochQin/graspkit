@@ -16,21 +16,21 @@ authors = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering :: Physics",
     "Intended Audience :: Science/Research",
 ]
 
-requires-python = ">= 3.14"
+requires-python = ">= 3.15"
 
 dependencies = [
     # 核心数据处理库
     "numpy>=2.4.2",
-    "polars>=1.38.1",
-    "matplotlib>=3.10.8",
+    "polars>=2.1.0",
+    "matplotlib>=3.11.2",
     "cycler>=0.12.1",
     # 配置文件处理
-    "rtoml>=0.13.0",
+    "rtoml>=0.14.0",
     "rich>=14.3.3",
 ]
 
@@ -97,13 +97,15 @@ select = ["NPY201"]
 quote-style = "double"
 
 [tool.basedpyright]
+venvPath = "../graspkit-tools"
+venv = ".venv"
 include = ["src"]
 exclude = ["**/node_modules",
     "**/__pycache__",
     "src/experimental",
     "src/typestubs"
 ]
-pythonVersion = "3.14"
+pythonVersion = "3.15"
 typeCheckingMode = "strict"
 defineConstant = { DEBUG = true }
 

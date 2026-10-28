@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
 from graspkit.grasp_data_extractor.asfs_data_processor import (  # noqa: E402
     format_configuration,
     format_energy_configurations,
+    iterative_levels_collection,
 )
 
 
@@ -56,6 +57,37 @@ def test_format_energy_configurations_wraps_merged_multishell_output_in_math_mod
 
 def test_format_configuration_handles_empty_input() -> None:
     assert format_configuration("") == ("", "")
+
+
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_iterative_levels_collection_preserves_unmatched_levels(tmp_path: Path) -> None:
+    header = (
+        "GRASP energy levels\n"
+        "No Pos  J  Parity  EnergyTotal  EnergyLevel  splitting  configuration_raw\n"
+        "header separator\nheader units\n"
+    )
+    first = tmp_path / "first.level"
+    second = tmp_path / "second.level"
+    first.write_text(
+        header + "1 1 0 + -10.0 0.0 0.0 1s\n2 2 0 + -9.0 20.0 0.0 2s\n-----\n",
+        encoding="utf-8",
+    )
+    second.write_text(
+        header + "1 2 0 + -8.5 25.0 0.0 2s\n2 3 0 + -8.0 50.0 0.0 3s\n-----\n",
+        encoding="utf-8",
+    )
+
+    merged = iterative_levels_collection([str(first), str(second)], ["A", "B"]).sort(
+        "Pos"
+    )
+
+    assert merged.select("Pos", "J", "Parity").rows() == [
+        ("1", "0", "+"), ("2", "0", "+"), ("3", "0", "+")
+    ]
+    assert merged["EnergyLevel_A"].to_list() == [0.0, 20.0, 0.0]
+    assert merged["EnergyLevel_B"].to_list() == [0.0, 25.0, 50.0]
+    assert merged["DeltaEA_to_B"].to_list() == [0.0, 5.0, 0.0]
+    assert not any(column.endswith("_right") for column in merged.columns)
 
 
 def test_format_configuration_rejects_non_string_input() -> None:

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Exact package version to publish (3.4.5)"
+        description: "Exact package version to publish (3.5.1)"
         required: true
         type: string
       publish_pypi:
@@ -32,12 +32,12 @@ concurrency:
 
 jobs:
   preflight:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Check branch and requested version
         env:
           RELEASE_VERSION: ${{ inputs.version }}
@@ -62,12 +62,12 @@ jobs:
 
   prepare:
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - uses: actions/download-artifact@v7
         with:
           pattern: graspkit-atomic-*
@@ -91,7 +91,7 @@ jobs:
   publish_pypi:
     needs: prepare
     if: ${{ inputs.publish_pypi && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
       url: https://pypi.org/project/graspkit-atomic/
@@ -111,7 +111,7 @@ jobs:
   github_release:
     needs: prepare
     if: ${{ inputs.github_release && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
@@ -121,7 +121,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Create a GitHub Release from this run's validated packages
         env:
           GH_TOKEN: ${{ github.token }}

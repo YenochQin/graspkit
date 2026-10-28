@@ -18,8 +18,11 @@ GRASP atomic-structure calculation results.
 
 ## Installation
 
+The Python 3.15 / Polars 2.1 compatibility changes are unreleased; use this
+source checkout until the next package release.
+
 Install [graspkit-atomic from PyPI](https://pypi.org/project/graspkit-atomic/)
-with Python 3.14 or newer. The distribution name is `graspkit-atomic`;
+with Python 3.15 or newer. The distribution name is `graspkit-atomic`;
 its Python import packages are `graspkit` and `graspkit_plot`.
 
 ### With uv
@@ -28,17 +31,17 @@ Use [uv](https://docs.astral.sh/uv/getting-started/installation/) to manage the
 environment and dependencies of your own analysis project. For a new project:
 
 ```bash
-uv init --python 3.14 atomic-analysis
+uv init --python 3.15 atomic-analysis
 cd atomic-analysis
 uv add graspkit-atomic
 uv run python -c "import graspkit; print(graspkit.__version__)"
 ```
 
-For an existing uv project using Python 3.14 or newer, run `uv add graspkit-atomic`
+For an existing uv project using Python 3.15 or newer, run `uv add graspkit-atomic`
 in its directory. This records the dependency in `pyproject.toml`, updates
 `uv.lock`, and installs it in the project's `.venv`. Use `uv run python analysis.py`
 to run your own analysis script; manual environment activation is not required.
-To pin a particular release, use `uv add "graspkit-atomic==3.4.5"`.
+To pin a particular release, use `uv add "graspkit-atomic==3.5.1"`.
 
 You can also add the dependency to an existing `pyproject.toml` manually:
 
@@ -46,9 +49,9 @@ You can also add the dependency to an existing `pyproject.toml` manually:
 [project]
 name = "atomic-analysis"
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.4.5",
+    "graspkit-atomic==3.5.1",
 ]
 ```
 

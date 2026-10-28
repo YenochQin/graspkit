@@ -1,10 +1,14 @@
 # Installation
 
-`graspkit-atomic` requires Python 3.14 or newer. It provides the `graspkit` and
+This development checkout of `graspkit-atomic` requires Python 3.15 or newer. It provides the `graspkit` and
 `graspkit_plot` import packages. The distribution name is `graspkit-atomic`, previously `grasp-atomic-kit`;
 existing import statements need no changes. When migrating an existing project,
 replace the old dependency rather than declaring both distributions, which
 provide the same Python packages.
+
+This checkout prepares 3.5.1 with Python 3.15 / Polars 2.1 compatibility.
+Use this source checkout until publication; the pinned PyPI examples below
+apply after 3.5.1 is available on the package index.
 
 ## Install from PyPI
 
@@ -15,20 +19,20 @@ python -m pip install graspkit-atomic
 For a fixed release:
 
 ```bash
-python -m pip install "graspkit-atomic==3.4.5"
+python -m pip install "graspkit-atomic==3.5.1"
 ```
 
 ## Declare a project dependency
 
-Add `"graspkit-atomic==3.4.5"` to the existing `[project].dependencies` list in
+Add `"graspkit-atomic==3.5.1"` to the existing `[project].dependencies` list in
 your own `pyproject.toml`. A minimal example:
 
 ```toml
 [project]
 name = "atomic-analysis"
 version = "0.1.0"
-requires-python = ">=3.14"
-dependencies = ["graspkit-atomic==3.4.5"]
+requires-python = ">=3.15"
+dependencies = ["graspkit-atomic==3.5.1"]
 ```
 
 For a uv-managed project, run `uv sync` after editing `pyproject.toml`, then
@@ -47,7 +51,7 @@ requires the corresponding GRASP data files.
 To install a downloaded wheel, use its exact filename:
 
 ```bash
-python -m pip install /path/to/graspkit_atomic-3.4.5-py3-none-any.whl
+python -m pip install /path/to/graspkit_atomic-3.5.1-py3-none-any.whl
 ```
 
 A standalone source checkout also supports `python -m pip install .`.

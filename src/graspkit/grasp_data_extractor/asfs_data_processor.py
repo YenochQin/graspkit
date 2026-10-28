@@ -553,7 +553,7 @@ def iterative_levels_collection(
         energy_data = energy_data.join(
             temp_df.select(key_cols + cols_to_join),
             on=key_cols,
-            how="outer",
+            how="full",
             coalesce=True,
         )
 
