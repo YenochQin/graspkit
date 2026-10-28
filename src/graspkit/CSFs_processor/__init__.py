@@ -11,7 +11,13 @@ from .extraction import (
     create_csf_document,
     write_csf_documents,
 )
+from .coverage import (
+    OrbitalCoverageResult,
+    complete_orbital_coverage,
+    count_orbital_coverage,
+)
 from .selection import (
+    CumulativeCsfSelection,
     generate_unique_random_numbers,
     random_choose_csfs,
     rmix_cumulative_selected_row_idxs,
@@ -19,6 +25,10 @@ from .selection import (
     select_csf_indices_by_ci_squared_cutoff,
     select_csfs_rows,
     sort_csfs_by_mix_coefficient,
+    select_csf_indices_by_cumulative_weight,
+    select_ci_cumulative_local_idxs,
+    project_local_idxs_to_full_pool_idxs,
+    iter_unselected_csf_indices,
 )
 from .validation import (
     load_selection_idxs,
@@ -42,6 +52,15 @@ __all__ = [
     "random_choose_csfs",
     "select_csfs_rows",
     "rmix_cumulative_selected_row_idxs",
+    "CumulativeCsfSelection",
+    "select_csf_indices_by_cumulative_weight",
+    "select_ci_cumulative_local_idxs",
+    "project_local_idxs_to_full_pool_idxs",
+    "iter_unselected_csf_indices",
+    # orbital coverage
+    "OrbitalCoverageResult",
+    "complete_orbital_coverage",
+    "count_orbital_coverage",
     # extraction
     "CsfDocument",
     "create_csf_document",

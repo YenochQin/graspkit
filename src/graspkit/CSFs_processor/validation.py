@@ -42,12 +42,20 @@ def validate_selection_idxs(
             duplicate values.
     """
     label = f" ({source})" if source is not None else ""
+    if row_count is not None and row_count < 0:
+        raise ValueError(f"row_count 不能为负数{label}")
     array = np.asarray(idxs)
     if array.ndim != 1:
         raise ValueError(f"选择索引必须是一维数组{label}: ndim={array.ndim}")
     if array.dtype.kind not in ("i", "u"):
         raise ValueError(f"选择索引必须是整数 dtype{label}: 实际 dtype={array.dtype}")
 
+    if (
+        array.size
+        and array.dtype.kind == "u"
+        and np.any(array > np.iinfo(np.int64).max)
+    ):
+        raise ValueError(f"选择索引超出 int64 范围{label}")
     int_array = array.astype(np.int64, copy=False)
     if int_array.size == 0:
         return int_array
@@ -199,8 +207,7 @@ def normalize_asf_row_indices(
     """Normalize and validate ASF matrix row indices for every rmix block."""
     if asf_row_indices is None:
         normalized_row_indices = [
-            block.asf_row_indices.tolist()
-            for block in asfs_mix_data.blocks
+            block.asf_row_indices.tolist() for block in asfs_mix_data.blocks
         ]
     else:
         normalized_row_indices = [
@@ -211,13 +218,13 @@ def normalize_asf_row_indices(
             "asf_row_indices 第一层长度与 mixing coefficient block 数量不一致"
         )
 
-    for block, row_indices in zip(asfs_mix_data.blocks, normalized_row_indices, strict=True):
+    for block, row_indices in zip(
+        asfs_mix_data.blocks, normalized_row_indices, strict=True
+    ):
         if not row_indices:
             raise ValueError(f"Block {block.block_index}: asf_row_indices 不能为空")
         if len(row_indices) != len(set(row_indices)):
-            raise ValueError(
-                f"Block {block.block_index}: asf_row_indices 包含重复值"
-            )
+            raise ValueError(f"Block {block.block_index}: asf_row_indices 包含重复值")
         if block.mix_coefficients.ndim != 2:
             raise ValueError(
                 f"Block {block.block_index}: mixing coefficients 必须是二维矩阵"

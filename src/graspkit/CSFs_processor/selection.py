@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,10 +17,171 @@ from ..grasp_data_extractor.rmix_data_processor import (
     RmixCiSquaredData,
     ci_squared,
     filter_ci_scores_by_threshold,
+    filter_sorted_ci_scores_by_cumulative,
     sort_ci_scores,
 )
 from ..utils.data_modules import MixCoefficientData
 from .validation import normalize_asf_row_indices, validate_selection_idxs
+
+
+@dataclass(frozen=True)
+class CumulativeCsfSelection:
+    """Per-ASF prefixes and their union in the caller's CSF index space.
+
+    Retained/discarded weights are fractions of each input row's total.
+    In relative mode, zero-total rows produce empty prefixes and zero fractions.
+    These fractions do not certify energies or any uncomputed CSF space.
+    """
+
+    indices: NDArray[np.int64]
+    per_asf_indices: tuple[NDArray[np.int64], ...]
+    totals: NDArray[np.float64]
+    retained_weight: NDArray[np.float64]
+    discarded_weight: NDArray[np.float64]
+
+
+def select_csf_indices_by_cumulative_weight(
+    ci_squared_values: np.ndarray,
+    *,
+    cumulative_threshold: float,
+    csf_indices: np.ndarray | None = None,
+    normalization: Literal["unit", "relative"] = "unit",
+    index_order: Literal["ascending", "importance"] = "ascending",
+) -> CumulativeCsfSelection:
+    """Select each ASF's shortest cumulative prefix, then union the CSFs.
+
+    Input is (ASF, CSF), or one CSF vector for a single ASF. ``unit`` requires
+    complete normalized rows (absolute rounding tolerance 1e-8); ``relative``
+    explicitly permits arbitrary nonnegative row totals for post-processing.
+    The crossing item is included. Equal weights use CSF-index-descending ties.
+    ``csf_indices`` maps columns to a global pool; omitted means local columns.
+    No ML configuration, predictions, budgets, or file writes are involved.
+    """
+    if normalization not in {"unit", "relative"} or index_order not in {
+        "ascending",
+        "importance",
+    }:
+        raise ValueError("Invalid normalization or index_order")
+    if not math.isfinite(cumulative_threshold) or not 0 < cumulative_threshold <= 1:
+        raise ValueError("cumulative_threshold must be in (0, 1]")
+    values = np.asarray(ci_squared_values)
+    if values.ndim not in (1, 2) or not values.size or np.iscomplexobj(values):
+        raise ValueError("Expected non-empty CI² with shape (ASF, CSF)")
+    weights = np.atleast_2d(np.asarray(values, dtype=np.float64))
+    if not np.isfinite(weights).all() or np.any(weights < 0):
+        raise ValueError("CI² must be finite and nonnegative")
+    indices = validate_selection_idxs(
+        np.arange(weights.shape[1], dtype=np.int64)
+        if csf_indices is None
+        else csf_indices
+    )
+    if len(indices) != weights.shape[1]:
+        raise ValueError("CSF indices do not match CI² shape (ASF, CSF)")
+    totals = np.sum(weights, axis=1, dtype=np.float64)
+    if not np.isfinite(totals).all():
+        raise ValueError("CI² row totals must be finite")
+    if normalization == "unit" and not np.allclose(totals, 1.0, rtol=0, atol=1e-8):
+        raise ValueError(f"Complete ASF weights must sum to 1, got {totals.tolist()}")
+    per_asf: list[NDArray[np.int64]] = []
+    normalized = np.divide(
+        weights, totals[:, None], out=np.zeros_like(weights), where=totals[:, None] > 0
+    )
+    # Normalization can underflow tiny positive entries in relative mode.
+    # Sorting original weights keeps every nonzero entry when target == 1.
+    for row in weights:
+        order = np.lexsort((-indices, -row))
+        positions = filter_sorted_ci_scores_by_cumulative(
+            row[order], cumulative_threshold
+        )
+        per_asf.append(indices[order[positions]])
+    combined = np.concatenate(per_asf)
+    union = (
+        np.unique(combined)
+        if index_order == "ascending"
+        else _unique_preserve_order(combined)
+    )
+    retained = np.sum(normalized[:, np.isin(indices, union)], axis=1)
+    positive = totals > 0
+    if np.any(retained[positive] + 1e-12 < cumulative_threshold):
+        raise ValueError("Cumulative retention did not meet its target")
+    discarded = np.where(positive, np.maximum(0.0, 1.0 - retained), 0.0)
+    return CumulativeCsfSelection(union, tuple(per_asf), totals, retained, discarded)
+
+
+def select_ci_cumulative_local_idxs(
+    ci_squared_by_block: Sequence[NDArray[np.float64]],
+    *,
+    asf_row_indices: list[list[int]] | None,
+    cumulative_threshold: float,
+) -> NDArray[np.int64]:
+    """Relative cumulative prefixes in concatenated block-local row space.
+
+    This post-processing interface preserves the per-ASF importance traversal
+    order. ASF requests address actual matrix rows, not original level IDs.
+    Zero-total rows are ignored. Missing requested blocks select no rows.
+    """
+    if not math.isfinite(cumulative_threshold) or not 0 < cumulative_threshold <= 1:
+        raise ValueError("cumulative_threshold must be in (0, 1]")
+    if asf_row_indices is not None and len(asf_row_indices) > len(ci_squared_by_block):
+        raise ValueError("ASF selection contains an unknown block")
+    selected: list[NDArray[np.int64]] = []
+    offset = 0
+    for block, values in enumerate(ci_squared_by_block):
+        if values.ndim != 2:
+            raise ValueError("Each CI² block must be a 2D (ASF, CSF) array")
+        if asf_row_indices is None:
+            requested = np.arange(values.shape[0], dtype=np.int64)
+        elif block >= len(asf_row_indices) or not asf_row_indices[block]:
+            requested = np.empty(0, dtype=np.int64)
+        else:
+            requested = np.asarray(asf_row_indices[block])
+        requested = validate_selection_idxs(requested, row_count=values.shape[0])
+        if requested.size:
+            result = select_csf_indices_by_cumulative_weight(
+                values[requested],
+                cumulative_threshold=cumulative_threshold,
+                csf_indices=np.arange(offset, offset + values.shape[1], dtype=np.int64),
+                normalization="relative",
+                index_order="importance",
+            )
+            selected.append(result.indices)
+        offset += values.shape[1]
+    return (
+        _unique_preserve_order(np.concatenate(selected))
+        if selected
+        else np.empty(0, dtype=np.int64)
+    )
+
+
+def project_local_idxs_to_full_pool_idxs(
+    source_sampled_idxs: np.ndarray,
+    local_idxs: np.ndarray,
+    *,
+    pool_row_count: int | None = None,
+) -> NDArray[np.int64]:
+    """Validate and map selected local rows to unique full-pool indices."""
+    source = validate_selection_idxs(source_sampled_idxs, row_count=pool_row_count)
+    selected = validate_selection_idxs(local_idxs, row_count=len(source))
+    return source[selected]
+
+
+def iter_unselected_csf_indices(
+    total_count: int,
+    excluded_indices: np.ndarray,
+    batch_size: int,
+) -> Iterator[NDArray[np.int64]]:
+    """Yield the sorted CSF-index complement without a full-pool mask."""
+    if total_count < 0 or batch_size <= 0:
+        raise ValueError("total_count must be nonnegative and batch_size positive")
+    excluded = np.sort(validate_selection_idxs(excluded_indices, row_count=total_count))
+    for start in range(0, total_count, batch_size):
+        stop = min(start + batch_size, total_count)
+        indices = np.arange(start, stop, dtype=np.int64)
+        lower, upper = np.searchsorted(excluded, [start, stop])
+        mask = np.ones(stop - start, dtype=bool)
+        mask[excluded[lower:upper] - start] = False
+        if np.any(mask):
+            yield indices[mask]
 
 
 def select_csf_indices_above_ci_squared_cutoff(
@@ -51,9 +215,7 @@ def select_csf_indices_by_ci_squared_cutoff(
 
     normalized_rows = normalize_asf_row_indices(asfs_mix_data, asf_row_indices)
 
-    for block, selected_rows in zip(
-        asfs_mix_data.blocks, normalized_rows, strict=True
-    ):
+    for block, selected_rows in zip(asfs_mix_data.blocks, normalized_rows, strict=True):
         block_data = block.mix_coefficients[selected_rows]
 
         squared_scores = ci_squared(block_data)
@@ -190,15 +352,11 @@ def random_choose_csfs(
             random_idxs = generator.choice(
                 unselected_idxs, size=choose_csfs_num, replace=False
             )
-            chosen_csfs_idxs = np.concatenate(
-                [selected_indices, random_idxs]
-            )
+            chosen_csfs_idxs = np.concatenate([selected_indices, random_idxs])
         else:
             chosen_csfs_idxs = selected_indices
     else:
-        chosen_csfs_idxs = generator.choice(
-            all_idxs, size=total_needed, replace=False
-        )
+        chosen_csfs_idxs = generator.choice(all_idxs, size=total_needed, replace=False)
 
     unselected_idxs = np.setdiff1d(all_idxs, chosen_csfs_idxs)
 
@@ -271,28 +429,11 @@ def rmix_cumulative_selected_row_idxs(
     Raises:
         ValueError: If no block/ASF selects any CSF.
     """
-    selected_by_block = rmix_ci_squared.filter_sorted_ci_scores_by_cumulative(
-        cumulative_threshold
-    )
-
-    mapped_by_block: list[NDArray[np.int64]] = []
-    block_offset = 0
-    for block_ci_indices, block_ci_squared in zip(
-        selected_by_block.csf_indices_list,
+    selected = select_ci_cumulative_local_idxs(
         rmix_ci_squared.ci_squared_list,
-        strict=True,
-    ):
-        block_selected = [
-            np.asarray(asf_ci_indices, dtype=np.int64)
-            for asf_ci_indices in block_ci_indices
-            if len(asf_ci_indices) > 0
-        ]
-        if block_selected:
-            block_union = _unique_preserve_order(np.concatenate(block_selected))
-            mapped_by_block.append(block_union + block_offset)
-
-        block_offset += int(block_ci_squared.shape[1])
-
-    if not mapped_by_block:
+        asf_row_indices=None,  # The loader has already selected/reordered ASF rows.
+        cumulative_threshold=cumulative_threshold,
+    )
+    if not selected.size:
         raise ValueError("rmix 累计贡献筛选没有选出任何 CSF")
-    return _unique_preserve_order(np.concatenate(mapped_by_block))
+    return selected

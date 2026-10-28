@@ -313,11 +313,20 @@ def filter_sorted_ci_scores_by_cumulative(
     if not 0 < cumulative_threshold <= 1:
         raise ValueError("cumulative_threshold must be > 0 and <= 1")
     score_array = _as_1d_score_array(sorted_scores, "sorted_scores")
+    if not np.isfinite(score_array).all() or np.any(score_array < 0):
+        raise ValueError("CI-square scores must be finite and non-negative")
     total = float(np.sum(score_array))
+    if not np.isfinite(total):
+        raise ValueError("CI-square total must be finite")
     if total <= 0:
         return np.array([], dtype=np.int64)
+    if cumulative_threshold == 1:
+        return np.flatnonzero(score_array > 0).astype(np.int64, copy=False)
     cumulative = np.cumsum(score_array) / total
-    count = int(np.searchsorted(cumulative, cumulative_threshold, side="left")) + 1
+    count = min(
+        int(np.searchsorted(cumulative, cumulative_threshold, side="left")) + 1,
+        len(score_array),
+    )
     return np.arange(count, dtype=np.int64)
 
 
@@ -390,14 +399,14 @@ def load_rmix_ci_squared(
         0,
         mix_data.block_num,
     ):
-        raise ValueError(
-            "asf_row_indices length must match the number of rmix blocks"
-        )
+        raise ValueError("asf_row_indices length must match the number of rmix blocks")
 
     selected_asf_rows: list[list[int]] = []
     ci_squared_list: list[NDArray[np.float64]] = []
     for block_index, block in enumerate(mix_data.blocks):
-        coefficient_array = _as_1d_or_2d_float_array(block.mix_coefficients, "coefficients")
+        coefficient_array = _as_1d_or_2d_float_array(
+            block.mix_coefficients, "coefficients"
+        )
         block_asf_rows = (
             asf_row_indices[block_index]
             if asf_row_indices is not None and len(asf_row_indices) > 0

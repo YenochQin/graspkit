@@ -43,6 +43,7 @@ SDIST_PATTERNS = {
     "README_zh.md",
     "INSTALL.md",
     "docs/releasing.md",
+    "docs/csf-selection-primitives.md",
     "build_package.py",
     "scripts/check_release.py",
 }
@@ -50,6 +51,7 @@ SDIST_REQUIRED = {
     "pyproject.toml",
     "LICENSE",
     "README.md",
+    "docs/csf-selection-primitives.md",
     "src/graspkit/version.py",
     "src/graspkit/py.typed",
     "scripts/check_release.py",

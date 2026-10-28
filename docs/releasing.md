@@ -1,10 +1,16 @@
 # Preparing a graspkit-atomic release
 
-The prepared stable version is **3.5.1**. Its single source is
+The prepared stable version is **3.5.2**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
-Version 3.5.1 prepares the Python 3.15 compatibility changes; publication is a separate step.
+Version 3.5.2 adds the CI/CSF processing interfaces on the 3.5.1 compatibility baseline; publication is a separate step.
 The local build commands below do not upload files or create Git tags.
 The separate manual publishing workflow is described near the end of this guide.
+
+## Changes in 3.5.2
+
+- Provide deterministic per-ASF cumulative CI-squared selection and diagnostics.
+- Validate and map CSF indices, stream unselected rows, and complete orbital coverage under explicit budgets.
+- Share the cumulative selection kernel with mixing-coefficient processing, independently of ML and workflow state.
 
 ## Changes in 3.5.1
 
@@ -48,8 +54,8 @@ The obsolete `--dev` option is removed; edit the version source deliberately.
 `--clean` removes only matching graspkit-atomic archives from the selected output
 folder. Unknown files cause an error instead of being deleted.
 
-Output: `dist/graspkit_atomic-3.5.1.tar.gz` and
-`dist/graspkit_atomic-3.5.1-py3-none-any.whl`. An optional `--outdir PATH` selects an
+Output: `dist/graspkit_atomic-3.5.2.tar.gz` and
+`dist/graspkit_atomic-3.5.2-py3-none-any.whl`. An optional `--outdir PATH` selects an
 empty output folder. The shell/batch wrappers select the shared Tools Python.
 
 Equivalent individual checks:
@@ -72,7 +78,8 @@ test. The CI workflow installs the wheel and dependencies on a fresh runner.
 ## Files and license
 
 The wheel contains `graspkit` and `graspkit_plot`. The source archive includes
-those sources, metadata, GPLv3 text and selected installation/build docs.
+those sources, metadata, GPLv3 text, selected installation/build docs and the
+public CSF processing guide.
 Research notes, agent instructions, tests, local data and historical reports
 are excluded. Full regression tests remain in the development repository.
 The existing GPLv3 license is recorded as `GPL-3.0-only`.
@@ -104,7 +111,7 @@ with a branch selector. Review all three platform jobs before using the artifact
 ## Before a later publication
 
 1. Review the exact source commit and release changes; rerun the workflow on it.
-2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.5.1
+2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.5.2
    has not already been published. A missing public project page alone does
    not prove that a name is available.
 3. Inspect the actual archives and hashes. Publishing makes their contents
@@ -128,7 +135,7 @@ completing a build does not start a publication. Its inputs are:
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `version` | Required | Exact source version, currently `3.5.1`. |
+| `version` | Required | Exact source version, currently `3.5.2`. |
 | `publish_pypi` | Off | Upload the validated packages to PyPI. |
 | `github_release` | Off | Create a GitHub Release using the same packages. |
 | `draft` | On | Keep the GitHub Release as a draft; turn off only for formal publication. |
@@ -144,7 +151,7 @@ source version, and select the destinations you intend to use:
 | On | On | Build and validate once, then upload the same files to both destinations. |
 
 A prior dry run is optional. No separate workflow, run ID or tag input is
-needed. The GitHub tag is derived as `v{version}`, for example `v3.5.1`.
+needed. The GitHub tag is derived as `v{version}`, for example `v3.5.2`.
 The `draft` option has no effect when `github_release` is off.
 
 ### One build, two independent destinations

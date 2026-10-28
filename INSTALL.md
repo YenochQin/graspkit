@@ -6,9 +6,10 @@ existing import statements need no changes. When migrating an existing project,
 replace the old dependency rather than declaring both distributions, which
 provide the same Python packages.
 
-This checkout prepares 3.5.1 with Python 3.15 / Polars 2.1 compatibility.
+This checkout prepares 3.5.2 with the CI/CSF processing interfaces on the
+Python 3.15 / Polars 2.1 compatibility baseline.
 Use this source checkout until publication; the pinned PyPI examples below
-apply after 3.5.1 is available on the package index.
+apply after 3.5.2 is available on the package index.
 
 ## Install from PyPI
 
@@ -19,12 +20,12 @@ python -m pip install graspkit-atomic
 For a fixed release:
 
 ```bash
-python -m pip install "graspkit-atomic==3.5.1"
+python -m pip install "graspkit-atomic==3.5.2"
 ```
 
 ## Declare a project dependency
 
-Add `"graspkit-atomic==3.5.1"` to the existing `[project].dependencies` list in
+Add `"graspkit-atomic==3.5.2"` to the existing `[project].dependencies` list in
 your own `pyproject.toml`. A minimal example:
 
 ```toml
@@ -32,7 +33,7 @@ your own `pyproject.toml`. A minimal example:
 name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
-dependencies = ["graspkit-atomic==3.5.1"]
+dependencies = ["graspkit-atomic==3.5.2"]
 ```
 
 For a uv-managed project, run `uv sync` after editing `pyproject.toml`, then
@@ -51,7 +52,7 @@ requires the corresponding GRASP data files.
 To install a downloaded wheel, use its exact filename:
 
 ```bash
-python -m pip install /path/to/graspkit_atomic-3.5.1-py3-none-any.whl
+python -m pip install /path/to/graspkit_atomic-3.5.2-py3-none-any.whl
 ```
 
 A standalone source checkout also supports `python -m pip install .`.
