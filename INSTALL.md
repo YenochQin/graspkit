@@ -15,12 +15,12 @@ python -m pip install graspkit-atomic
 For a fixed release:
 
 ```bash
-python -m pip install "graspkit-atomic==3.4.4"
+python -m pip install "graspkit-atomic==3.4.5"
 ```
 
 ## Declare a project dependency
 
-Add `"graspkit-atomic==3.4.4"` to the existing `[project].dependencies` list in
+Add `"graspkit-atomic==3.4.5"` to the existing `[project].dependencies` list in
 your own `pyproject.toml`. A minimal example:
 
 ```toml
@@ -28,7 +28,7 @@ your own `pyproject.toml`. A minimal example:
 name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = ["graspkit-atomic==3.4.4"]
+dependencies = ["graspkit-atomic==3.4.5"]
 ```
 
 For a uv-managed project, run `uv sync` after editing `pyproject.toml`, then
@@ -47,7 +47,7 @@ requires the corresponding GRASP data files.
 To install a downloaded wheel, use its exact filename:
 
 ```bash
-python -m pip install /path/to/graspkit_atomic-3.4.4-py3-none-any.whl
+python -m pip install /path/to/graspkit_atomic-3.4.5-py3-none-any.whl
 ```
 
 A standalone source checkout also supports `python -m pip install .`.

@@ -16,6 +16,51 @@ def _records(payloads: list[bytes]) -> bytes:
     )
 
 
+@pytest.mark.parametrize("file_parity, expected_parity", [(1, 1), (-1, 2), (2, 2)])
+@pytest.mark.parametrize("level_count", [0, 1])
+def test_signed_grasp_parity_is_normalized_and_written_in_native_format(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    file_parity: int,
+    expected_parity: int,
+    level_count: int,
+) -> None:
+    # GRASP writes ISPAR = +/-1; the public Python model uses 1=even, 2=odd.
+    path = tmp_path / "native.cm"
+    payloads = [
+        b"G92MIX",
+        struct.pack("=6i", 2, 1, 2, level_count, level_count, 1),
+        struct.pack("=5i", 1, 1, level_count, 3, file_parity),
+    ]
+    if level_count:
+        payloads.extend(
+            [
+                struct.pack("=i", 2),
+                struct.pack("=2d", -2.0, 0.04),
+                struct.pack("=d", 1.0),
+            ]
+        )
+    path.write_bytes(_records(payloads))
+
+    data = MixCoefLoader(path).load()
+    assert data.parity_list == [expected_parity]
+    assert data.blocks[0].mix_coefficients.shape == (level_count, 1)
+    display = capsys.readouterr().out
+    if level_count:
+        assert ("+" if expected_parity == 1 else "-") in display
+
+    output = tmp_path / "roundtrip.cm"
+    write_mix_coefficient_block(
+        output, data.blocks[0], electron_count=2, orbital_count=2
+    )
+    native_parity = 1 if expected_parity == 1 else -1
+    payloads[2] = struct.pack("=5i", 1, 1, level_count, 3, native_parity)
+    assert output.read_bytes() == _records(payloads)
+    assert MixCoefLoader(output).load(show_levels=False).parity_list == [
+        expected_parity
+    ]
+
+
 def test_loader_handles_empty_block_before_populated_block_and_high_j(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -99,6 +144,7 @@ def test_empty_mix_file_prints_and_writes_no_level_records(
         "negative_id",
         "truncated",
         "marker",
+        "parity",
     ],
 )
 def test_loader_rejects_inconsistent_or_incomplete_file(
@@ -110,7 +156,7 @@ def test_loader_rejects_inconsistent_or_incomplete_file(
     records = [
         b"G92MIX",
         struct.pack("=6i", *totals),
-        struct.pack("=5i", 1, 1, 1, 1, 1),
+        struct.pack("=5i", 1, 1, 1, 1, 0 if fault == "parity" else 1),
         struct.pack("=i", 0 if fault == "negative_id" else 1),
         struct.pack("=2d", -1, 0),
         struct.pack("=d", 1),

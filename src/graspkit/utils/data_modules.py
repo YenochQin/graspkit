@@ -12,6 +12,7 @@ class MixCoefficientBlock:
     ``level_ids`` contains GRASP identifiers from ``ivec``. It is metadata,
     not a matrix index. Rows of ``level_energies`` and ``mix_coefficients``
     are addressed only by zero-based ``asf_row_indices``.
+    ``parity`` uses 1 for even and 2 for odd; binary I/O converts GRASP's +/-1.
     """
 
     block_index: int

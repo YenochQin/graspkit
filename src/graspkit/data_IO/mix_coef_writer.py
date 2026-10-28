@@ -31,6 +31,7 @@ def write_mix_coefficient_block(
     As in rasfsplit, a block with no levels has no following data records.
     Uses native byte order, int32 record markers/integers, and float64 data,
     matching :class:`MixCoefLoader`. An existing output is overwritten.
+    Python parity (1=even, 2=odd) is written as GRASP ISPAR (+1/-1).
     """
     coefficient_count = block.csf_count * block.level_count
     counts = (
@@ -75,7 +76,7 @@ def write_mix_coefficient_block(
                     block.csf_count,
                     block.level_count,
                     block.j_value_location,
-                    block.parity,
+                    1 if block.parity == 1 else -1,
                 ],
                 dtype=np.int32,
             ),

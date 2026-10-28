@@ -116,8 +116,12 @@ class MixCoefLoader(BinaryFileLoader):
                 if jblock != nb:
                     raise ValueError(f"jblock ({jblock}) != nb ({nb})")
 
-                if ncfblk < 1 or nevblk < 0 or iatjp < 1 or iaspa not in (1, 2):
+                if ncfblk < 1 or nevblk < 0 or iatjp < 1 or iaspa not in (-1, 1, 2):
                     raise ValueError(f"Invalid mix coefficient block {nb} header")
+
+                # GRASP stores signed ISPAR (+1/-1). Keep the public Python
+                # convention (1=even, 2=odd), also accepting older Python files.
+                parity = 2 if iaspa == -1 else iaspa
 
                 # GRASP omits all three data records when nevblk == 0.
                 if nevblk:
@@ -160,7 +164,7 @@ class MixCoefLoader(BinaryFileLoader):
                             if (iatjp - 1) % 2 == 0
                             else f"{iatjp - 1}/2"
                         ),
-                        parity=iaspa,
+                        parity=parity,
                         level_ids=ivec_array.astype(np.int64, copy=False),
                         base_energy=eav,
                         level_energies=evals,
