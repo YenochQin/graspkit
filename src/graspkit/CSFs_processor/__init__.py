@@ -2,7 +2,9 @@
 """CSF parsing, coupling-J analysis, and deterministic selection algorithms."""
 
 from .coupling import (
+    CumulativeCouplingSelection,
     collect_coupling_groups,
+    select_csfs_by_cumulative_coupling,
     select_csfs_by_coupling_theme,
     summarize_coupling_ci_squared,
 )
@@ -41,7 +43,9 @@ from .validation import (
 
 __all__ = [
     # coupling
+    "CumulativeCouplingSelection",
     "collect_coupling_groups",
+    "select_csfs_by_cumulative_coupling",
     "select_csfs_by_coupling_theme",
     "summarize_coupling_ci_squared",
     # selection

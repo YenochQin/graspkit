@@ -5,6 +5,7 @@ import pytest
 from graspkit.CSFs_processor.coupling import (
     collect_coupling_groups,
     select_csfs_by_coupling_theme,
+    select_csfs_by_cumulative_coupling,
     summarize_coupling_ci_squared,
 )
 from graspkit.utils.data_modules import MixCoefficientBlock, MixCoefficientData
@@ -183,7 +184,9 @@ def test_collect_coupling_groups_uses_rcsfs_signature_and_block_local_indices() 
     ]
 
 
-def test_collect_coupling_groups_excludes_total_j_before_taking_trailing_values() -> None:
+def test_collect_coupling_groups_excludes_total_j_before_taking_trailing_values() -> (
+    None
+):
     result = collect_coupling_groups(_csfs_df(), coupling_level=1)
 
     assert result.to_dicts() == [
@@ -437,3 +440,44 @@ def test_summarize_coupling_ci_squared_rejects_multiple_j_values_in_csf_block() 
 
     with pytest.raises(ValueError, match="多个总 J"):
         summarize_coupling_ci_squared(csfs_df, mix_data)
+
+
+def test_cumulative_coupling_unions_prefix_and_dominant_members_in_source_order() -> (
+    None
+):
+    # Four exactly equal weights. The prefix tie selects later CSFs, whereas
+    # two equal channel totals select the channel first seen in source order.
+    frame = pl.DataFrame(
+        {
+            "idx": [7, 12, 4, 9],
+            "block_id": [0] * 4,
+            "coupling_signature": [[2, 8], [6, 8], [2, 8], [6, 8]],
+        },
+        schema_overrides={"coupling_signature": pl.List(pl.Int32)},
+    )
+    mix = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[0.5, -0.5, 0.5, -0.5], [1.0, 0.0, 0.0, 0.0]]))
+        ],
+        sorted_level_energies=[],
+    )
+    result = select_csfs_by_cumulative_coupling(
+        frame, mix, cumulative_threshold=0.4, coupling_level=1, asf_row_indices=[[0]]
+    )
+    assert result.prefix_counts == {0: 2}
+    assert result.dominant_channels["coupling_signature"].to_list() == [[2]]
+    assert result.selected_csfs["idx"].to_list() == [7, 4, 9]
+
+
+def test_cumulative_coupling_requires_complete_asf_like_ml_presampling() -> None:
+    mix = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[0.1, 0.2, 0.0]])),
+            _mix_block(1, np.array([[1.0, 0.0]])),
+        ],
+        sorted_level_energies=[],
+    )
+    with pytest.raises(ValueError, match="weights must sum to 1"):
+        select_csfs_by_cumulative_coupling(
+            _csfs_df(), mix, cumulative_threshold=1.0, coupling_level=1
+        )

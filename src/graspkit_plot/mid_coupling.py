@@ -57,6 +57,19 @@ def _coupling_label(signature: list[int]) -> str:
     return labels[0] if len(labels) == 1 else "(" + ", ".join(labels) + ")"
 
 
+def _twice_j_value(j_value: str) -> int:
+    if "/" in j_value:
+        numerator, denominator = j_value.split("/", maxsplit=1)
+        return 2 * int(numerator) // int(denominator)
+    return 2 * int(j_value)
+
+
+def mid_coupling_output_stem(*, parity: int, asf_row_index: int, j_value: str) -> str:
+    """Name a plot using parity, one-based ASF row and twice J."""
+    parity_prefix = {1: "e", 2: "o"}.get(parity, f"p{parity}")
+    return f"{parity_prefix}{asf_row_index + 1}_2J{_twice_j_value(j_value)}_MCJ"
+
+
 def _find_block(mix_data: MixCoefficientData, block_id: int) -> MixCoefficientBlock:
     for block in mix_data.blocks:
         if block.block_index == block_id:
@@ -76,6 +89,40 @@ def build_mid_coupling_plot_series(
     max_channels: int | None = None,
 ) -> MidCouplingPlotSeries:
     """Aggregate one ASF into contribution-sorted channels and an Others bin."""
+    block = _find_block(mix_data, block_id)
+    if asf_row_index < 0 or asf_row_index >= block.level_count:
+        raise ValueError(
+            f"block {block_id} asf_row_index is outside [0, {block.level_count})"
+        )
+    summary = summarize_coupling_ci_squared(
+        csfs_df,
+        mix_data,
+        asf_row_indices=[
+            [asf_row_index] if candidate.block_index == block_id else []
+            for candidate in mix_data.blocks
+        ],
+        coupling_level=coupling_level,
+        include_members=False,
+        allow_empty_blocks=True,
+    )
+    return _series_from_summary(
+        summary,
+        block,
+        asf_row_index,
+        min_csf_percentage,
+        min_contribution,
+        max_channels,
+    )
+
+
+def _series_from_summary(
+    summary: pl.DataFrame,
+    block: MixCoefficientBlock,
+    asf_row_index: int,
+    min_csf_percentage: float,
+    min_contribution: float,
+    max_channels: int | None,
+) -> MidCouplingPlotSeries:
     if not math.isfinite(min_csf_percentage) or min_csf_percentage < 0:
         raise ValueError("min_csf_percentage must be finite and non-negative")
     if not math.isfinite(min_contribution) or min_contribution < 0:
@@ -83,28 +130,10 @@ def build_mid_coupling_plot_series(
     if max_channels is not None and max_channels <= 0:
         raise ValueError("max_channels must be a positive integer or None")
 
-    block = _find_block(mix_data, block_id)
-    if asf_row_index < 0 or asf_row_index >= block.level_count:
-        raise ValueError(
-            f"block {block_id} asf_row_index is outside [0, {block.level_count})"
-        )
-
-    summary = summarize_coupling_ci_squared(
-        csfs_df,
-        mix_data,
-        asf_row_indices=[
-            [asf_row_index]
-            if candidate.block_index == block_id
-            else candidate.asf_row_indices.tolist()
-            for candidate in mix_data.blocks
-        ],
-        coupling_level=coupling_level,
-    ).filter(
-        (pl.col("block_id") == block_id)
-        & (pl.col("asf_index") == asf_row_index)
-    )
     if summary.is_empty():
-        raise ValueError(f"block {block_id}, ASF row {asf_row_index} has no CSFs")
+        raise ValueError(
+            f"block {block.block_index}, ASF row {asf_row_index} has no CSFs"
+        )
 
     rows = sorted(
         summary.iter_rows(named=True),
@@ -138,7 +167,7 @@ def build_mid_coupling_plot_series(
 
     parity_labels = {1: "+", 2: "-"}
     return MidCouplingPlotSeries(
-        block_id=block_id,
+        block_id=block.block_index,
         asf_row_index=asf_row_index,
         level_id=int(block.level_ids[asf_row_index]),
         j_value=block.j_value,
@@ -254,27 +283,31 @@ def plot_mid_coupling_contribution(
             alpha=0.75,
             label="Contribution Value",
         )
-        contribution_axis.set_ylabel("Contribution Value", color=_TEXT_COLOR, fontsize=12)
+        contribution_axis.set_ylabel(
+            "Contribution Value", color=_TEXT_COLOR, fontsize=12
+        )
         contribution_axis.tick_params(axis="y", labelcolor=_TEXT_COLOR)
         contribution_upper_limit = _contribution_axis_upper_limit(series.contributions)
         contribution_axis.set_ylim(0.0, contribution_upper_limit)
 
         for index, bar in enumerate(bars):
             center = bar.get_x() + bar.get_width() / 2
-            percentage_axis.annotate(
-                f"{series.csf_percentages[index]:.1f}%",
-                (center, bar.get_height()),
-                xytext=(0, 4),
-                textcoords="offset points",
-                ha="center",
-                va="bottom",
-            )
+            layout = _contribution_label_layout(series.contributions, index)
             x_offset, y_offset, alignment = _avoid_bar_label_collision(
-                layout=_contribution_label_layout(series.contributions, index),
+                layout=layout,
                 contribution=series.contributions[index],
                 contribution_upper_limit=contribution_upper_limit,
                 csf_percentage=series.csf_percentages[index],
                 percentage_upper_limit=percentage_upper_limit,
+            )
+            separate_labels = y_offset > layout[1]
+            percentage_axis.annotate(
+                f"{series.csf_percentages[index]:.1f}%",
+                (center, bar.get_height()),
+                xytext=(8, 4) if separate_labels else (0, 4),
+                textcoords="offset points",
+                ha="left" if separate_labels else "center",
+                va="bottom",
             )
             contribution_axis.annotate(
                 f"{series.contributions[index]:.3f}",
@@ -286,15 +319,71 @@ def plot_mid_coupling_contribution(
                 color=_TEXT_COLOR,
             )
 
-        contribution_axis.legend(loc="upper right", frameon=False)
+        contribution_axis.legend(loc="lower right", bbox_to_anchor=(1, 1), frameon=False)
         figure.tight_layout()
         figure.savefig(output_path, bbox_inches="tight")
         plt.close(figure)
     return output_path
 
 
+def save_mid_coupling_plots(
+    csfs_df: pl.DataFrame,
+    mix_data: MixCoefficientData,
+    output_dir: Path,
+    *,
+    asf_row_indices: list[list[int]] | None = None,
+    coupling_level: int = 1,
+    min_csf_percentage: float = 0.0,
+    min_contribution: float = 0.0,
+    max_channels: int | None = None,
+    formats: tuple[str, ...] = ("svg",),
+) -> list[Path]:
+    """Group CSFs once and render each requested ASF in the specified formats."""
+    if not formats or any(fmt not in {"svg", "png", "pdf"} for fmt in formats):
+        raise ValueError("formats must contain svg, png or pdf")
+    requested_rows = (
+        asf_row_indices
+        if asf_row_indices is not None
+        else [block.asf_row_indices.tolist() for block in mix_data.blocks]
+    )
+    summary = summarize_coupling_ci_squared(
+        csfs_df,
+        mix_data,
+        [list(dict.fromkeys(rows)) for rows in requested_rows],
+        coupling_level,
+        include_members=False,
+        allow_empty_blocks=True,
+    )
+    by_asf = summary.partition_by(["block_id", "asf_index"], as_dict=True)
+    used_stems: set[str] = set()
+    paths: list[Path] = []
+    for block, rows in zip(mix_data.blocks, requested_rows, strict=True):
+        for row in rows:
+            series = _series_from_summary(
+                by_asf[(block.block_index, row)],
+                block,
+                row,
+                min_csf_percentage,
+                min_contribution,
+                max_channels,
+            )
+            stem = mid_coupling_output_stem(
+                parity=block.parity, asf_row_index=row, j_value=block.j_value
+            )
+            if stem in used_stems:
+                stem = f"{stem}_b{block.block_index + 1}"
+            used_stems.add(stem)
+            for fmt in formats:
+                paths.append(
+                    plot_mid_coupling_contribution(series, output_dir / f"{stem}.{fmt}")
+                )
+    return paths
+
+
 __all__ = [
     "MidCouplingPlotSeries",
     "build_mid_coupling_plot_series",
     "plot_mid_coupling_contribution",
+    "mid_coupling_output_stem",
+    "save_mid_coupling_plots",
 ]

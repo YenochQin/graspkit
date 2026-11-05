@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from dataclasses import dataclass
 from fractions import Fraction
 
 import numpy as np
@@ -10,6 +12,7 @@ from numpy.typing import NDArray
 import polars as pl
 
 from ..utils.data_modules import MixCoefficientData
+from .selection import select_csf_indices_by_cumulative_weight
 from .validation import (
     normalize_asf_row_indices,
     validate_coupling_level,
@@ -129,11 +132,14 @@ def _selected_block_coefficients(
     csfs_df: pl.DataFrame,
     asfs_mix_data: MixCoefficientData,
     asf_row_indices: list[list[int]] | None,
-) -> list[tuple[int, list[int], NDArray[np.float64]]]:
+    *,
+    allow_empty_blocks: bool = False,
+) -> Iterator[tuple[int, list[int], NDArray[np.float64]]]:
     """Validate J/CSF alignment and return selected ASF coefficient matrices."""
     normalized_positions = normalize_asf_row_indices(
         asfs_mix_data,
         asf_row_indices,
+        allow_empty_blocks=allow_empty_blocks,
     )
     dataframe_block_ids = (
         csfs_df.get_column("block_id").unique(maintain_order=True).to_list()
@@ -144,7 +150,6 @@ def _selected_block_coefficients(
             f"CSF block IDs {dataframe_block_ids} 与 rmix block IDs {mix_block_ids} 不一致"
         )
 
-    selected_blocks: list[tuple[int, list[int], NDArray[np.float64]]] = []
     for mix_block, mix_j_value, selected_positions in zip(
         asfs_mix_data.blocks,
         asfs_mix_data.level_J_value_list,
@@ -160,21 +165,16 @@ def _selected_block_coefficients(
                 f"Block {mix_block.block_index}: mixing coefficients 必须是二维矩阵"
             )
 
-        dataframe_block = csfs_df.filter(
-            pl.col("block_id") == mix_block.block_index
+        signatures = csfs_df[_COUPLING_SIGNATURE_COLUMN].filter(
+            csfs_df["block_id"] == mix_block.block_index
         )
-        dataframe_csf_count = dataframe_block.height
+        dataframe_csf_count = len(signatures)
         if coefficient_matrix.shape[1] != dataframe_csf_count:
             raise ValueError(
                 f"Block {mix_block.block_index}: rmix CSF 数量 {coefficient_matrix.shape[1]} 与 CSF DataFrame {dataframe_csf_count} 不一致"
             )
 
-        csf_two_j_values = (
-            dataframe_block.get_column(_COUPLING_SIGNATURE_COLUMN)
-            .list.last()
-            .unique(maintain_order=True)
-            .to_list()
-        )
+        csf_two_j_values = signatures.list.last().unique(maintain_order=True).to_list()
         if len(csf_two_j_values) != 1:
             raise ValueError(
                 f"Block {mix_block.block_index}: CSF DataFrame 包含多个总 J: 2J={csf_two_j_values}"
@@ -186,14 +186,11 @@ def _selected_block_coefficients(
                 f"Block {mix_block.block_index}: CSF J={_format_twice_j(csf_two_j)} 与 rmix J={mix_j_value} 不一致"
             )
 
-        selected_blocks.append(
-            (
-                mix_block.block_index,
-                selected_positions,
-                coefficient_matrix[selected_positions],
-            )
+        yield (
+            mix_block.block_index,
+            selected_positions,
+            coefficient_matrix[selected_positions],
         )
-    return selected_blocks
 
 
 def _twice_j_value(j_value: str, *, block_index: int) -> int:
@@ -216,53 +213,38 @@ def _format_twice_j(two_j: int) -> str:
     return f"{two_j}/2"
 
 
-def _mixing_coefficients_to_long_frame(
-    csfs_df: pl.DataFrame,
-    asfs_mix_data: MixCoefficientData,
-    asf_row_indices: list[list[int]] | None,
-) -> pl.DataFrame:
-    """Convert selected ASF-by-CSF matrices to one Polars long frame."""
-    long_frames: list[pl.DataFrame] = []
-    for (
-        block_index,
-        selected_positions,
-        selected_coefficients,
-    ) in _selected_block_coefficients(csfs_df, asfs_mix_data, asf_row_indices):
-        selected_count = len(selected_positions)
-        csf_count = selected_coefficients.shape[1]
-        long_frames.append(
-            pl.DataFrame(
-                {
-                    "block_id": np.full(
-                        selected_count * csf_count,
-                        block_index,
-                        dtype=np.uint32,
-                    ),
-                    "asf_index": np.repeat(
-                        np.asarray(selected_positions, dtype=np.int64),
-                        csf_count,
-                    ),
-                    "block_csf_idx": np.tile(
-                        np.arange(csf_count, dtype=np.uint64),
-                        selected_count,
-                    ),
-                    "ci_squared": np.square(
-                        selected_coefficients,
-                        dtype=np.float64,
-                    ).reshape(-1),
-                },
-                schema={
-                    "block_id": pl.UInt32,
-                    "asf_index": pl.Int64,
-                    "block_csf_idx": pl.UInt64,
-                    "ci_squared": pl.Float64,
-                },
-            )
-        )
+@dataclass(frozen=True)
+class _WeightedCouplingBlock:
+    block_id: int
+    asf_rows: list[int]
+    groups: pl.DataFrame
+    ci_squared: NDArray[np.float64]
+    channel_sums: NDArray[np.float64]
 
-    if not long_frames:
-        raise ValueError("没有可汇总的 mixing coefficient block")
-    return pl.concat(long_frames, how="vertical")
+
+def _weighted_coupling_blocks(
+    csfs_df: pl.DataFrame,
+    mix_data: MixCoefficientData,
+    asf_row_indices: list[list[int]] | None,
+    coupling_level: int | None,
+    *,
+    allow_empty_blocks: bool = False,
+) -> Iterator[_WeightedCouplingBlock]:
+    """Group each CSF once, then sum each ASF over the same source-ordered members."""
+    groups = collect_coupling_groups(csfs_df, coupling_level)
+    for block_id, rows, coefficients in _selected_block_coefficients(
+        csfs_df, mix_data, asf_row_indices, allow_empty_blocks=allow_empty_blocks
+    ):
+        if not rows:
+            continue
+        block_groups = groups.filter(pl.col("block_id") == block_id)
+        members = block_groups["idxs"].explode().to_numpy()
+        counts = block_groups["count"].to_numpy()
+        starts = np.cumsum(counts, dtype=np.int64) - counts
+        weights = np.square(coefficients)
+        # Reduce one ASF at a time to bound temporary storage by the block size.
+        sums = np.stack([np.add.reduceat(row[members], starts) for row in weights])
+        yield _WeightedCouplingBlock(block_id, rows, block_groups, weights, sums)
 
 
 def summarize_coupling_ci_squared(
@@ -270,56 +252,103 @@ def summarize_coupling_ci_squared(
     asfs_mix_data: MixCoefficientData,
     asf_row_indices: list[list[int]] | None = None,
     coupling_level: int | None = None,
+    *,
+    include_members: bool = True,
+    allow_empty_blocks: bool = False,
 ) -> pl.DataFrame:
-    """Summarize CI-square contributions by block, ASF, and coupling pattern.
+    """Return channel counts and CI² sums in block, ASF and source-channel order.
 
-    The returned frame is in long form: one row represents one selected ASF
-    and one coupling signature in one block. This keeps the ASF identity
-    explicit instead of encoding aligned sums in nested dictionaries.
+    By default also return the block-local and source indices of each member.
+    For plots, omit the member lists and allow empty ASF lists to skip blocks.
     """
-    _validate_coupling_frame(csfs_df)
-    annotated = _with_selected_coupling(csfs_df, coupling_level).select(
-        "block_id",
-        "block_csf_idx",
-        pl.col("idx").cast(pl.UInt64()),
-        _SELECTED_COUPLING_COLUMN,
-    )
-    coefficient_frame = _mixing_coefficients_to_long_frame(
+    frames: list[pl.DataFrame] = []
+    for block in _weighted_coupling_blocks(
         csfs_df,
         asfs_mix_data,
         asf_row_indices,
-    )
-    joined = coefficient_frame.join(
-        annotated,
-        on=["block_id", "block_csf_idx"],
-        how="inner",
-        validate="m:1",
-        maintain_order="left",
-    )
-    if joined.height != coefficient_frame.height:
-        raise ValueError("mixing coefficient 行与 CSF DataFrame 未能完整对齐")
+        coupling_level,
+        allow_empty_blocks=allow_empty_blocks,
+    ):
+        groups = (
+            block.groups
+            if include_members
+            else block.groups.drop("idxs", "global_idxs")
+        )
+        for asf_index, channel_sums in zip(
+            block.asf_rows, block.channel_sums, strict=True
+        ):
+            frames.append(
+                groups.with_columns(
+                    pl.lit(asf_index, dtype=pl.Int64).alias("asf_index"),
+                    pl.Series("sum_ci", channel_sums),
+                )
+            )
+    schema: dict[str, type[pl.DataType] | pl.DataType] = {
+        "block_id": pl.UInt32,
+        "asf_index": pl.Int64,
+        "coupling_signature": pl.List(pl.Int32),
+        "count": pl.UInt32,
+    }
+    if include_members:
+        schema.update(idxs=pl.List(pl.UInt64), global_idxs=pl.List(pl.UInt64))
+    schema["sum_ci"] = pl.Float64
+    if not frames:
+        return pl.DataFrame(schema=schema)
+    return pl.concat(frames).select(list(schema)).cast({"block_id": pl.UInt32})
 
-    return (
-        joined.group_by(
-            ["block_id", "asf_index", _SELECTED_COUPLING_COLUMN],
-            maintain_order=True,
+
+@dataclass(frozen=True)
+class CumulativeCouplingSelection:
+    """Source-ordered selection and the statistics used to construct it."""
+
+    selected_csfs: pl.DataFrame
+    prefix_counts: dict[int, int]
+    dominant_channels: pl.DataFrame
+
+
+def select_csfs_by_cumulative_coupling(
+    csfs_df: pl.DataFrame,
+    mix_data: MixCoefficientData,
+    *,
+    cumulative_threshold: float,
+    coupling_level: int,
+    asf_row_indices: list[list[int]] | None = None,
+) -> CumulativeCouplingSelection:
+    """Union each selected ASF's normalized CI² prefix and its dominant channel.
+
+    Prefix ties follow select_csf_indices_by_cumulative_weight. Equal channel
+    sums select the first channel in CSF source order, as in ML presampling.
+    """
+    selected = np.zeros(csfs_df.height, dtype=np.bool_)
+    prefix_counts: dict[int, int] = {}
+    dominant_frames: list[pl.DataFrame] = []
+    for block in _weighted_coupling_blocks(
+        csfs_df, mix_data, asf_row_indices, coupling_level
+    ):
+        prefix = select_csf_indices_by_cumulative_weight(
+            block.ci_squared, cumulative_threshold=cumulative_threshold
         )
-        .agg(
-            pl.len().alias("count"),
-            pl.col("block_csf_idx").alias("idxs"),
-            pl.col("idx").alias("global_idxs"),
-            pl.col("ci_squared").sum().alias("sum_ci"),
+        prefix_counts[block.block_id] = len(prefix.indices)
+        winners = np.argmax(block.channel_sums, axis=1)
+        block_mask = np.zeros(block.ci_squared.shape[1], dtype=np.bool_)
+        block_mask[prefix.indices] = True
+        theme_members = (
+            block.groups["idxs"].gather(np.unique(winners)).explode().to_numpy()
         )
-        .rename({_SELECTED_COUPLING_COLUMN: _COUPLING_SIGNATURE_COLUMN})
-        .select(
-            "block_id",
-            "asf_index",
-            _COUPLING_SIGNATURE_COLUMN,
-            "count",
-            "idxs",
-            "global_idxs",
-            "sum_ci",
+        block_mask[theme_members] = True
+        selected[csfs_df["block_id"].to_numpy() == block.block_id] = block_mask
+        dominant_frames.append(
+            block.groups.select("block_id", "coupling_signature", "count")[
+                winners
+            ].with_columns(
+                pl.Series("asf_index", block.asf_rows, dtype=pl.Int64),
+                pl.Series(
+                    "sum_ci", block.channel_sums[np.arange(len(winners)), winners]
+                ),
+            )
         )
+    return CumulativeCouplingSelection(
+        csfs_df.filter(selected), prefix_counts, pl.concat(dominant_frames)
     )
 
 

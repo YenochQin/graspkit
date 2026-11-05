@@ -43,6 +43,8 @@ __all__ = [
     "optimize_for_multi_subplot",
     "optimize_for_plot_type",
     "plot_mid_coupling_contribution",
+    "mid_coupling_output_stem",
+    "save_mid_coupling_plots",
     "resolve_transformed_xscale",
     "rwfn_plot",
     "rwfns_compare_plot",

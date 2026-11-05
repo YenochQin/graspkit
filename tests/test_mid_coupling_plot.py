@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
@@ -13,6 +14,7 @@ from graspkit_plot import (
     MidCouplingPlotSeries,
     build_mid_coupling_plot_series,
     plot_mid_coupling_contribution,
+    save_mid_coupling_plots,
 )
 from graspkit_plot.mid_coupling import _mid_coupling_bar_colors
 
@@ -103,9 +105,7 @@ def test_plot_mid_coupling_contribution_writes_svg(tmp_path: Path) -> None:
 
 
 def test_mid_coupling_bars_use_requested_positional_palette() -> None:
-    colors = _mid_coupling_bar_colors(
-        ["7/2", "5/2", "9/2", "3/2", "Others"]
-    )
+    colors = _mid_coupling_bar_colors(["7/2", "5/2", "9/2", "3/2", "Others"])
 
     assert [to_hex(color) for color in colors] == [
         "#56b4e9",
@@ -162,3 +162,37 @@ def test_all_mid_coupling_bars_have_no_visible_border(
 
     assert bar_kwargs["edgecolor"] == "none"
     assert bar_kwargs["linewidth"] == 0
+
+
+def test_batch_plots_select_blocks_and_asfs_in_requested_order(tmp_path: Path) -> None:
+    frame = _csfs_frame()
+    block = _mix_data().blocks[0]
+    frames = [
+        frame.with_columns(
+            pl.lit(i, dtype=pl.UInt32).alias("block_id"), pl.col("idx") + 5 * i
+        )
+        for i in range(3)
+    ]
+    mix = MixCoefficientData(
+        blocks=[replace(block, block_index=i) for i in range(3)],
+        sorted_level_energies=[],
+    )
+    paths = save_mid_coupling_plots(
+        pl.concat(frames),
+        mix,
+        tmp_path,
+        asf_row_indices=[[1, 0], [], [1]],
+        formats=("svg", "png"),
+        min_contribution=0.075,
+    )
+    assert [p.name for p in paths] == [
+        "e2_2J2_MCJ.svg",
+        "e2_2J2_MCJ.png",
+        "e1_2J2_MCJ.svg",
+        "e1_2J2_MCJ.png",
+        "e2_2J2_MCJ_b3.svg",
+        "e2_2J2_MCJ_b3.png",
+    ]
+    assert "0.700" in paths[0].read_text()
+    assert "0.800" in paths[2].read_text()
+    assert all(p.stat().st_size > 0 for p in paths)

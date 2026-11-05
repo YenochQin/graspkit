@@ -203,6 +203,8 @@ def validate_coupling_level(coupling_level: int | None) -> int | None:
 def normalize_asf_row_indices(
     asfs_mix_data: MixCoefficientData,
     asf_row_indices: Sequence[Sequence[int]] | None,
+    *,
+    allow_empty_blocks: bool = False,
 ) -> list[list[int]]:
     """Normalize and validate ASF matrix row indices for every rmix block."""
     if asf_row_indices is None:
@@ -221,7 +223,7 @@ def normalize_asf_row_indices(
     for block, row_indices in zip(
         asfs_mix_data.blocks, normalized_row_indices, strict=True
     ):
-        if not row_indices:
+        if not row_indices and not allow_empty_blocks:
             raise ValueError(f"Block {block.block_index}: asf_row_indices 不能为空")
         if len(row_indices) != len(set(row_indices)):
             raise ValueError(f"Block {block.block_index}: asf_row_indices 包含重复值")
