@@ -12,12 +12,12 @@
 - `graspkit.utils`：通用 GRASP 数据模型、环境检测和量子数工具。
 - `graspkit_plot`：绘图和出版级样式工具。
 
-3.5.2 的 CI² 累计筛选、索引映射与轨道覆盖接口见
-[CSF 处理接口文档](docs/csf-selection-primitives.md)。这些新增接口尚未发布，需使用配套源码。
+3.5.3 支持按累计 CI² 与主导耦合通道联合筛选 CSF，并为选定的 ASF 批量绘图。
+详见[版本说明](docs/releasing.md#changes-in-353)和[CSF 处理接口文档](docs/csf-selection-primitives.md)。
 
 ## 安装
 
-Python 3.15 / Polars 2.1 兼容修改尚未发布，请暂用源码版本。
+3.5.3 发布前可使用本版源码安装。
 
 使用 Python 3.15 或更新版本，从 [PyPI 安装 graspkit-atomic](https://pypi.org/project/graspkit-atomic/)。
 分发包名为 `graspkit-atomic`，Python 导入名为 `graspkit` 和 `graspkit_plot`。
@@ -36,7 +36,7 @@ uv run python -c "import graspkit; print(graspkit.__version__)"
 已有 uv 项目使用 Python 3.15 或更新版本时，直接在其目录运行 `uv add graspkit-atomic`。
 该命令会将依赖写入 `pyproject.toml`，更新 `uv.lock`，并安装到项目的 `.venv` 中。
 运行自己的分析脚本时使用 `uv run python analysis.py`，无需手动激活环境。
-需要固定版本时，使用 `uv add "graspkit-atomic==3.5.2"`。
+需要固定版本时，使用 `uv add "graspkit-atomic==3.5.3"`。
 
 也可以手动将依赖加入已有的 `pyproject.toml`：
 
@@ -46,7 +46,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.5.2",
+    "graspkit-atomic==3.5.3",
 ]
 ```
 

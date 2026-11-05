@@ -16,14 +16,13 @@ GRASP atomic-structure calculation results.
   quantum-number helpers.
 - `graspkit_plot`: plotting and publication-style helpers.
 
-For version 3.5.2's cumulative CI² selection, index mapping and
-orbital coverage interfaces, see [CSF processing primitives](docs/csf-selection-primitives.md).
-These newly added interfaces require this source checkout until the next release.
+Version 3.5.3 adds cumulative coupling-channel selection and batch plotting
+for selected ASFs. See the [release notes](docs/releasing.md#changes-in-353)
+and the [CSF processing primitives](docs/csf-selection-primitives.md).
 
 ## Installation
 
-The Python 3.15 / Polars 2.1 compatibility changes are unreleased; use this
-source checkout until the next package release.
+Use this source checkout for 3.5.3 until the package is published.
 
 Install [graspkit-atomic from PyPI](https://pypi.org/project/graspkit-atomic/)
 with Python 3.15 or newer. The distribution name is `graspkit-atomic`;
@@ -45,7 +44,7 @@ For an existing uv project using Python 3.15 or newer, run `uv add graspkit-atom
 in its directory. This records the dependency in `pyproject.toml`, updates
 `uv.lock`, and installs it in the project's `.venv`. Use `uv run python analysis.py`
 to run your own analysis script; manual environment activation is not required.
-To pin a particular release, use `uv add "graspkit-atomic==3.5.2"`.
+To pin a particular release, use `uv add "graspkit-atomic==3.5.3"`.
 
 You can also add the dependency to an existing `pyproject.toml` manually:
 
@@ -55,7 +54,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.5.2",
+    "graspkit-atomic==3.5.3",
 ]
 ```
 
