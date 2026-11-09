@@ -189,3 +189,7 @@ cython_debug/
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# Local Claude and Codegraph data
+.claude/
+.codegraph/
