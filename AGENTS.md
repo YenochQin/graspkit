@@ -1,5 +1,9 @@
 # GraspKit Guidelines
 
+## Shell commands
+
+All shell commands shown to the user, including replies, documentation, and copyable examples, must use fish shell syntax. Label shell code blocks as `fish`; do not output Bash commands or Bash-specific syntax. Use fish-compatible variable assignments, environment variables, control flow, and virtual-environment activation.
+
 ## Ownership and interfaces
 
 `graspkit-atomic` is the stable GRASP processing library. The wheel contains `src/graspkit/` and `src/graspkit_plot/`; tests are under `tests/` and documentation under `docs/`.
@@ -16,8 +20,8 @@ Use only `../graspkit-tools/.venv` with Python 3.15. Setup and dependency synchr
 
 From this repository, activate the shared environment before invoking tools:
 
-```sh
-source ../graspkit-tools/.venv/bin/activate
+```fish
+source ../graspkit-tools/.venv/bin/activate.fish
 ```
 
 Choose validation for the change:
