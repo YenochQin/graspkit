@@ -77,6 +77,9 @@ rCSFs validates the file version and layout.
   columns, and use block-local positions to index the mixing matrices. The
   selected rows retain their original `idx`.
 
+The [V3 coupling plan](csf-descriptor-v3-coupling-plan.md) records the
+block-alignment cases and the fixture-based regression command.
+
 ## Indices
 
 - `validate_selection_idxs` checks one-dimensional integer indices, bounds,
