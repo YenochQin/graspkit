@@ -74,8 +74,12 @@ rCSFs validates the file version and layout.
 - Group members have zero-based block-local positions in `idxs` and original
   row numbers in `global_idxs`. Weighting and selection match the explicit
   block order, verify the signature's total `2J` and the number of coefficient
-  columns, and use block-local positions to index the mixing matrices. The
-  selected rows retain their original `idx`.
+  columns, and require strictly increasing `idx` within each block. When the
+  descriptor includes `parity`, its signed `+1`/`-1` values must match the
+  corresponding mixing block's `1`/`2` parity. Selected rows retain their
+  original `idx`.
+- Cumulative coupling selection skips blocks without selected ASF rows. If
+  every block is skipped, the selection and diagnostics are empty.
 
 The [V3 coupling plan](csf-descriptor-v3-coupling-plan.md) records the
 block-alignment cases and the fixture-based regression command.

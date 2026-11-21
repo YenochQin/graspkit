@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -105,11 +106,13 @@ def test_v3_coupling_groups_and_selects_csfs_by_block(
                 "idx": source_indices,
                 "block_id": block_ids,
                 "coupling_signature": signatures,
+                "parity": [1, 1, 1, 1],
             },
             schema={
                 "idx": pl.UInt64,
                 "block_id": pl.UInt32,
                 "coupling_signature": pl.List(pl.Int32),
+                "parity": pl.Int8,
             },
         )
 
@@ -169,6 +172,18 @@ def test_v3_coupling_groups_and_selects_csfs_by_block(
     )
     with pytest.raises(ValueError, match=r"Block 1: CSF J=1 与 rmix J=1/2 不一致"):
         summarize_coupling_ci_squared(bad_total_j, mix_data, coupling_level=1)
+
+    for positions in ([1, 0, 2, 3], [0, 0, 2, 3]):
+        with pytest.raises(ValueError, match=r"Block 0:.*idx.*严格递增"):
+            summarize_coupling_ci_squared(
+                csfs_df[positions], mix_data, coupling_level=1
+            )
+
+    odd_mixing = replace(
+        mix_data, blocks=[replace(mix_data.blocks[0], parity=2), mix_data.blocks[1]]
+    )
+    with pytest.raises(ValueError, match=r"Block 0:.*宇称.*不一致"):
+        summarize_coupling_ci_squared(csfs_df, odd_mixing, coupling_level=1)
 
 
 def test_v3_closed_core_signature_has_no_intermediate_entries() -> None:
@@ -572,6 +587,30 @@ def test_summarize_coupling_ci_squared_rejects_multiple_j_values_in_csf_block() 
         summarize_coupling_ci_squared(csfs_df, mix_data)
 
 
+@pytest.mark.parametrize("odd_parity", [-1, 1, 2, None])
+def test_coupling_theme_checks_signed_v3_parity(odd_parity: int | None) -> None:
+    frame = _csfs_df().with_columns(
+        pl.Series("parity", [1, 1, 1, -1, odd_parity], dtype=pl.Int8)
+    )
+    mix = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.array([[1.0, 0.0, 0.0]])),
+            replace(_mix_block(1, np.array([[1.0, 0.0]])), parity=2),
+        ],
+        sorted_level_energies=[],
+    )
+    if odd_parity == -1:
+        selected = select_csfs_by_coupling_theme(
+            frame, mix, ci_squared_cutoff=0.5, coupling_level=1
+        )
+        assert selected["idx"].to_list() == [0, 2, 3]
+    else:
+        with pytest.raises(ValueError, match=r"Block 1:.*宇称.*不一致"):
+            select_csfs_by_coupling_theme(
+                frame, mix, ci_squared_cutoff=0.5, coupling_level=1
+            )
+
+
 def test_cumulative_coupling_unions_prefix_and_dominant_members_in_source_order() -> (
     None
 ):
@@ -579,7 +618,7 @@ def test_cumulative_coupling_unions_prefix_and_dominant_members_in_source_order(
     # two equal channel totals select the channel first seen in source order.
     frame = pl.DataFrame(
         {
-            "idx": [7, 12, 4, 9],
+            "idx": [7, 12, 14, 19],
             "block_id": [0] * 4,
             "coupling_signature": [[2, 8], [6, 8], [2, 8], [6, 8]],
         },
@@ -596,7 +635,44 @@ def test_cumulative_coupling_unions_prefix_and_dominant_members_in_source_order(
     )
     assert result.prefix_counts == {0: 2}
     assert result.dominant_channels["coupling_signature"].to_list() == [[2]]
-    assert result.selected_csfs["idx"].to_list() == [7, 4, 9]
+    assert result.selected_csfs["idx"].to_list() == [7, 14, 19]
+
+
+@pytest.mark.parametrize("asf_rows", [None, [[], [0]]])
+def test_cumulative_coupling_skips_blocks_without_asfs(
+    asf_rows: list[list[int]] | None,
+) -> None:
+    frame = _csfs_df()
+    mix = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.empty((0, 3))),
+            _mix_block(1, np.array([[1.0, 0.0]])),
+        ],
+        sorted_level_energies=[],
+    )
+    result = select_csfs_by_cumulative_coupling(
+        frame, mix, cumulative_threshold=0.9, coupling_level=1, asf_row_indices=asf_rows
+    )
+    assert result.selected_csfs["idx"].to_list() == [3]
+    assert result.prefix_counts == {1: 1}
+    assert result.dominant_channels.rows() == [(1, [5], 1, 0, 1.0)]
+
+    empty = select_csfs_by_cumulative_coupling(
+        frame, mix, cumulative_threshold=0.9, coupling_level=1, asf_row_indices=[[], []]
+    )
+    assert empty.selected_csfs.is_empty() and empty.selected_csfs.schema == frame.schema
+    assert empty.prefix_counts == {}
+    assert empty.dominant_channels.is_empty()
+    assert empty.dominant_channels.schema == result.dominant_channels.schema
+
+    with pytest.raises(ValueError, match="cumulative_threshold"):
+        select_csfs_by_cumulative_coupling(
+            frame,
+            mix,
+            cumulative_threshold=0.0,
+            coupling_level=1,
+            asf_row_indices=[[], []],
+        )
 
 
 def test_cumulative_coupling_requires_complete_asf_like_ml_presampling() -> None:

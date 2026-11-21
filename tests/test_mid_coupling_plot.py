@@ -196,3 +196,26 @@ def test_batch_plots_select_blocks_and_asfs_in_requested_order(tmp_path: Path) -
     assert "0.700" in paths[0].read_text()
     assert "0.800" in paths[2].read_text()
     assert all(p.stat().st_size > 0 for p in paths)
+
+
+def test_batch_plot_names_are_stable_across_disjoint_asf_requests(
+    tmp_path: Path,
+) -> None:
+    frame = _csfs_frame()
+    frame = pl.concat(
+        [
+            frame,
+            frame.with_columns(pl.col("block_id") + 1, pl.col("idx") + frame.height),
+        ]
+    )
+    mix = _mix_data()
+    mix = replace(mix, blocks=[mix.blocks[0], replace(mix.blocks[0], block_index=1)])
+
+    (first,) = save_mid_coupling_plots(frame, mix, tmp_path, asf_row_indices=[[0], []])
+    first_svg = first.read_bytes()
+    (second,) = save_mid_coupling_plots(frame, mix, tmp_path, asf_row_indices=[[], [0]])
+
+    assert first.name == "e1_2J2_MCJ.svg"
+    assert second.name == "e1_2J2_MCJ_b2.svg"
+    assert first.read_bytes() == first_svg
+    assert second.stat().st_size > 0

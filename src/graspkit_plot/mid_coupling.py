@@ -338,26 +338,34 @@ def save_mid_coupling_plots(
     max_channels: int | None = None,
     formats: tuple[str, ...] = ("svg",),
 ) -> list[Path]:
-    """Group CSFs once and render each requested ASF in the specified formats."""
+    """Render requested ASFs with file names stable across batches.
+
+    For each J and parity, the first mixing block uses the base name and later
+    blocks append their one-based block number.
+    """
     if not formats or any(fmt not in {"svg", "png", "pdf"} for fmt in formats):
         raise ValueError("formats must contain svg, png or pdf")
-    requested_rows = (
+    selected_rows = (
         asf_row_indices
         if asf_row_indices is not None
         else [block.asf_row_indices.tolist() for block in mix_data.blocks]
     )
+    requested_rows = [list(dict.fromkeys(rows)) for rows in selected_rows]
     summary = summarize_coupling_ci_squared(
         csfs_df,
         mix_data,
-        [list(dict.fromkeys(rows)) for rows in requested_rows],
+        requested_rows,
         coupling_level,
         include_members=False,
         allow_empty_blocks=True,
     )
     by_asf = summary.partition_by(["block_id", "asf_index"], as_dict=True)
-    used_stems: set[str] = set()
+    seen_symmetries: set[tuple[int, int]] = set()
     paths: list[Path] = []
     for block, rows in zip(mix_data.blocks, requested_rows, strict=True):
+        symmetry = (block.parity, _twice_j_value(block.j_value))
+        suffix = f"_b{block.block_index + 1}" if symmetry in seen_symmetries else ""
+        seen_symmetries.add(symmetry)
         for row in rows:
             series = _series_from_summary(
                 by_asf[(block.block_index, row)],
@@ -370,12 +378,11 @@ def save_mid_coupling_plots(
             stem = mid_coupling_output_stem(
                 parity=block.parity, asf_row_index=row, j_value=block.j_value
             )
-            if stem in used_stems:
-                stem = f"{stem}_b{block.block_index + 1}"
-            used_stems.add(stem)
             for fmt in formats:
                 paths.append(
-                    plot_mid_coupling_contribution(series, output_dir / f"{stem}.{fmt}")
+                    plot_mid_coupling_contribution(
+                        series, output_dir / f"{stem}{suffix}.{fmt}"
+                    )
                 )
     return paths
 

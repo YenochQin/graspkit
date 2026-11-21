@@ -9,6 +9,7 @@ to fall back to partial results.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from math import isfinite
 from pathlib import Path
 
 import numpy as np
@@ -198,6 +199,12 @@ def validate_coupling_level(coupling_level: int | None) -> int | None:
     ):
         raise ValueError(f"coupling_level 必须是 None 或正整数: {coupling_level}")
     return coupling_level
+
+
+def validate_cumulative_threshold(cumulative_threshold: float) -> None:
+    """Require a finite cumulative weight target in (0, 1]."""
+    if not isfinite(cumulative_threshold) or not 0 < cumulative_threshold <= 1:
+        raise ValueError("cumulative_threshold must be in (0, 1]")
 
 
 def normalize_asf_row_indices(

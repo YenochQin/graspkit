@@ -21,7 +21,11 @@ from ..grasp_data_extractor.rmix_data_processor import (
     sort_ci_scores,
 )
 from ..utils.data_modules import MixCoefficientData
-from .validation import normalize_asf_row_indices, validate_selection_idxs
+from .validation import (
+    normalize_asf_row_indices,
+    validate_cumulative_threshold,
+    validate_selection_idxs,
+)
 
 
 @dataclass(frozen=True)
@@ -62,8 +66,7 @@ def select_csf_indices_by_cumulative_weight(
         "importance",
     }:
         raise ValueError("Invalid normalization or index_order")
-    if not math.isfinite(cumulative_threshold) or not 0 < cumulative_threshold <= 1:
-        raise ValueError("cumulative_threshold must be in (0, 1]")
+    validate_cumulative_threshold(cumulative_threshold)
     values = np.asarray(ci_squared_values)
     if values.ndim not in (1, 2) or not values.size or np.iscomplexobj(values):
         raise ValueError("Expected non-empty CI² with shape (ASF, CSF)")
@@ -120,8 +123,7 @@ def select_ci_cumulative_local_idxs(
     order. ASF requests address actual matrix rows, not original level IDs.
     Zero-total rows are ignored. Missing requested blocks select no rows.
     """
-    if not math.isfinite(cumulative_threshold) or not 0 < cumulative_threshold <= 1:
-        raise ValueError("cumulative_threshold must be in (0, 1]")
+    validate_cumulative_threshold(cumulative_threshold)
     if asf_row_indices is not None and len(asf_row_indices) > len(ci_squared_by_block):
         raise ValueError("ASF selection contains an unknown block")
     selected: list[NDArray[np.int64]] = []

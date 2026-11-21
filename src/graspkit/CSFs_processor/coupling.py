@@ -11,7 +11,9 @@ are separate columns interpreted by rCSFs.
 
 ``block_id`` identifies the explicit source block, including adjacent blocks
 with the same symmetry. Mixing coefficients use positions within each block.
-``idx`` records the original CSF row and is preserved in selections.
+``idx`` records the original CSF row and must increase within each block when
+using mixing data. When present, the V3 ``parity`` column is checked against
+the mixing block's even/odd parity.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from .selection import select_csf_indices_by_cumulative_weight
 from .validation import (
     normalize_asf_row_indices,
     validate_coupling_level,
+    validate_cumulative_threshold,
 )
 
 _COUPLING_SIGNATURE_COLUMN = "coupling_signature"
@@ -147,7 +150,7 @@ def _selected_block_coefficients(
     *,
     allow_empty_blocks: bool = False,
 ) -> Iterator[tuple[int, list[int], NDArray[np.float64]]]:
-    """Validate J/CSF alignment and return selected ASF coefficient matrices."""
+    """Validate CSF block alignment and return selected ASF coefficient matrices."""
     normalized_positions = normalize_asf_row_indices(
         asfs_mix_data,
         asf_row_indices,
@@ -161,6 +164,14 @@ def _selected_block_coefficients(
         raise ValueError(
             f"CSF block IDs {dataframe_block_ids} 与 rmix block IDs {mix_block_ids} 不一致"
         )
+
+    alignment_columns = ["block_id", "idx", _COUPLING_SIGNATURE_COLUMN]
+    has_parity = "parity" in csfs_df.schema
+    if has_parity:
+        if not csfs_df.schema["parity"].is_integer():
+            raise ValueError("CSF parity 必须是整数列")
+        alignment_columns.append("parity")
+    alignment = csfs_df.select(alignment_columns)
 
     for mix_block, mix_j_value, selected_positions in zip(
         asfs_mix_data.blocks,
@@ -177,15 +188,20 @@ def _selected_block_coefficients(
                 f"Block {mix_block.block_index}: mixing coefficients 必须是二维矩阵"
             )
 
-        signatures = csfs_df[_COUPLING_SIGNATURE_COLUMN].filter(
-            csfs_df["block_id"] == mix_block.block_index
-        )
-        dataframe_csf_count = len(signatures)
+        block_rows = alignment.filter(pl.col("block_id") == mix_block.block_index)
+        dataframe_csf_count = block_rows.height
         if coefficient_matrix.shape[1] != dataframe_csf_count:
             raise ValueError(
                 f"Block {mix_block.block_index}: rmix CSF 数量 {coefficient_matrix.shape[1]} 与 CSF DataFrame {dataframe_csf_count} 不一致"
             )
 
+        source_indices = block_rows["idx"]
+        if (source_indices[1:] <= source_indices[:-1]).any():
+            raise ValueError(
+                f"Block {mix_block.block_index}: CSF idx 必须严格递增以匹配 rmix 列顺序"
+            )
+
+        signatures = block_rows[_COUPLING_SIGNATURE_COLUMN]
         csf_two_j_values = signatures.list.last().unique(maintain_order=True).to_list()
         if len(csf_two_j_values) != 1:
             raise ValueError(
@@ -197,6 +213,14 @@ def _selected_block_coefficients(
             raise ValueError(
                 f"Block {mix_block.block_index}: CSF J={_format_twice_j(csf_two_j)} 与 rmix J={mix_j_value} 不一致"
             )
+
+        if has_parity:
+            csf_parities = block_rows["parity"].unique(maintain_order=True).to_list()
+            rmix_parity = {1: 1, 2: -1}.get(mix_block.parity)
+            if rmix_parity is None or csf_parities != [rmix_parity]:
+                raise ValueError(
+                    f"Block {mix_block.block_index}: CSF 宇称 {csf_parities} 与 rmix 宇称 {rmix_parity} 不一致"
+                )
 
         yield (
             mix_block.block_index,
@@ -330,12 +354,15 @@ def select_csfs_by_cumulative_coupling(
 
     Prefix ties follow select_csf_indices_by_cumulative_weight. Equal channel
     sums select the first channel in CSF source order, as in ML presampling.
+    Blocks with no selected ASF are skipped. If all blocks are skipped, the
+    selection and diagnostics are empty.
     """
+    validate_cumulative_threshold(cumulative_threshold)
     selected = np.zeros(csfs_df.height, dtype=np.bool_)
     prefix_counts: dict[int, int] = {}
     dominant_frames: list[pl.DataFrame] = []
     for block in _weighted_coupling_blocks(
-        csfs_df, mix_data, asf_row_indices, coupling_level
+        csfs_df, mix_data, asf_row_indices, coupling_level, allow_empty_blocks=True
     ):
         prefix = select_csf_indices_by_cumulative_weight(
             block.ci_squared, cumulative_threshold=cumulative_threshold
@@ -359,8 +386,21 @@ def select_csfs_by_cumulative_coupling(
                 ),
             )
         )
+    dominant_channels = (
+        pl.concat(dominant_frames)
+        if dominant_frames
+        else pl.DataFrame(
+            schema={
+                "block_id": csfs_df.schema["block_id"],
+                "coupling_signature": pl.List(pl.Int32),
+                "count": pl.get_index_type(),
+                "asf_index": pl.Int64,
+                "sum_ci": pl.Float64,
+            }
+        )
+    )
     return CumulativeCouplingSelection(
-        csfs_df.filter(selected), prefix_counts, pl.concat(dominant_frames)
+        csfs_df.filter(selected), prefix_counts, dominant_channels
     )
 
 
