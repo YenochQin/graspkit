@@ -1,6 +1,6 @@
 # CSF 计算描述符 V3 在 GraspKit 中的耦合分组计划
 
-2026-11-21 · 待实施 · 源码基线 `a10dfc9`。GraspKit 消费 rCSFs 返回的 Polars DataFrame，将 CSF 行与 mixing 文件对齐，执行确定性的分组、覆盖分析和选择。本仓库的交付重点是验证这个公开数据接口。Parquet 编解码由 rCSFs 的 `docs/CSF_DESCRIPTOR_V3_PLAN.md` 定义。[CSF 选择原语](csf-selection-primitives.md)
+2026-11-21 · GraspKit 接入已实施 · 源码基线 `a10dfc9`。GraspKit 消费 rCSFs 返回的 Polars DataFrame，将 CSF 行与 mixing 文件对齐，执行确定性的分组、覆盖分析和选择。本仓库的交付重点是验证这个公开数据接口。Parquet 编解码由 rCSFs 的 `docs/CSF_DESCRIPTOR_V3_PLAN.md` 定义。[CSF 选择原语](csf-selection-primitives.md)
 
 ## 计算数据与分组接口
 
@@ -20,3 +20,9 @@
 2. 保留 `coupling_level` 的语义：指定深度时先去掉末项总 2J，再取所需的中间部分；全签名模式包含总 2J。按块检查签名尾项与 mixing 的 J、行数与系数列数；覆盖相邻同 J 同宇称的独立块。全局行号与块内位置分别验收。
 3. 在库内用公开接口的最小 DataFrame 测试。对于 peel 为 `1s,2s,3s,4s` 的 A₀、A₁（`1s² 2s¹ 3s¹ 4s¹`，3s 处分别 K=0、1），期望签名为 `[0,1,0,1]` 和 `[0,1,2,1]`。B=`1s² 2s² 3s¹ 4s⁰` 的签名为 `[0,0,1]`。三条记录均与总 J=½ 的 mixing 块对齐；深度 1 能分辨 A₀ 与 A₁。再检查纯闭核、非连续全局行号及对错误总 2J 的拒绝。[现有耦合测试](../tests/test_csfs_processor_coupling.py) · [mixing 分块测试](../tests/test_mix_coefficient_data_blocks.py)
 4. 在有新版 rCSFs 的集成环境中，让真实的 V3 文件经过 `read_csfs` 后进入上述公开函数，检查分组、原始行号和 CI 权重选择。库内普通测试沿用 DataFrame 夹具；rCSFs 的 Python 扩展和 ML 训练仍由各自仓库维护。
+
+在共享 Python 环境装有支持 V3 的 rCSFs 时，从 `graspkit/` 运行真实文件用例。测试将本库的 GRASP 文本夹具转换成 Parquet，核对版本为 3，再由 `read_csfs` 读取。V3 读取端拒绝 V2 文件。
+
+```fish
+GRASPKIT_TEST_RCSFS_V3=1 PYTHONPATH=src ../graspkit-tools/.venv/bin/python -m pytest 'tests/test_csfs_processor_coupling.py::test_v3_coupling_groups_and_selects_csfs_by_block[parquet]' --basetemp=../temp/tests/graspkit-coupling-v3
+```

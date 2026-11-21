@@ -5,7 +5,7 @@ Available in the prepared GraspKit 3.5.2 source version.
 The public functions below belong to `graspkit.CSFs_processor`. They do not
 depend on ML configuration, PyTorch, scikit-learn or a calculation workflow.
 Callers choose thresholds and budgets and decide what to do with the returned
-diagnostics. Descriptor generation and the V2 format remain owned by rCSFs.
+diagnostics. rCSFs owns descriptor generation and the V3 Parquet format.
 
 ## Cumulative selection
 
@@ -50,6 +50,32 @@ blocks, with optional per-block ASF **matrix row** selections and concatenated
 block offsets. It uses relative normalization and importance traversal order.
 The existing `rmix_cumulative_selected_row_idxs(RmixCiSquaredData, ...)` delegates
 to this block interface; its loader has already selected the requested ASF rows.
+
+## Coupling groups
+
+Read the descriptor dataset with a V3-capable rCSFs build using
+`rcsfs.read_csfs(path, include_block_id=True, include_coupling_signature=True)`.
+Pass the returned DataFrame to `collect_coupling_groups`,
+`summarize_coupling_ci_squared`, or the coupling selection functions.
+rCSFs validates the file version and layout.
+
+- `idx` is the original CSF row number. `block_id` identifies each explicit
+  block, including adjacent blocks with the same J and parity.
+- `coupling_signature` is a non-empty Polars `List(Int32)` of doubled angular
+  momenta derived from the canonical print positions of occupied peel
+  subshells. Zeros at intermediate positions are valid. The last entry is
+  physical total `2J`, so a J = 1/2 CSF has signature tail `1` and stored
+  `total_two_j_plus_one` of `2`. A pure closed-core CSF has signature `[0]`.
+  The V3 raw cumulative `2K+1` codes describe coupling through every peel
+  position, including empty and closed subshells.
+- A specified `coupling_level` counts trailing entries after removing total
+  `2J`. For example, at depth 1, `[0, 1, 0, 1]` and `[0, 1, 2, 1]`
+  give groups `[0]` and `[2]`. With `None`, the complete signature is used.
+- Group members have zero-based block-local positions in `idxs` and original
+  row numbers in `global_idxs`. Weighting and selection match the explicit
+  block order, verify the signature's total `2J` and the number of coefficient
+  columns, and use block-local positions to index the mixing matrices. The
+  selected rows retain their original `idx`.
 
 ## Indices
 

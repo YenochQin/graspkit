@@ -1,8 +1,11 @@
+import os
+from pathlib import Path
+
 import numpy as np
 import polars as pl
 import pytest
 
-from graspkit.CSFs_processor.coupling import (
+from graspkit.CSFs_processor import (
     collect_coupling_groups,
     select_csfs_by_coupling_theme,
     select_csfs_by_cumulative_coupling,
@@ -56,6 +59,133 @@ def _mix_block(
         level_energies=np.arange(coefficient_array.shape[0], dtype=np.float64),
         mix_coefficients=coefficient_array,
     )
+
+
+@pytest.mark.parametrize(
+    "use_parquet",
+    [
+        pytest.param(False, id="dataframe"),
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                os.environ.get("GRASPKIT_TEST_RCSFS_V3") != "1",
+                reason="requires an rCSFs build that writes and reads V3",
+            ),
+            id="parquet",
+        ),
+    ],
+)
+def test_v3_coupling_groups_and_selects_csfs_by_block(
+    use_parquet: bool,
+    tmp_path: Path,
+) -> None:
+    signatures = [[0, 1, 0, 1], [0, 1, 2, 1], [0, 0, 1], [0, 0, 1]]
+    block_ids = [0, 0, 0, 1]
+    if use_parquet:
+        from rcsfs import convert_csfs, read_csfs
+
+        fixture = Path(__file__).parent / "fixtures" / "coupling_v3.c"
+        text_path = tmp_path / fixture.name
+        text_path.write_text(
+            fixture.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+        )
+        parquet_path = tmp_path / "coupling_desc.parquet"
+        convert_csfs(text_path, parquet_path)
+        assert pl.read_parquet_metadata(parquet_path)["descriptor_version"] == "3"
+        _, csfs_df = read_csfs(
+            parquet_path, include_block_id=True, include_coupling_signature=True
+        )
+        assert csfs_df["total_two_j_plus_one"].to_list() == [2, 2, 2, 2]
+        assert csfs_df["parity"].to_list() == [1, 1, 1, 1]
+        source_indices = [0, 1, 2, 3]
+    else:
+        source_indices = [7, 12, 25, 42]
+        csfs_df = pl.DataFrame(
+            {
+                "idx": source_indices,
+                "block_id": block_ids,
+                "coupling_signature": signatures,
+            },
+            schema={
+                "idx": pl.UInt64,
+                "block_id": pl.UInt32,
+                "coupling_signature": pl.List(pl.Int32),
+            },
+        )
+
+    assert csfs_df.select("idx", "block_id", "coupling_signature").rows() == list(
+        zip(source_indices, block_ids, signatures, strict=True)
+    )
+    assert collect_coupling_groups(csfs_df).select(
+        "block_id", "coupling_signature", "idxs", "global_idxs"
+    ).rows() == [
+        (0, signatures[0], [0], [source_indices[0]]),
+        (0, signatures[1], [1], [source_indices[1]]),
+        (0, signatures[2], [2], [source_indices[2]]),
+        (1, signatures[3], [0], [source_indices[3]]),
+    ]
+    assert collect_coupling_groups(csfs_df, coupling_level=1).rows() == [
+        (0, [0], 2, [0, 2], [source_indices[0], source_indices[2]]),
+        (0, [2], 1, [1], [source_indices[1]]),
+        (1, [0], 1, [0], [source_indices[3]]),
+    ]
+
+    mix_data = MixCoefficientData(
+        blocks=[
+            _mix_block(0, np.sqrt(np.array([[0.30, 0.45, 0.25]])), j_value="1/2"),
+            _mix_block(1, np.array([[1.0]]), j_value="1/2"),
+        ],
+        sorted_level_energies=[0.0, 1.0],
+    )
+    summary = summarize_coupling_ci_squared(csfs_df, mix_data, coupling_level=1)
+    assert summary["sum_ci"].to_list() == pytest.approx([0.55, 0.45, 1.0])
+
+    theme = select_csfs_by_coupling_theme(
+        csfs_df, mix_data, ci_squared_cutoff=0.5, coupling_level=1
+    )
+    assert theme["idx"].to_list() == [
+        source_indices[0],
+        source_indices[2],
+        source_indices[3],
+    ]
+
+    cumulative = select_csfs_by_cumulative_coupling(
+        csfs_df, mix_data, cumulative_threshold=0.4, coupling_level=1
+    )
+    assert cumulative.prefix_counts == {0: 1, 1: 1}
+    assert cumulative.dominant_channels.select(
+        "block_id", "coupling_signature"
+    ).rows() == [
+        (0, [0]),
+        (1, [0]),
+    ]
+    assert cumulative.selected_csfs["idx"].to_list() == source_indices
+
+    bad_total_j = csfs_df.with_columns(
+        pl.when(pl.col("block_id") == 1)
+        .then(pl.lit([0, 0, 2], dtype=pl.List(pl.Int32)))
+        .otherwise(pl.col("coupling_signature"))
+        .alias("coupling_signature")
+    )
+    with pytest.raises(ValueError, match=r"Block 1: CSF J=1 与 rmix J=1/2 不一致"):
+        summarize_coupling_ci_squared(bad_total_j, mix_data, coupling_level=1)
+
+
+def test_v3_closed_core_signature_has_no_intermediate_entries() -> None:
+    csfs_df = pl.DataFrame(
+        {"idx": [15], "block_id": [0], "coupling_signature": [[0]]},
+        schema_overrides={"coupling_signature": pl.List(pl.Int32)},
+    )
+    mix_data = MixCoefficientData(
+        blocks=[_mix_block(0, np.array([[1.0]]), j_value="0")],
+        sorted_level_energies=[0.0],
+    )
+
+    assert collect_coupling_groups(csfs_df)["coupling_signature"].to_list() == [[0]]
+    summary = summarize_coupling_ci_squared(csfs_df, mix_data, coupling_level=1)
+    assert summary.select(
+        "coupling_signature", "idxs", "global_idxs", "sum_ci"
+    ).rows() == [([], [0], [15], 1.0)]
 
 
 def test_select_csfs_by_coupling_theme_returns_threshold_and_dominant_union() -> None:

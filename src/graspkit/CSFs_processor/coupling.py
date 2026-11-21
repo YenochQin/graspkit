@@ -1,5 +1,18 @@
 # -*- encoding: utf-8 -*-
-"""Polars coupling-signature analysis for rCSFs DataFrames."""
+"""Analyze coupling signatures from the rCSFs V3 DataFrame interface.
+
+Use ``rcsfs.read_csfs`` with ``include_block_id`` and
+``include_coupling_signature`` enabled. The reader supplies a non-empty
+``List(Int32)`` signature from the canonical print positions of occupied peel
+subshells. Its intermediate entries are doubled angular momenta (including
+valid zeros), and its final entry is the physical total ``2J``. A pure
+closed-core CSF has signature ``[0]``. The V3 raw ``2J+1`` and ``2K+1`` codes
+are separate columns interpreted by rCSFs.
+
+``block_id`` identifies the explicit source block, including adjacent blocks
+with the same symmetry. Mixing coefficients use positions within each block.
+``idx`` records the original CSF row and is preserved in selections.
+"""
 
 from __future__ import annotations
 
@@ -88,12 +101,11 @@ def collect_coupling_groups(
     """Group rCSFs coupling signatures with local and global CSF indices.
 
     Args:
-        csfs_df: DataFrame returned by ``rcsfs.read_csfs`` with both
+        csfs_df: V3 DataFrame returned by ``rcsfs.read_csfs`` with both
             ``include_block_id`` and ``include_coupling_signature`` enabled.
-        coupling_level: Number of trailing intermediate-coupling ``2J`` values
-            used as the grouping pattern. The signature's final total J value
-            is excluded before counting. ``None`` retains the complete
-            signature, including total J.
+        coupling_level: Number of trailing intermediate entries used as the
+            grouping pattern. First remove the signature's final total ``2J``.
+            ``None`` retains the complete signature, including total ``2J``.
 
     Returns:
         One row per block and coupling pattern with columns ``block_id``,
@@ -362,15 +374,14 @@ def select_csfs_by_coupling_theme(
 ) -> pl.DataFrame:
     """Select rCSFs rows by CI-square threshold and dominant coupling theme.
 
-    The input must be returned by :func:`rcsfs.read_csfs` with both
+    The V3 input must be returned by :func:`rcsfs.read_csfs` with both
     ``include_block_id`` and ``include_coupling_signature`` enabled. For every
     block, the result is the source-ordered union of CSFs whose selected-ASF
     CI-square exceeds ``ci_squared_cutoff`` and every member of the dominant coupling
     group for each selected ASF.
 
-    ``coupling_level`` is the positive number of trailing intermediate-coupling
-    integer ``2J`` values retained from the rCSFs fixed-width coupling
-    signature. The final total J value is excluded before counting.
+    ``coupling_level`` counts trailing intermediate entries after removing
+    the final total ``2J``, as in :func:`collect_coupling_groups`.
     """
     validate_coupling_level(coupling_level)
     if type(ci_squared_cutoff) not in (int, float):
