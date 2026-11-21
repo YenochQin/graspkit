@@ -12,12 +12,12 @@
 - `graspkit.utils`：通用 GRASP 数据模型、环境检测和量子数工具。
 - `graspkit_plot`：绘图和出版级样式工具。
 
-3.5.3 支持按累计 CI² 与主导耦合通道联合筛选 CSF，并为选定的 ASF 批量绘图。
-详见[版本说明](docs/releasing.md#changes-in-353)和[CSF 处理接口文档](docs/csf-selection-primitives.md)。
+3.6.0 验证了使用 rCSFs V3 描述符与 GRASP 混合系数分块进行耦合通道筛选的流程。
+详见[版本说明](docs/releasing.md#changes-in-360)和 [CSF 处理接口文档](docs/csf-selection-primitives.md)。
 
 ## 安装
 
-3.5.3 发布前可使用本版源码安装。
+3.6.0 发布前可使用本版源码安装。
 
 使用 Python 3.15 或更新版本，从 [PyPI 安装 graspkit-atomic](https://pypi.org/project/graspkit-atomic/)。
 分发包名为 `graspkit-atomic`，Python 导入名为 `graspkit` 和 `graspkit_plot`。
@@ -26,7 +26,7 @@
 
 可以用 [uv](https://docs.astral.sh/uv/getting-started/installation/) 管理你自己的分析项目环境和依赖。新建项目时：
 
-```bash
+```fish
 uv init --python 3.15 atomic-analysis
 cd atomic-analysis
 uv add graspkit-atomic
@@ -36,7 +36,7 @@ uv run python -c "import graspkit; print(graspkit.__version__)"
 已有 uv 项目使用 Python 3.15 或更新版本时，直接在其目录运行 `uv add graspkit-atomic`。
 该命令会将依赖写入 `pyproject.toml`，更新 `uv.lock`，并安装到项目的 `.venv` 中。
 运行自己的分析脚本时使用 `uv run python analysis.py`，无需手动激活环境。
-需要固定版本时，使用 `uv add "graspkit-atomic==3.5.3"`。
+3.6.0 在包索引可用后，可用 `uv add "graspkit-atomic==3.6.0"` 固定版本。
 
 也可以手动将依赖加入已有的 `pyproject.toml`：
 
@@ -46,7 +46,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.5.3",
+    "graspkit-atomic==3.6.0",
 ]
 ```
 
@@ -57,7 +57,7 @@ dependencies = [
 
 安装到已有的 Python 环境：
 
-```bash
+```fish
 python -m pip install graspkit-atomic
 ```
 

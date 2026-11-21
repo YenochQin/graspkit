@@ -1,6 +1,6 @@
 # CI weights, CSF indices and orbital coverage
 
-Available in the prepared GraspKit 3.5.2 source version.
+This guide describes GraspKit 3.6.0.
 
 The public functions below belong to `graspkit.CSFs_processor`. They do not
 depend on ML configuration, PyTorch, scikit-learn or a calculation workflow.
