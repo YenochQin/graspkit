@@ -25,5 +25,6 @@
 在共享 Python 环境装有支持 V3 的 rCSFs 时，从 `graspkit/` 运行真实文件用例。测试将本库的 GRASP 文本夹具转换成 Parquet，核对版本为 3，再由 `read_csfs` 读取。V3 读取端拒绝 V2 文件。
 
 ```fish
+mkdir -p ../temp/tests
 GRASPKIT_TEST_RCSFS_V3=1 PYTHONPATH=src ../graspkit-tools/.venv/bin/python -m pytest 'tests/test_csfs_processor_coupling.py::test_v3_coupling_groups_and_selects_csfs_by_block[parquet]' --basetemp=../temp/tests/graspkit-coupling-v3
 ```

@@ -23,4 +23,6 @@ jobs:
       - name: Test coupling against real V3 Parquet data
         env:
           GRASPKIT_TEST_RCSFS_V3: "1"
-        run: python -m pytest tests/test_csfs_processor_coupling.py --basetemp=temp/tests/coupling-v3
+        run: |
+          mkdir -p temp/tests
+          python -m pytest -v tests/test_csfs_processor_coupling.py --basetemp=temp/tests/coupling-v3
