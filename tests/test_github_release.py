@@ -63,9 +63,14 @@ class GitHubReleaseTests(unittest.TestCase):
         }
         self.jobs = [
             {"name": name, "conclusion": result} for name, result in [
-                ("preflight", "success"), ("prepare", "success"), ("publish_pypi", "skipped"),
-                ("build / build (linux)", "success"), ("build / build (windows)", "success"),
-                ("build / build (macos)", "success"),
+                ("preflight", "success"),
+                ("build / coupling-v3 / coupling-v3", "success"),
+                ("build / build (ubuntu-24.04)", "success"),
+                ("build / build (windows-2022)", "success"),
+                ("build / build (macos-15)", "success"),
+                ("prepare", "success"),
+                ("publish_pypi", "skipped"),
+                ("github_release", None),
             ]
         ]
         for index, job in enumerate(self.jobs, start=1):
@@ -154,12 +159,16 @@ class GitHubReleaseTests(unittest.TestCase):
         self.assertEqual(len(self.created), 4)
 
     def test_incomplete_prerequisites_are_rejected(self) -> None:
-        for name in ("preflight", "prepare", "build / build (windows)"):
+        for name in (
+            "preflight", "prepare", "build / coupling-v3 / coupling-v3",
+            "build / build (windows-2022)",
+        ):
             with self.subTest(name=name):
                 original = copy.deepcopy(self.jobs)
                 next(job for job in self.jobs if job["name"] == name)["conclusion"] = "failure"
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError) as error:
                     self.create()
+                self.assertIn(name, str(error.exception))
                 self.jobs = original
         self.assertFalse(self.created)
 

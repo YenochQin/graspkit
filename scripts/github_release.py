@@ -65,12 +65,18 @@ def validate_run(
         name = job["name"]
         if name not in latest or job["id"] > latest[name]["id"]:
             latest[name] = job
-    jobs = list(latest.values())
-    for name in ("preflight", "prepare"):
-        matches = [job for job in jobs if job["name"] == name]
-        require(len(matches) == 1 and matches[0]["conclusion"] == "success", f"Expected {name}: success.")
-    builds = [job for job in jobs if job["name"].startswith("build /")]
-    require(len(builds) == 3 and all(job["conclusion"] == "success" for job in builds), "All three platform builds must succeed.")
+    for name in (
+        "preflight",
+        "build / coupling-v3 / coupling-v3",
+        "build / build (ubuntu-24.04)",
+        "build / build (windows-2022)",
+        "build / build (macos-15)",
+        "prepare",
+    ):
+        require(
+            name in latest and latest[name]["conclusion"] == "success",
+            f"Expected {name}: success.",
+        )
     sha = run["head_sha"]
     require(re.fullmatch(r"[0-9a-f]{40}", sha) is not None and sha == expected_sha, "Source commit mismatch.")
     return sha

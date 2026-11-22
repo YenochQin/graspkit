@@ -1,9 +1,18 @@
 # Preparing a graspkit-atomic release
 
-The prepared version is **3.6.0**. Its single source is
+The prepared version is **3.6.1**. Its single source is
 `src/graspkit/version.py`; Hatchling reads it through `dynamic = ["version"]`.
 The local build commands below do not upload files or create Git tags.
 The separate manual publishing workflow is described near the end of this guide.
+
+## Changes in 3.6.1
+
+- Validate signed V3 parity and strictly increasing CSF indices within each
+  block before using GRASP mixing coefficients.
+- Skip blocks without selected ASF rows during cumulative coupling selection.
+  Keep plot filenames stable across separate batches for blocks of the same symmetry.
+- Run the real V3 Parquet test in CI and release builds. GitHub Release
+  validation checks the V3 test job and each platform build by name.
 
 ## Changes in 3.6.0
 
@@ -67,8 +76,8 @@ The obsolete `--dev` option is removed; edit the version source deliberately.
 `--clean` removes only matching graspkit-atomic archives from the selected output
 folder. Unknown files cause an error instead of being deleted.
 
-Output files are `dist/graspkit_atomic-3.6.0.tar.gz` and
-`dist/graspkit_atomic-3.6.0-py3-none-any.whl`. An optional `--outdir PATH` selects an
+Output files are `dist/graspkit_atomic-3.6.1.tar.gz` and
+`dist/graspkit_atomic-3.6.1-py3-none-any.whl`. An optional `--outdir PATH` selects an
 empty output folder. The shell/batch wrappers select the shared Tools Python.
 
 Equivalent individual checks:
@@ -124,9 +133,9 @@ with a branch selector. Review all three platform jobs before using the artifact
 ## Before a later publication
 
 1. Review the exact source commit and release changes; rerun the workflow on it.
-2. Confirm PyPI ownership/availability of `graspkit-atomic`, and that version 3.6.0
-   has not already been published. A missing public project page alone does
-   not prove that a name is available.
+2. Confirm PyPI ownership or availability of `graspkit-atomic` and check the
+   upload history for the 3.6.1 filenames. PyPI reserves filenames even after
+   the files are deleted.
 3. Inspect the actual archives and hashes. Publishing makes their contents
    public even if the Git repository remains private. Repository URLs in the
    metadata require access to that repository; provide accessible public docs
@@ -148,7 +157,7 @@ completing a build does not start a publication. Its inputs are:
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `version` | Required | Exact source version, currently `3.6.0`. |
+| `version` | Required | Exact source version, currently `3.6.1`. |
 | `publish_pypi` | Off | Upload the validated packages to PyPI. |
 | `github_release` | Off | Create a GitHub Release using the same packages. |
 | `draft` | On | Keep the GitHub Release as a draft; turn off only for formal publication. |
@@ -164,7 +173,7 @@ source version, and select the destinations you intend to use:
 | On | On | Build and validate once, then upload the same files to both destinations. |
 
 A prior dry run is optional. No separate workflow, run ID or tag input is
-needed. The GitHub tag is derived as `v{version}`, for example `v3.6.0`.
+needed. The GitHub tag is derived as `v{version}`, for example `v3.6.1`.
 The `draft` option has no effect when `github_release` is off.
 
 ### One build, two independent destinations
@@ -193,8 +202,8 @@ that version in the workflow; do not try to overwrite an existing release.
 ### GitHub Release behavior
 
 The Release job automatically reads this run's ID, attempt and source commit
-from GitHub. It confirms that preflight, all three builds and preparation have
-succeeded; it does not require the whole workflow or the PyPI job to finish.
+from GitHub. It verifies the successful completion of preflight, V3 coupling
+tests, all three platform builds and preparation. The PyPI job runs independently.
 It checks the downloaded artifact's GitHub SHA-256 digest, package metadata and
 wheel platforms before creating a Release. These checks run with Python's
 standard library and the GitHub CLI supplied by the hosted runner.
