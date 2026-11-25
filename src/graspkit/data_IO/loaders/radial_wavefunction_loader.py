@@ -1,18 +1,30 @@
 # -*- encoding: utf-8 -*-
 from dataclasses import dataclass
-from typing import override
+from os import fstat
+from struct import Struct
+from typing import BinaryIO, override
 
 import numpy as np
 import polars as pl
-from numpy import bytes_
 from numpy.typing import NDArray
 
 from .binary_file_loader import BinaryFileLoader
 
+_STREAM_HEADER = Struct("<8sii")
+_STREAM_SIGNATURE = b"GRWFRAD1"
+_ORBITAL_DTYPE = np.dtype([
+    ("n", "<i4"),
+    ("kappa", "<i4"),
+    ("point_count", "<i4"),
+    ("reserved", "<i4"),
+    ("energy", "<f8"),
+    ("origin_parameter", "<f8"),
+])
+
 
 @dataclass(frozen=True)
 class RWFNOrbitalData:
-    """One orbital from a G92RWF file, with its native radial grid."""
+    """One orbital from a radial wavefunction file, with its native radial grid."""
 
     n: int
     kappa: int
@@ -86,31 +98,21 @@ def int_nl_2_str_nl(n: int, kappa: int) -> str:
 
 
 class RWFNFileLoader(BinaryFileLoader):
-    """径向波函数二进制文件加载器 (.w文件）
-
-    用于加载 GRASP2018 生成的径向波函数二进制文件。
-
-    文件格式对应 Fortran 代码：
-        write (3) 'G92RWF'
-        write (3) nn, laky, energy, npts
-        write (3) a0, (pg(j,i), j=1, npts), (qg(j,i), j=1, npts)
-        write (3) (rg(j,i), j=1, npts)
-    """
+    """Read Suite radial streams and legacy G92RWF orbital records."""
 
     def load_orbitals(self) -> dict[tuple[int, int], RWFNOrbitalData]:
         """Load orbitals without discarding kappa or per-orbital grids."""
 
         orbitals: dict[tuple[int, int], RWFNOrbitalData] = {}
         with open(file=self.file_path, mode="rb") as binary_file:
-            # 读取文件头标识（G92RWF 前后的记录标记）
-            header: NDArray[bytes_] = self.read_fortran_record(binary_file, "S1", 6)
-            g92rwf: str = b"".join(header).decode(encoding="utf-8").strip()
+            signature = binary_file.read(len(_STREAM_SIGNATURE))
+            binary_file.seek(0)
+            if signature == _STREAM_SIGNATURE:
+                return self._load_stream_orbitals(binary_file)
+            header = b"".join(self.read_fortran_record(binary_file, "S1", 6))
+            if header != b"G92RWF":
+                raise ValueError(f"Unknown radial wavefunction signature: {header!r}")
 
-            if g92rwf != "G92RWF":
-                raise ValueError(f"Not a radial wavefunction file: {g92rwf}")
-
-            # Read three Fortran records per orbital.  Probe for EOF before
-            # reading metadata so malformed records are not mistaken for EOF.
             while True:
                 position = binary_file.tell()
                 if not binary_file.read(1):
@@ -135,9 +137,7 @@ class RWFNFileLoader(BinaryFileLoader):
                         ("d", point_count),
                     ],
                 )
-                (rg,) = self.read_mixed_arrays(
-                    file=binary_file, field_specs=[("d", point_count)]
-                )
+                rg = self.read_fortran_record(binary_file, np.float64, point_count)
                 key = (orbital_n, orbital_kappa)
                 if key in orbitals:
                     raise ValueError(
@@ -155,6 +155,42 @@ class RWFNFileLoader(BinaryFileLoader):
 
         if not orbitals:
             raise ValueError(f"No orbitals in radial wavefunction: {self.file_path}")
+        return orbitals
+
+    def _load_stream_orbitals(
+        self, binary_file: BinaryIO
+    ) -> dict[tuple[int, int], RWFNOrbitalData]:
+        header = binary_file.read(_STREAM_HEADER.size)
+        if len(header) != _STREAM_HEADER.size:
+            raise ValueError(f"Truncated radial wavefunction header: {self.file_path}")
+        _, count, longest = _STREAM_HEADER.unpack(header)
+        channels = 2 * count + 1
+        expected_size = _STREAM_HEADER.size + count * _ORBITAL_DTYPE.itemsize + 8 * channels * longest
+        if min(count, longest) < 1 or fstat(binary_file.fileno()).st_size != expected_size:
+            raise ValueError(f"Invalid radial wavefunction dimensions: {self.file_path}")
+
+        table = np.fromfile(binary_file, dtype=_ORBITAL_DTYPE, count=count)
+        radial = np.fromfile(binary_file, dtype="<f8", count=channels * longest)
+        if table.size != count or radial.size != channels * longest:
+            raise ValueError(f"Truncated radial wavefunction: {self.file_path}")
+        radial = radial.reshape(channels, longest)
+        orbitals: dict[tuple[int, int], RWFNOrbitalData] = {}
+        for index, orbital in enumerate(table):
+            n, kappa = int(orbital["n"]), int(orbital["kappa"])
+            points = int(orbital["point_count"])
+            if not (n > 0 and kappa != 0 and 0 < points <= longest and orbital["reserved"] == 0):
+                raise ValueError(f"Invalid radial wavefunction orbital: {(n, kappa)}")
+            if (n, kappa) in orbitals:
+                raise ValueError(f"Duplicate orbital in radial wavefunction: {(n, kappa)}")
+            orbitals[n, kappa] = RWFNOrbitalData(
+                n=n,
+                kappa=kappa,
+                energy=float(orbital["energy"]),
+                a0=float(orbital["origin_parameter"]),
+                p=radial[2 * index + 1, :points],
+                q=radial[2 * index + 2, :points],
+                r=radial[0, :points].copy(),
+            )
         return orbitals
 
     @override
