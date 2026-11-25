@@ -4,7 +4,8 @@ from struct import Struct
 
 import numpy as np
 
-SIGNATURE = b"GRMIX001"
+SIGNATURE = b"CSF--MIX"
+READABLE_SIGNATURES = (SIGNATURE, b"GRMIX001")
 INCOMPLETE_SIGNATURE = b"GRMIXTMP"
 HEADER = Struct("<8s5q64s")
 DIRECTORY_RECORD = Struct("<6q")

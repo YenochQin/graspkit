@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from .binary_file_loader import BinaryFileLoader
 
 _STREAM_HEADER = Struct("<8sii")
-_STREAM_SIGNATURE = b"GRWFRAD1"
+_STREAM_SIGNATURES = (b"RAD--WFN", b"GRWFRAD1")
 _ORBITAL_DTYPE = np.dtype([
     ("n", "<i4"),
     ("kappa", "<i4"),
@@ -105,9 +105,9 @@ class RWFNFileLoader(BinaryFileLoader):
 
         orbitals: dict[tuple[int, int], RWFNOrbitalData] = {}
         with open(file=self.file_path, mode="rb") as binary_file:
-            signature = binary_file.read(len(_STREAM_SIGNATURE))
+            signature = binary_file.read(len(_STREAM_SIGNATURES[0]))
             binary_file.seek(0)
-            if signature == _STREAM_SIGNATURE:
+            if signature in _STREAM_SIGNATURES:
                 return self._load_stream_orbitals(binary_file)
             header = b"".join(self.read_fortran_record(binary_file, "S1", 6))
             if header != b"G92RWF":

@@ -193,7 +193,7 @@ def test_indexed_mixing_stream_roundtrip(tmp_path: Path) -> None:
     )
     write_mix_coefficient_block(path, block, electron_count=3, orbital_count=4, basis_id=basis_id)
     raw = path.read_bytes()
-    assert struct.unpack_from("<8s5q64s", raw) == (b"GRMIX001", 3, 4, 1, 3, 2, basis_id.encode())
+    assert struct.unpack_from("<8s5q64s", raw) == (b"CSF--MIX", 3, 4, 1, 3, 2, basis_id.encode())
     assert struct.unpack_from("<6q", raw, 112) == (3, -1, 3, 2, 0, 192)
     assert struct.unpack_from("<3d", raw, 216) == (0.0, -0.5, 0.5)
     result = MixCoefLoader(path).load(show_levels=False, basis_id=basis_id)
@@ -203,8 +203,14 @@ def test_indexed_mixing_stream_roundtrip(tmp_path: Path) -> None:
     np.testing.assert_array_equal(parsed.level_energies, [-1024.0, -1023.875])
     np.testing.assert_array_equal(parsed.mix_coefficients, block.mix_coefficients)
     assert isinstance(parsed.mix_coefficients, np.memmap)
+    previous = tmp_path / "previous.cimix"
+    previous.write_bytes(b"GRMIX001" + raw[8:])
+    previous_block, = MixCoefLoader(previous).load(show_levels=False, basis_id=basis_id).blocks
+    np.testing.assert_array_equal(previous_block.level_energies, parsed.level_energies)
+    np.testing.assert_array_equal(previous_block.mix_coefficients, parsed.mix_coefficients)
     with pytest.raises(ValueError, match="descriptor SHA-256"):
         MixCoefLoader(path).load(show_levels=False, basis_id="c" * 64)
-    path.write_bytes(raw[:-8])
+    truncated = tmp_path / "truncated.cimix"
+    truncated.write_bytes(raw[:-8])
     with pytest.raises(ValueError, match="totals"):
-        MixCoefLoader(path).load(show_levels=False)
+        MixCoefLoader(truncated).load(show_levels=False)

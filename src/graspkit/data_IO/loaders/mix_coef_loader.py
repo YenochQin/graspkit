@@ -127,7 +127,7 @@ class MixCoefLoader(BinaryFileLoader):
             binary_file.seek(0)
             if signature == stream_layout.INCOMPLETE_SIGNATURE:
                 raise ValueError(f"Incomplete mixing stream: {self.file_path}")
-            if signature == stream_layout.SIGNATURE:
+            if signature in stream_layout.READABLE_SIGNATURES:
                 data = self._load_stream(binary_file, basis_id)
                 if basis_blocks is not None and (
                     data.electron_count != electron_count
