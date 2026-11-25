@@ -172,3 +172,39 @@ def test_loader_rejects_inconsistent_or_incomplete_file(
     path.write_bytes(content)
     with pytest.raises(ValueError):
         MixCoefLoader(path).load(show_levels=False)
+
+
+def test_indexed_mixing_stream_roundtrip(tmp_path: Path) -> None:
+    from graspkit.utils.data_modules import MixCoefficientBlock
+
+    path = tmp_path / "case.cimix"
+    basis_id = "05" * 32
+    block = MixCoefficientBlock(
+        block_index=0,
+        csf_count=3,
+        level_count=2,
+        j_value_location=4,
+        j_value="3/2",
+        parity=2,
+        level_ids=np.array([0, 2], dtype=np.int64),
+        base_energy=-1024.0,
+        level_energies=np.array([0.0, 0.125]),
+        mix_coefficients=np.array([[1.0, 0.0, 0.0], [0.0, -0.5, 0.5]]),
+    )
+    write_mix_coefficient_block(path, block, electron_count=3, orbital_count=4, basis_id=basis_id)
+    raw = path.read_bytes()
+    assert struct.unpack_from("<8s5q64s", raw) == (b"GRMIX001", 3, 4, 1, 3, 2, basis_id.encode())
+    assert struct.unpack_from("<6q", raw, 112) == (3, -1, 3, 2, 0, 192)
+    assert struct.unpack_from("<3d", raw, 216) == (0.0, -0.5, 0.5)
+    result = MixCoefLoader(path).load(show_levels=False, basis_id=basis_id)
+    assert result.basis_id == basis_id
+    parsed, = result.blocks
+    np.testing.assert_array_equal(parsed.level_ids, block.level_ids)
+    np.testing.assert_array_equal(parsed.level_energies, [-1024.0, -1023.875])
+    np.testing.assert_array_equal(parsed.mix_coefficients, block.mix_coefficients)
+    assert isinstance(parsed.mix_coefficients, np.memmap)
+    with pytest.raises(ValueError, match="descriptor SHA-256"):
+        MixCoefLoader(path).load(show_levels=False, basis_id="c" * 64)
+    path.write_bytes(raw[:-8])
+    with pytest.raises(ValueError, match="totals"):
+        MixCoefLoader(path).load(show_levels=False)

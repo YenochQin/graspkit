@@ -58,12 +58,14 @@ class MixCoefficientData:
         sorted_level_energies: Absolute level energies sorted ascending.
         electron_count: Electron count from the file header, when available.
         orbital_count: Orbital count from the file header, when available.
+        basis_id: SHA-256 of the exact V3 descriptor used by a Suite mixing stream.
     """
 
     blocks: list[MixCoefficientBlock]
     sorted_level_energies: list[float]
     electron_count: int | None = None
     orbital_count: int | None = None
+    basis_id: str | None = None
 
     @property
     def block_num(self) -> int:

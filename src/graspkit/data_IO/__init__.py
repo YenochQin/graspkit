@@ -8,7 +8,7 @@ from .loaders.hyperfine_structure_loader import (  # noqa: F401
     NuclearParameters,
 )
 from .loaders.lsj_comp_loader import LSJCompLoader  # noqa: F401
-from .loaders.mix_coef_loader import MixCoefLoader  # noqa: F401
+from .loaders.mix_coef_loader import MixCoefLoader, MixingBasisBlock
 from .loaders.radial_wavefunction_loader import (  # noqa: F401
     RWFNFileLoader,
     RWFNOrbitalData,
@@ -32,6 +32,7 @@ __all__ = [
     "NuclearParameters",
     "LSJCompLoader",
     "MixCoefLoader",
+    "MixingBasisBlock",
     "RWFNFileLoader",
     "RWFNOrbitalData",
     "TransitionLoader",
