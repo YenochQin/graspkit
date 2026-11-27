@@ -91,7 +91,7 @@ class LevelDataFrameRow(TypedDict):
 class LSJCompLoader(BaseLoader[pl.DataFrame]):
     """LSJ组成文件加载器
 
-    用于加载 GRASP2018 生成的 LSJ 组成文件（.lsj.lbl）。
+    加载 Suite 的 .lsj.labels 或 GRASP2018 的 .lsj.lbl 组成报告。
     解析能级的 LSJ 组成信息并构建为 polars DataFrame。
 
     Examples:
@@ -114,14 +114,14 @@ class LSJCompLoader(BaseLoader[pl.DataFrame]):
         """初始化LSJ文件加载器
 
         Args:
-            file_path: LSJ文件路径（.lsj.lbl 文本文件）
+            file_path: LSJ 组成报告路径
         """
         super().__init__(file_path)
         self._levels: list[LevelComposition] = self._parse_lsj_file()
         self.df: pl.DataFrame = self._levels_to_dataframe(self._levels)
 
     def _parse_lsj_file(self) -> list[LevelComposition]:
-        """解析 .lsj.lbl 文本文件为类型化的能级组成列表。
+        """解析 LSJ 组成报告为类型化的能级组成列表。
 
         Returns:
             类型化的能级组成列表。

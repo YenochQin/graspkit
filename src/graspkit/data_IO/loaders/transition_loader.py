@@ -11,6 +11,11 @@ from .base_loader import BaseLoader
 # 正则表达式：匹配 S/GF/AKI = 数值格式的数据
 DATA_PATTERN = re.compile(r"(S|GF|AKI)\s*=\s*([\d\.D\+\-]+)")
 
+_REPORT_NAMES = {
+    "rmcdhf": (".mcdhf.transition", ".t"),
+    "rci": (".ci.transition", ".ct"),
+}
+
 
 class TransitionFileScan:
     """跃迁文件扫描器
@@ -28,8 +33,8 @@ class TransitionFileScan:
 
         Args:
             directory: 目录路径
-            calculation_type: 计算类型，"rmcdhf" 使用 .t 文件，"rci" 使用 .ct 文件
-            load_ct_lsj: 是否加载 .[c]t.lsj 文件
+            calculation_type: 计算类型，"rmcdhf" 或 "rci"
+            load_ct_lsj: 是否优先加载 LSJ 报告
 
         Returns:
             找到的跃迁文件路径列表，按文件名排序
@@ -43,43 +48,28 @@ class TransitionFileScan:
         if not dir_path.is_dir():
             raise ValueError(f"Path is not a directory: {directory}")
 
-        # 确定文件后缀
-        if calculation_type == "rmcdhf":
-            base_suffix = ".t"
-        elif calculation_type == "rci":
-            base_suffix = ".ct"
-        else:
+        if calculation_type not in _REPORT_NAMES:
             raise ValueError(
                 f"Invalid calculation_type: {calculation_type}. Must be 'rmcdhf' or 'rci'"
             )
 
-        # 确定要查找的后缀
-        if load_ct_lsj:
-            suffix = base_suffix + ".lsj"
-        else:
-            suffix = base_suffix
-
-        # 扫描文件
-        files = sorted(dir_path.glob(f"*{suffix}"))
-
-        if not files:
-            # 如果没找到文件，尝试查找备选格式
-            if load_ct_lsj:
-                # 没找到 .lsj 文件，尝试查找基础文件
-                files = sorted(dir_path.glob(f"*{base_suffix}"))
-                if not files:
-                    raise ValueError(
-                        f"No transition files found with suffix {suffix} \nor {base_suffix} in directory: {directory}"
-                    )
-            else:
-                # 没找到基础文件，尝试查找 .lsj 文件
-                files = sorted(dir_path.glob(f"*{base_suffix}.lsj"))
-                if not files:
-                    raise ValueError(
-                        f"No transition files found with suffix {suffix} \nor {base_suffix}.lsj in directory: {directory}"
-                    )
-
-        return files
+        stem_suffix, legacy_suffix = _REPORT_NAMES[calculation_type]
+        for lsj_suffix in ((".lsj", "") if load_ct_lsj else ("", ".lsj")):
+            by_pair: dict[str, Path] = {}
+            report_suffix = stem_suffix + lsj_suffix
+            for suffix in (
+                legacy_suffix + lsj_suffix,
+                report_suffix + ".txt",
+                report_suffix,
+            ):
+                for path in dir_path.glob(f"*{suffix}"):
+                    if path.is_file():
+                        by_pair[path.name.removesuffix(suffix)] = path
+            if by_pair:
+                return sorted(by_pair.values())
+        raise ValueError(
+            f"No {calculation_type} transition reports found in directory: {directory}"
+        )
 
     @staticmethod
     def get_file_type(file_path: Path) -> str:
@@ -92,17 +82,19 @@ class TransitionFileScan:
             文件类型: "t", "ct", "t.lsj", 或 "ct.lsj"
         """
         filename = file_path.name
+        suite_filename = filename.removesuffix(".txt")
 
-        if filename.endswith(".t.lsj"):
-            return "t.lsj"
-        elif filename.endswith(".ct.lsj"):
-            return "ct.lsj"
-        elif filename.endswith(".t"):
-            return "t"
-        elif filename.endswith(".ct"):
-            return "ct"
-        else:
-            return "unknown"
+        for stem_suffix, legacy_suffix in _REPORT_NAMES.values():
+            for lsj_suffix in (".lsj", ""):
+                suite_suffixes = (
+                    stem_suffix + lsj_suffix,
+                    stem_suffix + ".phase" + lsj_suffix,
+                )
+                if filename.endswith(
+                    legacy_suffix + lsj_suffix
+                ) or suite_filename.endswith(suite_suffixes):
+                    return (legacy_suffix + lsj_suffix).lstrip(".")
+        return "unknown"
 
 
 #######################################################################
@@ -415,11 +407,8 @@ class TransitionLoader(BaseLoader[list[str]]):
     """GRASP2018 跃迁数据加载器
 
     用于加载 GRASP2018 生成的跃迁数据文件。
-    支持以下文件类型：
-    - .t 文件 (rmcdhf 计算结果)
-    - .ct 文件 (rci 计算结果)
-    - .t.lsj 文件 (rmcdhf LSJ 耦合格式)
-    - .ct.lsj 文件 (rci LSJ 耦合格式)
+    支持 Suite 的 .mcdhf.transition[.lsj] 和 .ci.transition[.lsj]，也识别旧有的
+    .txt 后缀及 .t、.ct、.t.lsj 和 .ct.lsj。相位版报告可通过文件路径读取。
 
     支持两种加载模式：
     1. 单文件模式：直接加载指定的跃迁文件
@@ -440,11 +429,8 @@ class TransitionLoader(BaseLoader[list[str]]):
         Args:
             file_path: 文件或目录路径
             calculation_type: 计算类型（目录扫描时使用）
-                "rmcdhf": 使用 .t 文件
-                "rci": 使用 .ct 文件
-            load_ct_lsj: 是否加载 .lsj 格式文件
-                True: 优先加载 .t.lsj 或 .ct.lsj 文件
-                False: 加载 .t 或 .ct 文件
+                "rmcdhf" 或 "rci"
+            load_ct_lsj: 目录扫描时是否优先加载 LSJ 报告
 
         Raises:
             ValueError: 路径不存在或参数无效
@@ -490,7 +476,7 @@ class TransitionLoader(BaseLoader[list[str]]):
             return self._load_transition_file(self.file_path)
 
     def _load_transition_file(self, file_path: Path) -> list[str]:
-        """加载跃迁文件（支持所有文本格式：.t, .ct, .t.lsj, .ct.lsj）
+        """读取跃迁报告的原始文本行。
 
         Args:
             file_path: 文件路径
@@ -671,15 +657,13 @@ class TransitionLoader(BaseLoader[list[str]]):
                 i += 1
 
             # 解析数据行
-            for line in data_lines:
-                stripped = line.strip()
-                if not (stripped.startswith("f1 ") or stripped.startswith("f2 ")):
+            for line_idx, line in enumerate(data_lines):
+                if line.split(maxsplit=1)[0] not in ("f", "f1", "f2"):
                     continue
 
                 try:
                     if is_electric:
                         # 电性跃迁：需要找下一行
-                        line_idx = data_lines.index(line)
                         if line_idx + 1 < len(data_lines):
                             line2 = data_lines[line_idx + 1]
                             parsed = parse_electric_transition_line(line, line2)
@@ -745,10 +729,8 @@ class TransitionLoader(BaseLoader[list[str]]):
         all_data: list[dict[str, str]] = []
 
         # 检查是否是 .lsj 格式
-        if self.load_ct_lsj or (
-            self.file_paths
-            and TransitionFileScan.get_file_type(self.file_paths[0]).endswith(".lsj")
-        ):
+        file_type = TransitionFileScan.get_file_type(self.file_paths[0])
+        if file_type.endswith(".lsj") or (file_type == "unknown" and self.load_ct_lsj):
             # .lsj 格式：数据已经解析好了
             data_lines = self.load()
             transitions = self._parse_lsj_transitions(data_lines)
