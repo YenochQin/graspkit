@@ -6,9 +6,9 @@ existing import statements need no changes. When migrating an existing project,
 replace the old dependency rather than declaring both distributions, which
 provide the same Python packages.
 
-This checkout prepares 3.6.1 with stricter alignment checks for CSFs and
-GRASP mixing blocks. It runs rCSFs V3 coupling tests during release builds.
-Use this source checkout until 3.6.1 is available on the package index.
+Version 3.7.0 adds support for Suite `RAD--WFN` radial wavefunctions and
+indexed `CSF--MIX` mixing coefficients.
+Use this source checkout until 3.7.0 is available on the package index.
 
 ## Install from PyPI
 
@@ -19,12 +19,12 @@ python -m pip install graspkit-atomic
 For a fixed release:
 
 ```fish
-python -m pip install "graspkit-atomic==3.6.1"
+python -m pip install "graspkit-atomic==3.7.0"
 ```
 
 ## Declare a project dependency
 
-Add `"graspkit-atomic==3.6.1"` to the existing `[project].dependencies` list in
+Add `"graspkit-atomic==3.7.0"` to the existing `[project].dependencies` list in
 your own `pyproject.toml`. A minimal example:
 
 ```toml
@@ -32,7 +32,7 @@ your own `pyproject.toml`. A minimal example:
 name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
-dependencies = ["graspkit-atomic==3.6.1"]
+dependencies = ["graspkit-atomic==3.7.0"]
 ```
 
 For a uv-managed project, run `uv sync` after editing `pyproject.toml`, then
@@ -51,7 +51,7 @@ requires the corresponding GRASP data files.
 To install a downloaded wheel, use its exact filename:
 
 ```fish
-python -m pip install /path/to/graspkit_atomic-3.6.1-py3-none-any.whl
+python -m pip install /path/to/graspkit_atomic-3.7.0-py3-none-any.whl
 ```
 
 A standalone source checkout also supports `python -m pip install .`.

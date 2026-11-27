@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Exact package version to publish (3.6.1)"
+        description: "Exact package version to publish (3.7.0)"
         required: true
         type: string
       publish_pypi:

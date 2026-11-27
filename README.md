@@ -16,14 +16,14 @@ GRASP atomic-structure calculation results.
   quantum-number helpers.
 - `graspkit_plot`: plotting and publication-style helpers.
 
-Version 3.6.1 validates CSF row order and parity against GRASP mixing blocks
-and runs rCSFs V3 coupling tests during release builds. See the
-[release notes](docs/releasing.md#changes-in-361)
+Version 3.7.0 reads Suite `RAD--WFN` radial wavefunctions and indexed
+`CSF--MIX` mixing coefficients. See the
+[release notes](docs/releasing.md#changes-in-370)
 and the [CSF processing primitives](docs/csf-selection-primitives.md).
 
 ## Installation
 
-Use this source checkout for 3.6.1 until the package is published.
+Use this source checkout for 3.7.0 until the package is published.
 
 Install [graspkit-atomic from PyPI](https://pypi.org/project/graspkit-atomic/)
 with Python 3.15 or newer. The distribution name is `graspkit-atomic`;
@@ -45,7 +45,7 @@ For an existing uv project using Python 3.15 or newer, run `uv add graspkit-atom
 in its directory. This records the dependency in `pyproject.toml`, updates
 `uv.lock`, and installs it in the project's `.venv`. Use `uv run python analysis.py`
 to run your own analysis script; manual environment activation is not required.
-After 3.6.1 is available on the package index, pin it with `uv add "graspkit-atomic==3.6.1"`.
+After 3.7.0 is available on the package index, pin it with `uv add "graspkit-atomic==3.7.0"`.
 
 You can also add the dependency to an existing `pyproject.toml` manually:
 
@@ -55,7 +55,7 @@ name = "atomic-analysis"
 version = "0.1.0"
 requires-python = ">=3.15"
 dependencies = [
-    "graspkit-atomic==3.6.1",
+    "graspkit-atomic==3.7.0",
 ]
 ```
 
